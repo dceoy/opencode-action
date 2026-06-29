@@ -85,7 +85,7 @@ runs:
       run: >
         echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
     - name: Copy bundled OpenCode config
-      if: inputs.enable-toolkit == 'true' }}
+      if: inputs.enable-toolkit == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
