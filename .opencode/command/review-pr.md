@@ -27,7 +27,8 @@ Run a comprehensive pull request review using multiple specialized agents, each 
    - **all** - Run all applicable reviews (default)
 
 3. **Identify Changed Files**
-   - Run `git diff --name-only` to see modified files
+   - Run `git diff --name-only HEAD` to see staged and unstaged modified files
+   - Include untracked files from `git status --short` when they are part of the review
    - Check if a PR already exists: `gh pr view`
    - Identify file types and what reviews apply
 

@@ -18,7 +18,7 @@ Do not use this skill to triage existing review comments on a PR; use `pr-feedba
 ## Inputs
 
 - Optional review aspects requested by the user, such as `comments`, `tests`, `errors`, `types`, `code`, `simplify`, or `all`.
-- A repository checkout with the changes to review. The skill relies on `git diff` to identify changed files.
+- A repository checkout with the changes to review. The skill relies on `git diff --name-only HEAD` and `git status --short` to identify changed files, including staged and untracked files.
 
 If no aspects are specified, run all applicable reviews.
 
@@ -39,7 +39,8 @@ If no aspects are specified, run all applicable reviews.
    - Parse any requested aspects from the user; default to all applicable reviews.
 
 2. **Identify Changed Files**
-   - Run `git diff --name-only` to see modified files.
+   - Run `git diff --name-only HEAD` to see staged and unstaged modified files.
+   - Include untracked files from `git status --short` when they are part of the review.
    - Check if a PR already exists with `gh pr view`.
    - Identify file types and which reviews apply.
 
