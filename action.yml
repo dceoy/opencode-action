@@ -114,7 +114,7 @@ runs:
         opencode_status="${PIPESTATUS[0]}"
         set -e
 
-        if grep -Eiq 'AI_APICallError|Insufficient credits|(^|[^0-9])402([^0-9]|$)' "${output_file}"; then
+        if grep -Eiq 'AI_APICallError|Insufficient credits|Provider API error.*402|402.*Provider API error' "${output_file}"; then
           echo "::error::OpenCode reported a model provider API failure. Check provider credentials, quota, and billing."
           rm -f "${output_file}"
           exit 1

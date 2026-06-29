@@ -18,7 +18,7 @@ Do not use this skill to triage existing review comments on a PR; use `pr-feedba
 ## Inputs
 
 - Optional review aspects requested by the user, such as `code`, `performance`, `security`, `tests`, `errors`, `comments`, `types`, `simplify`, or `all`.
-- A repository checkout with the changes to review. In GitHub Actions the skill uses `gh pr diff` and `gh pr view`; locally it uses `git diff` and `git status`.
+- A repository checkout with the changes to review. In GitHub Actions the skill derives the PR number from the event payload or pull request ref, then passes that number to `gh pr diff` and `gh pr view`; locally it uses `git diff` and `git status`.
 
 If no aspects are specified, run all applicable reviews.
 
@@ -37,11 +37,29 @@ If no aspects are specified, run all applicable reviews.
 ## Workflow
 
 1. **Detect the review context**
-   - In GitHub Actions, `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF`, and `GITHUB_TOKEN` are set and `gh` is authenticated.
-   - Run `gh pr view --json number,title,body,baseRefName,headRefName,files,url`. If it succeeds, you are in **PR mode** (post results back). If not, fall back to **local mode** (report to the user only).
+   - In GitHub Actions, `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF`, and `GITHUB_EVENT_PATH` are set. The `gh` CLI also requires `GH_TOKEN` or `GITHUB_TOKEN` in the environment.
+   - Derive the PR number from the event payload first:
+
+     ```bash
+     PR_NUMBER=""
+     if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
+       PR_NUMBER="$(jq -r '.pull_request.number // .issue.number // empty' "$GITHUB_EVENT_PATH")"
+     fi
+     ```
+
+   - If the payload does not contain a PR or issue number, fall back to parsing `GITHUB_REF` only for pull request refs:
+
+     ```bash
+     if [[ -z "${PR_NUMBER}" && "${GITHUB_REF:-}" =~ ^refs/pull/([0-9]+)/merge$ ]]; then
+       PR_NUMBER="${BASH_REMATCH[1]}"
+     fi
+     ```
+
+   - If `PR_NUMBER` is set, run `gh pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName,files,url`. If it succeeds, you are in **PR mode** (post results back). If not, fall back to **local mode** (report to the user only).
+   - Do not rely on the current git branch to identify the PR. GitHub Actions pull request workflows usually check out a detached merge ref.
 
 2. **Gather the diff**
-   - PR mode: `gh pr diff` and the `files` list from `gh pr view`. Prefer `gh pr diff` because CI checkouts are shallow.
+   - PR mode: `gh pr diff "$PR_NUMBER"` and the `files` list from `gh pr view "$PR_NUMBER"`. Prefer `gh pr diff "$PR_NUMBER"` because CI checkouts are shallow.
    - Local mode: `git diff --name-only HEAD` plus untracked files from `git status --short`, then `git diff` for content.
 
 3. **Choose applicable reviewers**
