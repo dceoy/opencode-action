@@ -42,7 +42,7 @@ inputs:
     default: latest
   enable-toolkit:
     required: false
-    description: Copy the action's bundled .opencode/ agents and commands into the workspace before running. Existing files are preserved.
+    description: Install the action's bundled .opencode/ agents and commands into ~/.config/opencode (global config) before running. Existing files are preserved.
     default: 'true'
 outputs:
   opencode-version:
@@ -91,9 +91,9 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: |
         if [[ -d "${ACTION_PATH}/.opencode" ]]; then
-          mkdir -p .opencode
-          cp -rn "${ACTION_PATH}/.opencode/." .opencode/
-          echo "Copied bundled OpenCode config into .opencode/"
+          mkdir -p "${HOME}/.config/opencode"
+          cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
+          echo "Copied bundled OpenCode config into ~/.config/opencode/"
         fi
     - name: Run OpenCode
       id: run_opencode
