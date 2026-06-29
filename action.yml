@@ -41,10 +41,10 @@ inputs:
     description: OpenCode version to install (e.g., v1.2.3)
     default: latest
 outputs:
-  opencode_version:
+  opencode-version:
     description: OpenCode version resolved for this run.
     value: ${{ steps.version.outputs.opencode-version }}
-  cache_hit:
+  cache-hit:
     description: Whether the OpenCode binary cache was restored.
     value: ${{ steps.cache.outputs.cache-hit }}
 runs:

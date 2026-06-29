@@ -2,36 +2,30 @@
 
 ## Project Structure & Module Organization
 
-This repository publishes a composite GitHub Action for running OpenCode from GitHub Actions. The main action definition is `action.yml`; keep all action inputs, environment mappings, and composite steps there. User-facing setup and examples live in `README.md`. CI and repository automation are under `.github/`, including `.github/workflows/ci.yml`, Dependabot, and Renovate configuration. Agent helper skills are stored under `.agents/skills/`. There is currently no application source tree or test fixture directory.
+This repository publishes a composite GitHub Action for running OpenCode in GitHub Actions. The action contract, inputs, outputs, environment mappings, install steps, and `opencode github run` delegation live in `action.yml`. User-facing setup, examples, inputs, outputs, and secret requirements live in `README.md`. GitHub automation is under `.github/`, including `.github/workflows/ci.yml`, `.github/workflows/opencode.yml`, Dependabot, and Renovate configuration. Agent helper skills are under `.agents/skills/`. There is no application source tree, package manager project, or dedicated test fixture directory.
 
 ## Build, Test, and Development Commands
 
-There is no package manager build step. Validate changes with the same checks used by CI:
+There is no build step. Validate local changes with the repository QA script:
 
 ```bash
-test -f action.yml
-grep -q '^runs:' action.yml
-grep -q 'using: composite' action.yml
-grep -q 'opencode github run' action.yml
-test -f README.md
-grep -q 'dceoy/opencode-action@main' README.md
-grep -q 'model:' README.md
+.agents/skills/local-qa/scripts/qa.sh
 ```
 
-For local end-to-end testing, reference this checkout from a temporary workflow or use the README example with `uses: dceoy/opencode-action@main` after pushing changes to a branch.
+The script checks core action metadata and README examples, including the composite action declaration, `opencode github run`, and documented usage. For end-to-end testing, run the action from a temporary workflow or push a branch and reference it from a test repository workflow.
 
 ## Coding Style & Naming Conventions
 
-Use YAML for action and workflow configuration with two-space indentation. Prefer clear, snake_case input names matching existing inputs such as `use_github_token` and `oidc_base_url`. Keep shell snippets compatible with `bash` and use strict mode in workflows where possible (`bash -euo pipefail`). Pin third-party actions by full commit SHA in workflows when practical, and annotate the intended version in a comment.
+Use YAML with two-space indentation for action and workflow files. Keep action inputs in `snake_case`, matching existing names such as `use_github_token`, `oidc_base_url`, and `cache_hit`. Prefer explicit `bash -euo pipefail` shell declarations for composite steps. Keep third-party actions pinned by full commit SHA when practical, with a comment naming the intended upstream version.
 
 ## Testing Guidelines
 
-Tests are metadata and documentation checks rather than unit tests. When changing `action.yml`, verify that required inputs, defaults, environment variables, and the `opencode github run` delegation remain documented in `README.md`. When editing workflows, ensure `.github/workflows/ci.yml` still passes the reusable GitHub Actions lint and scan workflow.
+Treat metadata and documentation checks as the primary test suite. When changing `action.yml`, update `README.md` in the same change if inputs, outputs, defaults, permissions, or secrets change. Run the QA script before submitting. When editing workflows, verify `.github/workflows/ci.yml` still covers the relevant checks.
 
 ## Commit & Pull Request Guidelines
 
-Recent commits use short, imperative, lowercase subjects, for example `add opencode github action`. Follow that style and keep each commit focused. Pull requests should explain the action behavior changed, list any input or documentation updates, and link related issues when applicable. Include workflow screenshots or run links when changing CI behavior.
+Recent commits use short, focused, imperative subjects such as `improve action inputs and version handling`. Follow that style and keep each commit scoped to one behavior or documentation change. Pull requests should describe the action behavior changed, list any input or README updates, link related issues when available, and include workflow run links for CI or action-behavior changes.
 
 ## Security & Configuration Tips
 
-Do not commit provider API keys or GitHub tokens. Document required secrets in `README.md` and pass them through workflow `env`. Keep the default token path explicit: `use_github_token: true` requires `GITHUB_TOKEN` and suitable workflow permissions.
+Do not commit provider API keys, GitHub tokens, or generated credentials. Document required secrets in `README.md` and pass them through workflow `env`. If `use_github_token: true` is used, ensure the workflow grants the minimum required `GITHUB_TOKEN` permissions for the requested task.
