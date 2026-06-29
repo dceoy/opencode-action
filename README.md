@@ -1,10 +1,31 @@
 # opencode-action
 
-OpenCode GitHub Action for running the OpenCode GitHub agent in workflows.
+OpenCode GitHub Action for running the OpenCode GitHub agent in workflows with version
+selection, binary caching, and GitHub token integration.
 
 [![CI](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml/badge.svg)](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml)
 
-This repository provides a composite GitHub Action based on the upstream OpenCode GitHub Action implementation at <https://github.com/anomalyco/opencode/tree/dev/github>. The action resolves the requested OpenCode CLI version, restores or populates a cache for the binary, adds OpenCode to `PATH`, and delegates execution to:
+This is not a vendored copy of the official OpenCode GitHub Action. It is an
+independently maintained composite action that keeps the upstream
+`opencode github run` contract as the execution boundary while adding
+GitHub Actions-focused improvements.
+
+Key additions in this action include:
+
+- explicit `version` input for installing `latest` or a pinned OpenCode CLI
+  release
+- GitHub Actions cache integration for the OpenCode binary
+- configurable OIDC token exchange endpoint or direct `GITHUB_TOKEN` mode
+- documented defaults for optional inputs
+- stable action outputs for the resolved OpenCode version and cache status
+
+The upstream OpenCode implementation at
+<https://github.com/anomalyco/opencode/tree/dev/github> remains the reference for
+OpenCode GitHub agent behavior. This repository owns the composite action wrapper,
+installation flow, caching behavior, inputs, outputs, and documentation. At run
+time, the action resolves the requested OpenCode CLI version, restores or
+populates a cache for the binary, adds OpenCode to `PATH`, and delegates execution
+to:
 
 ```bash
 opencode github run
