@@ -2,8 +2,8 @@
 name: OpenCode GitHub Action
 description: Run OpenCode in GitHub Actions workflows
 branding:
-  icon: code
-  color: orange
+  icon: square
+  color: black
 inputs:
   model:
     required: true
