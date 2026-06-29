@@ -20,11 +20,14 @@ on:
       - assigned
 permissions:
   contents: read
-  actions: read
 jobs:
   opencode-review:
     if: >
       github.event_name == 'pull_request'
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      && (! github.event.pull_request.draft)
+      && (! startsWith(github.head_ref, 'dependabot/'))
+      && (! startsWith(github.head_ref, 'renovate/'))
     permissions:
       contents: read
       pull-requests: write
@@ -47,12 +50,21 @@ jobs:
           model: openrouter/openrouter/free
   opencode-bot:
     if: >
-      github.event_name != 'pull_request'
-      && (
-        contains(github.event.comment.body, ' /oc')
-        || startsWith(github.event.comment.body, '/oc')
-        || contains(github.event.comment.body, ' /opencode')
-        || startsWith(github.event.comment.body, '/opencode')
+      (
+        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+        && (contains(github.event.comment.body, ' /oc') || contains(github.event.comment.body, ' /opencode'))
+      ) || (
+        github.event_name == 'pull_request_review'
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
+        && (contains(github.event.review.body, '/oc') || contains(github.event.review.body, '/opencode'))
+      ) || (
+        github.event_name == 'issues'
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+        && (
+          (contains(github.event.issue.body, '/oc') || contains(github.event.issue.title, '/oc'))
+          || (contains(github.event.issue.body, '/opencode') || contains(github.event.issue.title, '/opencode'))
+        )
       )
     permissions:
       contents: read
