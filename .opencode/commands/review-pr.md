@@ -1,215 +1,127 @@
 ---
-description: Comprehensive PR review using specialized agents (comments, tests, errors, types, code, simplify).
+description: Comprehensive GitHub PR review — gathers the PR via gh, runs specialized review subagents in parallel, filters to noteworthy findings, and posts inline + summary review comments back to the PR.
 agent: general
 ---
 
 # Comprehensive PR Review
 
-Run a comprehensive pull request review using multiple specialized agents, each focusing on a different aspect of code quality. Each review agent is a subagent you spawn via the `task` tool using its name as the `subagent_type`.
+Perform a comprehensive pull request review by orchestrating specialized review subagents. Each subagent focuses on one area and returns **only noteworthy findings**. You then review every finding and keep only the ones **you also deem noteworthy**, then post the results back to the PR. Keep feedback concise; do not spam praise or nitpicks.
 
-**Review Aspects (optional):** "$ARGUMENTS"
+**Requested review aspects (optional):** "$ARGUMENTS"
 
-## Review Workflow:
+## 1. Detect the review context
 
-1. **Determine Review Scope**
-   - Check git status to identify changed files
-   - Parse arguments to see if the user requested specific review aspects
-   - Default: Run all applicable reviews
+Determine whether you are reviewing a real GitHub PR (running in GitHub Actions) or working locally.
 
-2. **Available Review Aspects:**
+- In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (e.g. `refs/pull/42/merge`), and an authenticated `GITHUB_TOKEN`, and `gh` is available.
+- Run `gh pr view --json number,title,body,baseRefName,headRefName,files,url` to confirm a PR is available.
+  - If it succeeds, you are in **PR mode**: post results back with `gh` (step 6).
+  - If it fails (no PR or not in CI), fall back to **local mode**: review `git diff` and `git status`, and report findings directly to the user without posting anything to GitHub.
 
-   - **comments** - Analyze code comment accuracy and maintainability
-   - **tests** - Review test coverage quality and completeness
-   - **errors** - Check error handling for silent failures
-   - **types** - Analyze type design and invariants (if new types added)
-   - **code** - General code review for project guidelines
-   - **simplify** - Simplify code for clarity and maintainability
-   - **all** - Run all applicable reviews (default)
+## 2. Gather the diff
 
-3. **Identify Changed Files**
-   - Run `git diff --name-only HEAD` to see staged and unstaged modified files
-   - Include untracked files from `git status --short` when they are part of the review
-   - Check if a PR already exists: `gh pr view`
-   - Identify file types and what reviews apply
+- **PR mode:** run `gh pr diff` for the full diff and use the `files` list from `gh pr view` for the changed-file set. Prefer `gh pr diff` over `git diff` because CI checkouts are shallow (`fetch-depth: 1`).
+- **Local mode:** run `git diff --name-only HEAD` plus untracked files from `git status --short` for the changed-file set, then `git diff` for content.
 
-4. **Determine Applicable Reviews**
+Capture both the changed-file list and the full diff to hand to the subagents.
 
-   Based on changes:
-   - **Always applicable**: code-reviewer (general quality)
-   - **If test files changed**: pr-test-analyzer
-   - **If comments/docs added**: comment-analyzer
-   - **If error handling changed**: silent-failure-hunter
-   - **If types added/modified**: type-design-analyzer
-   - **After passing review**: code-simplifier (polish and refine)
+## 3. Choose applicable reviewers
 
-5. **Launch Review Agents**
+Default: run all applicable reviewers. Honor any aspects named in `$ARGUMENTS`:
 
-   Spawn each applicable agent with the `task` tool, passing the changed files / diff as input:
+- **code** - `code-reviewer` (general quality; **always applicable**)
+- **performance** - `performance-reviewer` (loops, queries, allocations, hot paths)
+- **security** - `security-code-reviewer` (external input, auth, secrets, trust boundaries)
+- **tests** - `pr-test-analyzer` (if test files changed)
+- **errors** - `silent-failure-hunter` (if error handling / catch blocks changed)
+- **comments** - `comment-analyzer` (if comments or docs changed)
+- **types** - `type-design-analyzer` (if new types are introduced)
+- **simplify** - refinement only; do **not** run as part of the review. If the user passes `simplify`, run `code-simplifier` on the changed files instead of a review and stop.
+- **all** - run all applicable reviewers (default)
 
-   - **comment-analyzer** - comment accuracy
-   - **pr-test-analyzer** - test coverage
-   - **silent-failure-hunter** - error handling
-   - **type-design-analyzer** - type design
-   - **code-reviewer** - general review
-   - **code-simplifier** - refinement (run last, only after review passes)
+Always run `code-reviewer`. Add the others when their trigger condition holds or the user explicitly requests them.
 
-   **Sequential approach** (one at a time):
-   - Easier to understand and act on
-   - Each report is complete before the next
-   - Good for interactive review
+## 4. Launch the subagents
 
-   **Parallel approach** (user can request):
-   - Launch all agents simultaneously
-   - Faster for comprehensive review
-   - Results come back together
+Spawn each applicable reviewer with the `task` tool, using its name as `subagent_type`. Pass the changed files, the full diff, and the PR metadata (title/body) as input. Launch them **in parallel** for speed.
 
-6. **Aggregate Results**
+Instruct every subagent to:
 
-   After agents complete, summarize:
-   - **Critical Issues** (must fix before merge)
-   - **Important Issues** (should fix)
-   - **Suggestions** (nice to have)
-   - **Positive Observations** (what's good)
+- Review only the changed lines (the diff) and the functions they belong to, not the whole repository.
+- Return **only noteworthy findings** (confidence >= 80, real impact). No nitpicks, no praise spam.
+- Format each finding as:
+  - `file`: path
+  - `line`: line number in the PR head file (so an inline review comment can anchor to it)
+  - `severity`: `critical` | `important` | `suggestion`
+  - `message`: concise description and concrete fix
+- If nothing noteworthy, return an empty finding list and a one-line "no issues" note.
 
-7. **Provide Action Plan**
+Do **not** let subagents post comments themselves. You are the only one who posts.
 
-   Organize findings:
+## 5. Filter and aggregate
 
-   ```markdown
-   # PR Review Summary
+Review every finding returned by the subagents. Keep only the findings **you also deem noteworthy**. Discard duplicates across agents, false positives, and trivial nits. This second filter is what keeps the review signal high.
 
-   ## Critical Issues (X found)
+Group surviving findings by severity:
 
-   - [agent-name]: Issue description [file:line]
+- **Critical** — must fix before merge
+- **Important** — should fix
+- **Suggestions** — optional improvements
 
-   ## Important Issues (X found)
+## 6. Post the results
 
-   - [agent-name]: Issue description [file:line]
+### PR mode
 
-   ## Suggestions (X found)
+Post a **single review** carrying the summary body plus inline comments, using the GitHub API via `gh api`. Derive the PR number with `gh pr view --json number -q .number`, and let `:owner`/`:repo` resolve from the git remote.
 
-   - [agent-name]: Suggestion [file:line]
+For inline comments, build a JSON payload with one entry per finding. Each inline comment must anchor to a line that is part of the diff for that file; use `side: "RIGHT"` and the head-file line number. For multi-line spans, add `start_line`/`start_side`. If a finding's line is not in the diff, move it into the summary body instead of an inline comment.
 
-   ## Strengths
-
-   - What's well-done in this PR
-
-   ## Recommended Action
-
-   1. Fix critical issues first
-   2. Address important issues
-   3. Consider suggestions
-   4. Re-run review after fixes
-   ```
-
-## Usage Examples:
-
-**Full review (default):**
-
-```
-/review-pr
+```bash
+gh api -X POST repos/:owner/:repo/pulls/$NUMBER/reviews --input - <<'EOF'
+{
+  "event": "COMMENT",
+  "body": "<summary markdown, see below>",
+  "comments": [
+    {"path": "src/foo.ts", "line": 42, "side": "RIGHT", "body": "**important**: ..."}
+  ]
+}
+EOF
 ```
 
-**Specific aspects:**
+Summary body (`body` field) format:
 
-```
-/review-pr tests errors
-# Reviews only test coverage and error handling
+```markdown
+## OpenCode PR Review
 
-/review-pr comments
-# Reviews only code comments
+Reviewed <N> files across <M> areas: <list areas>.
 
-/review-pr simplify
-# Simplifies code after passing review
-```
+### Critical (X)
 
-**Parallel review:**
+- `file:line` — issue
 
-```
-/review-pr all parallel
-# Launches all agents in parallel
-```
+### Important (X)
 
-## Agent Descriptions:
+- `file:line` — issue
 
-**comment-analyzer**:
+### Suggestions (X)
 
-- Verifies comment accuracy vs code
-- Identifies comment rot
-- Checks documentation completeness
-
-**pr-test-analyzer**:
-
-- Reviews behavioral test coverage
-- Identifies critical gaps
-- Evaluates test quality
-
-**silent-failure-hunter**:
-
-- Finds silent failures
-- Reviews catch blocks
-- Checks error logging
-
-**type-design-analyzer**:
-
-- Analyzes type encapsulation
-- Reviews invariant expression
-- Rates type design quality
-
-**code-reviewer**:
-
-- Checks AGENTS.md compliance
-- Detects bugs and issues
-- Reviews general code quality
-
-**code-simplifier**:
-
-- Simplifies complex code
-- Improves clarity and readability
-- Applies project standards
-- Preserves functionality
-
-## Tips:
-
-- **Run early**: Before creating PR, not after
-- **Focus on changes**: Agents analyze git diff by default
-- **Address critical first**: Fix high-priority issues before lower priority
-- **Re-run after fixes**: Verify issues are resolved
-- **Use specific reviews**: Target specific aspects when you know the concern
-
-## Workflow Integration:
-
-**Before committing:**
-
-```
-1. Write code
-2. Run: /review-pr code errors
-3. Fix any critical issues
-4. Commit
+- `file:line` — issue
 ```
 
-**Before creating PR:**
+If there are **no findings at all**, post a concise review body such as `No noteworthy issues found — looks good.` (one line, no inline comments). Do not open a review when there is nothing to say beyond noise, but a one-line confirmation is acceptable so users know the review ran.
 
-```
-1. Stage all changes
-2. Run: /review-pr all
-3. Address all critical and important issues
-4. Run specific reviews again to verify
-5. Create PR
-```
+If `gh api .../reviews` fails (e.g. a comment line is out of range), fall back to a single top-level `gh pr comment --body "..."` with the summary plus a "findings with file:line" list. Never leave the user with no feedback.
 
-**After PR feedback:**
+Use `event: "COMMENT"` for normal reviews. Only use `event: "REQUEST_CHANGES"` when there are critical findings that block merge, and prefer `COMMENT` otherwise.
 
-```
-1. Make requested changes
-2. Run targeted reviews based on feedback
-3. Verify issues are resolved
-4. Push updates
-```
+### Local mode
 
-## Notes:
+Print the same summary to the user. Do not call `gh`.
 
-- Agents run autonomously and return detailed reports
-- Each agent focuses on its specialty for deep analysis
-- Results are actionable with specific file:line references
-- All agents are available as subagents (spawned automatically by this command)
+## 7. Notes
+
+- Keep feedback concise. A short review with real signal beats a long review with padding.
+- Never post secrets, tokens, or full file contents in comments.
+- The workflow grants `pull-requests: write`, so `GITHUB_TOKEN` can post reviews. Do not attempt to push commits or merge.
+- If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
+- Re-run after fixes to verify issues are resolved.
