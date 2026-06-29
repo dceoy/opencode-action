@@ -16,7 +16,7 @@ The script checks core action metadata and README examples, including the compos
 
 ## Coding Style & Naming Conventions
 
-Use YAML with two-space indentation for action and workflow files. Keep action inputs in `snake_case`, matching existing names such as `use_github_token`, `oidc_base_url`, and `cache_hit`. Prefer explicit `bash -euo pipefail` shell declarations for composite steps. Keep third-party actions pinned by full commit SHA when practical, with a comment naming the intended upstream version.
+Use YAML with two-space indentation for action and workflow files. Keep action inputs in `kebab-case`, matching existing names such as `use-github-token`, `oidc-base-url`, and `cache-hit`. Prefer explicit `bash -euo pipefail` shell declarations for composite steps. Keep third-party actions pinned by full commit SHA when practical, with a comment naming the intended upstream version.
 
 ## Testing Guidelines
 
@@ -28,4 +28,4 @@ Recent commits use short, focused, imperative subjects such as `improve action i
 
 ## Security & Configuration Tips
 
-Do not commit provider API keys, GitHub tokens, or generated credentials. Document required secrets in `README.md` and pass them through workflow `env`. If `use_github_token: true` is used, ensure the workflow grants the minimum required `GITHUB_TOKEN` permissions for the requested task.
+Do not commit provider API keys, GitHub tokens, or generated credentials. Document required secrets in `README.md` and pass them through workflow `env`. If `use-github-token: true` is used, ensure the workflow grants the minimum required `GITHUB_TOKEN` permissions for the requested task.
