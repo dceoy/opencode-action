@@ -78,7 +78,7 @@ If no aspects are specified, run all applicable reviews.
    - Group by severity: Critical (must fix), Important (should fix), Suggestions (optional).
 
 6. **Post the results**
-   - PR mode: post a single review with a summary body and inline comments via `gh api -X POST repos/:owner/:repo/pulls/$NUMBER/reviews` (`event: COMMENT`). Anchor inline comments to diff lines with `side: "RIGHT"`; move out-of-range findings into the summary body. If posting the review fails, fall back to `gh pr comment`. Use `event: "REQUEST_CHANGES"` only for blocking critical findings.
+   - PR mode: post a single review with a summary body and inline comments via `gh api -X POST repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews` (`event: COMMENT`). Anchor inline comments to diff lines with `side: "RIGHT"`; move out-of-range findings into the summary body. If posting the review fails, fall back to `gh pr comment`. Use `event: "REQUEST_CHANGES"` only for blocking critical findings.
    - Local mode: print the summary to the user.
    - If there are no findings, post a one-line confirmation so users know the review ran.
 

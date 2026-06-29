@@ -90,12 +90,12 @@ Group surviving findings by severity:
 
 ### PR mode
 
-Post a **single review** carrying the summary body plus inline comments, using the GitHub API via `gh api`. Use the explicit `PR_NUMBER` derived in step 1, and let `:owner`/`:repo` resolve from the git remote.
+Post a **single review** carrying the summary body plus inline comments, using the GitHub API via `gh api`. Use the explicit `PR_NUMBER` derived in step 1, and let `{owner}`/`{repo}` resolve from the git remote.
 
 For inline comments, build a JSON payload with one entry per finding. Each inline comment must anchor to a line that is part of the diff for that file; use `side: "RIGHT"` and the head-file line number. For multi-line spans, add `start_line`/`start_side`. If a finding's line is not in the diff, move it into the summary body instead of an inline comment.
 
 ```bash
-gh api -X POST repos/:owner/:repo/pulls/$PR_NUMBER/reviews --input - <<'EOF'
+gh api -X POST repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews --input - <<'EOF'
 {
   "event": "COMMENT",
   "body": "<summary markdown, see below>",
