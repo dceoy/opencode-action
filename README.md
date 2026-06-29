@@ -78,6 +78,28 @@ Set the API key required by the selected model provider, for example:
 
 When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workflow enough permissions for the requested work.
 
+## Pull Request Reviews
+
+The bundled `/review-pr` command posts reviews back to GitHub with `gh`. Workflows that invoke it must provide:
+
+- `pull-requests: write`
+- `issues: write` when falling back to `gh pr comment`
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}`
+- A valid API key for the selected model provider with available credits or quota
+
+Example OpenCode step:
+
+```yaml
+- name: Run OpenCode review
+  uses: dceoy/opencode-action@main
+  env:
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    GH_TOKEN: ${{ github.token }}
+  with:
+    model: openrouter/openrouter/free
+    prompt: /review-pr
+```
+
 ## Examples
 
 Explain an issue:
