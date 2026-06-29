@@ -48,7 +48,7 @@ runs:
         echo "version=${VERSION:-latest}" >> "${GITHUB_OUTPUT}"
     - name: Cache OpenCode
       id: cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
       with:
         path: ~/.opencode/bin
         key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
