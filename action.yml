@@ -107,5 +107,18 @@ runs:
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
-      run: >
-        opencode github run
+      run: |
+        output_file="$(mktemp)"
+        set +e
+        opencode github run 2>&1 | tee "${output_file}"
+        opencode_status="${PIPESTATUS[0]}"
+        set -e
+
+        if grep -Eiq 'AI_APICallError|Insufficient credits|(^|[^0-9])402([^0-9]|$)' "${output_file}"; then
+          echo "::error::OpenCode reported a model provider API failure. Check provider credentials, quota, and billing."
+          rm -f "${output_file}"
+          exit 1
+        fi
+
+        rm -f "${output_file}"
+        exit "${opencode_status}"

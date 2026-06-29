@@ -13,14 +13,32 @@ Perform a comprehensive pull request review by orchestrating specialized review 
 
 Determine whether you are reviewing a real GitHub PR (running in GitHub Actions) or working locally.
 
-- In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (e.g. `refs/pull/42/merge`), and an authenticated `GITHUB_TOKEN`, and `gh` is available.
-- Run `gh pr view --json number,title,body,baseRefName,headRefName,files,url` to confirm a PR is available.
+- In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (e.g. `refs/pull/42/merge`), and `GITHUB_EVENT_PATH`. The `gh` CLI also requires `GH_TOKEN` or `GITHUB_TOKEN` to be available in the environment.
+- Derive the PR number from the event payload first:
+
+```bash
+PR_NUMBER=""
+if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
+  PR_NUMBER="$(jq -r '.pull_request.number // .issue.number // empty' "$GITHUB_EVENT_PATH")"
+fi
+```
+
+- If the payload does not contain a PR or issue number, fall back to parsing `GITHUB_REF` only for pull request refs:
+
+```bash
+if [[ -z "${PR_NUMBER}" && "${GITHUB_REF:-}" =~ ^refs/pull/([0-9]+)/merge$ ]]; then
+  PR_NUMBER="${BASH_REMATCH[1]}"
+fi
+```
+
+- If `PR_NUMBER` is set, run `gh pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName,files,url` to confirm a PR is available.
   - If it succeeds, you are in **PR mode**: post results back with `gh` (step 6).
   - If it fails (no PR or not in CI), fall back to **local mode**: review `git diff` and `git status`, and report findings directly to the user without posting anything to GitHub.
+- Do not rely on the current git branch to identify the PR. GitHub Actions pull request workflows usually check out a detached merge ref.
 
 ## 2. Gather the diff
 
-- **PR mode:** run `gh pr diff` for the full diff and use the `files` list from `gh pr view` for the changed-file set. Prefer `gh pr diff` over `git diff` because CI checkouts are shallow (`fetch-depth: 1`).
+- **PR mode:** run `gh pr diff "$PR_NUMBER"` for the full diff and use the `files` list from `gh pr view "$PR_NUMBER"` for the changed-file set. Prefer `gh pr diff "$PR_NUMBER"` over `git diff` because CI checkouts are shallow (`fetch-depth: 1`).
 - **Local mode:** run `git diff --name-only HEAD` plus untracked files from `git status --short` for the changed-file set, then `git diff` for content.
 
 Capture both the changed-file list and the full diff to hand to the subagents.
@@ -72,12 +90,12 @@ Group surviving findings by severity:
 
 ### PR mode
 
-Post a **single review** carrying the summary body plus inline comments, using the GitHub API via `gh api`. Derive the PR number with `gh pr view --json number -q .number`, and let `:owner`/`:repo` resolve from the git remote.
+Post a **single review** carrying the summary body plus inline comments, using the GitHub API via `gh api`. Use the explicit `PR_NUMBER` derived in step 1, and let `:owner`/`:repo` resolve from the git remote.
 
 For inline comments, build a JSON payload with one entry per finding. Each inline comment must anchor to a line that is part of the diff for that file; use `side: "RIGHT"` and the head-file line number. For multi-line spans, add `start_line`/`start_side`. If a finding's line is not in the diff, move it into the summary body instead of an inline comment.
 
 ```bash
-gh api -X POST repos/:owner/:repo/pulls/$NUMBER/reviews --input - <<'EOF'
+gh api -X POST repos/:owner/:repo/pulls/$PR_NUMBER/reviews --input - <<'EOF'
 {
   "event": "COMMENT",
   "body": "<summary markdown, see below>",
@@ -110,7 +128,7 @@ Reviewed <N> files across <M> areas: <list areas>.
 
 If there are **no findings at all**, post a concise review body such as `No noteworthy issues found — looks good.` (one line, no inline comments). Do not open a review when there is nothing to say beyond noise, but a one-line confirmation is acceptable so users know the review ran.
 
-If `gh api .../reviews` fails (e.g. a comment line is out of range), fall back to a single top-level `gh pr comment --body "..."` with the summary plus a "findings with file:line" list. Never leave the user with no feedback.
+If `gh api .../reviews` fails (e.g. a comment line is out of range), fall back to a single top-level `gh pr comment "$PR_NUMBER" --body "..."` with the summary plus a "findings with file:line" list. Never leave the user with no feedback.
 
 Use `event: "COMMENT"` for normal reviews. Only use `event: "REQUEST_CHANGES"` when there are critical findings that block merge, and prefer `COMMENT` otherwise.
 
@@ -122,6 +140,6 @@ Print the same summary to the user. Do not call `gh`.
 
 - Keep feedback concise. A short review with real signal beats a long review with padding.
 - Never post secrets, tokens, or full file contents in comments.
-- The workflow grants `pull-requests: write`, so `GITHUB_TOKEN` can post reviews. Do not attempt to push commits or merge.
+- The workflow grants `pull-requests: write`, so `GH_TOKEN` or `GITHUB_TOKEN` can post reviews when passed to the OpenCode step. Do not attempt to push commits or merge.
 - If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
 - Re-run after fixes to verify issues are resolved.
