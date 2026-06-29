@@ -42,7 +42,7 @@ inputs:
     default: latest
   enable-toolkit:
     required: false
-    description: Install the action's bundled .opencode/ agents and commands into ~/.config/opencode (global config) before running. Existing files are preserved.
+    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
     default: 'true'
 outputs:
   opencode-version:

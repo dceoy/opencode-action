@@ -47,18 +47,18 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 
 ## Inputs
 
-| Input              | Required | Default                   | Description                                                                                                                                           |
-| ------------------ | -------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                             |
-| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                     |
-| `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                |
-| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                         |
-| `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                   |
-| `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                          |
-| `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                            |
-| `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                 |
-| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                         |
-| `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents and commands into `~/.config/opencode` (global config) before running. Existing files are preserved. |
+| Input              | Required | Default                   | Description                                                                                                                                                    |
+| ------------------ | -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                      |
+| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                              |
+| `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                         |
+| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                  |
+| `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                            |
+| `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                   |
+| `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                     |
+| `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
+| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                  |
+| `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved. |
 
 ## Outputs
 
