@@ -48,6 +48,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           model: openrouter/openrouter/free
+          prompt: /review-pr
   opencode-bot:
     if: >
       (
