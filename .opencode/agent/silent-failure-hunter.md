@@ -2,7 +2,7 @@
 name: silent-failure-hunter
 description: Reviews code changes for silent failures, inadequate error handling, broad catch blocks, and inappropriate fallback behavior. Use proactively after implementing error handling, catch blocks, fallback logic, or any code that could suppress errors, and when reviewing PRs containing try/catch. Triggers on "review the error handling", "check for silent failures", or "analyze catch blocks in this PR".
 mode: all
-color: yellow
+color: warning
 permission:
   edit: deny
 ---

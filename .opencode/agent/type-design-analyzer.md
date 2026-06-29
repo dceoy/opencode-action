@@ -2,7 +2,7 @@
 name: type-design-analyzer
 description: Analyzes type design quality, rating encapsulation, invariant expression, usefulness, and enforcement on a 1-10 scale. Use when introducing a new type, during PR creation to review all added types, or when refactoring existing types to improve their design. Triggers on "review the UserAccount type design", "analyze type design in this PR", or "check if this type has strong invariants".
 mode: all
-color: pink
+color: accent
 permission:
   edit: deny
 ---

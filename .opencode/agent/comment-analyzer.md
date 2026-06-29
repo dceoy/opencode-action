@@ -2,7 +2,7 @@
 name: comment-analyzer
 description: Analyzes code comments for accuracy, completeness, and long-term maintainability. Use after generating documentation comments or docstrings, before finalizing a PR that adds or modifies comments, when reviewing existing comments for technical debt or comment rot, or to verify comments accurately reflect the code they describe. Triggers on "check if the comments are accurate", "review the documentation I added", or "analyze comments for technical debt".
 mode: all
-color: green
+color: success
 permission:
   edit: deny
 ---

@@ -2,7 +2,7 @@
 name: pr-test-analyzer
 description: Reviews pull requests for test coverage quality and completeness, focusing on behavioral coverage over line coverage. Use after a PR is created or updated, when adding new functionality, or for a pre-merge double-check. Triggers on "check if the tests are thorough", "review test coverage for this PR", or "are there any critical test gaps?".
 mode: all
-color: cyan
+color: info
 permission:
   edit: deny
 ---

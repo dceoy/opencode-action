@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Reviews code against project guidelines (AGENTS.md) for style violations, bugs, and quality issues with high precision to minimize false positives. Use proactively after writing or modifying code, before committing, or before creating a pull request. Triggers on requests like "review my recent changes", "check if everything looks good", or "review this before I commit". By default reviews unstaged changes from `git diff` unless given a different scope.
 mode: all
-color: green
+color: success
 permission:
   edit: deny
 ---
