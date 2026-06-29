@@ -30,32 +30,39 @@ inputs:
   oidc_base_url:
     description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install. Defaults to https://api.opencode.ai.
     required: false
+outputs:
+  opencode_version:
+    description: OpenCode version resolved for this run.
+    value: ${{ steps.version.outputs.version }}
+  cache_hit:
+    description: Whether the OpenCode binary cache was restored.
+    value: ${{ steps.cache.outputs.cache-hit }}
 runs:
   using: composite
   steps:
     - name: Get OpenCode version
       id: version
-      shell: bash
+      shell: bash -euo pipefail {0}
       run: |
         VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
         echo "version=${VERSION:-latest}" >> "${GITHUB_OUTPUT}"
     - name: Cache OpenCode
       id: cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
       with:
         path: ~/.opencode/bin
         key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
     - name: Install OpenCode
       if: steps.cache.outputs.cache-hit != 'true'
-      shell: bash
+      shell: bash -euo pipefail {0}
       run: >
         curl -fsSL https://opencode.ai/install | bash
     - name: Add OpenCode to PATH
-      shell: bash
+      shell: bash -euo pipefail {0}
       run: >
         echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
     - name: Run OpenCode
-      shell: bash
+      shell: bash -euo pipefail {0}
       id: run_opencode
       env:
         MODEL: ${{ inputs.model }}

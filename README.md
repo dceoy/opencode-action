@@ -64,6 +64,13 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 | `variant`          | No       |         | Provider-specific model variant, such as `high`, `max`, or `minimal`. |
 | `oidc_base_url`    | No       |         | Custom OIDC token exchange API base URL.                              |
 
+## Outputs
+
+| Output             | Description                                     |
+| ------------------ | ----------------------------------------------- |
+| `opencode_version` | OpenCode version resolved for the workflow run. |
+| `cache_hit`        | Whether the OpenCode binary cache was restored. |
+
 ## Secrets
 
 Set the API key required by the selected model provider, for example:
