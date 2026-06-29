@@ -20,7 +20,7 @@ inputs:
     required: false
     description: Custom prompt to override the default prompt
     default: ''
-  use_github_token:
+  use-github-token:
     required: false
     description: Whether to use GITHUB_TOKEN directly instead of OpenCode App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var.
     default: 'false'
@@ -32,7 +32,7 @@ inputs:
     required: false
     description: Model variant for provider-specific reasoning effort (e.g., high, max, minimal)
     default: ''
-  oidc_base_url:
+  oidc-base-url:
     required: false
     description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install.
     default: https://api.opencode.ai
@@ -40,6 +40,10 @@ inputs:
     required: false
     description: OpenCode version to install (e.g., v1.2.3)
     default: latest
+  enable-toolkit:
+    required: false
+    description: Copy the action's bundled .opencode/ agents and commands into the workspace before running. Existing files are preserved.
+    default: 'true'
 outputs:
   opencode-version:
     description: OpenCode version resolved for this run.
@@ -80,6 +84,17 @@ runs:
       shell: bash -euo pipefail {0}
       run: >
         echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
+    - name: Copy bundled OpenCode config
+      if: ${{ inputs['enable-toolkit'] == 'true' }}
+      shell: bash -euo pipefail {0}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [[ -d "${ACTION_PATH}/.opencode" ]]; then
+          mkdir -p .opencode
+          cp -rn "${ACTION_PATH}/.opencode/." .opencode/
+          echo "Copied bundled OpenCode config into .opencode/"
+        fi
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
@@ -88,9 +103,9 @@ runs:
         AGENT: ${{ inputs.agent }}
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
-        USE_GITHUB_TOKEN: ${{ inputs.use_github_token }}
+        USE_GITHUB_TOKEN: ${{ inputs['use-github-token'] }}
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
-        OIDC_BASE_URL: ${{ inputs.oidc_base_url }}
+        OIDC_BASE_URL: ${{ inputs['oidc-base-url'] }}
       run: >
         opencode github run
