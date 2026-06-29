@@ -1,0 +1,51 @@
+---
+name: CI/CD
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  release:
+    types:
+      - released
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  github-actions-lint-and-scan:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: dceoy/gh-actions-for-devops/.github/workflows/github-actions-lint-and-scan.yml@main   # zizmor: ignore[unpinned-uses]
+    with:
+      search-path: .github/workflows
+      go-version: stable
+      python-version: 3.x
+  github-major-version-tag:
+    if: >
+      (github.event_name == 'release' && github.event.action == 'released')
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    uses: dceoy/gh-actions-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
+  dependabot-auto-merge:
+    if: >
+      github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
+    needs:
+      - github-actions-lint-and-scan
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      checks: read
+      statuses: read
+    uses: dceoy/gh-actions-for-devops/.github/workflows/dependabot-auto-merge.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      unconditional: true
