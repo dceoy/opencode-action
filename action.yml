@@ -6,35 +6,45 @@ branding:
   color: orange
 inputs:
   model:
-    description: Model to use, in provider/model format
     required: true
+    description: Model to use, in provider/model format
   agent:
-    description: Agent to use. Must be a primary agent. Falls back to default_agent from config or build if not found.
     required: false
+    description: Agent to use. Must be a primary agent. Falls back to default_agent from config or 'build' if not found.
+    default: build
   share:
-    description: Share the OpenCode session. Defaults to true for public repositories.
     required: false
+    description: Whether to share the opencode session
+    default: 'false'
   prompt:
+    required: false
     description: Custom prompt to override the default prompt
-    required: false
+    default: ''
   use_github_token:
-    description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var.
     required: false
-    default: false
+    description: Whether to use GITHUB_TOKEN directly instead of OpenCode App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var.
+    default: 'false'
   mentions:
-    description: Comma-separated list of trigger phrases, case-insensitive. Defaults to /opencode,/oc.
     required: false
+    description: Comma-separated list of trigger phrases (case-insensitive)
+    default: /opencode,/oc
   variant:
-    description: Model variant for provider-specific reasoning effort, for example high, max, or minimal.
     required: false
+    description: Model variant for provider-specific reasoning effort (e.g., high, max, minimal)
+    default: ''
   oidc_base_url:
-    description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install. Defaults to https://api.opencode.ai.
     required: false
+    description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install.
+    default: https://api.opencode.ai
+  version:
+    required: false
+    description: OpenCode version to install (e.g., v1.2.3)
+    default: latest
 outputs:
-  opencode_version:
+  opencode-version:
     description: OpenCode version resolved for this run.
-    value: ${{ steps.version.outputs.version }}
-  cache_hit:
+    value: ${{ steps.version.outputs.opencode-version }}
+  cache-hit:
     description: Whether the OpenCode binary cache was restored.
     value: ${{ steps.cache.outputs.cache-hit }}
 runs:
@@ -43,27 +53,36 @@ runs:
     - name: Get OpenCode version
       id: version
       shell: bash -euo pipefail {0}
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-        echo "version=${VERSION:-latest}" >> "${GITHUB_OUTPUT}"
+        if [[ "${INPUT_VERSION}" == "latest" ]]; then
+          OPENCODE_VERSION="$(curl -fsSL https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r '.tag_name')"
+        else
+          OPENCODE_VERSION="${INPUT_VERSION}"
+        fi
+        echo "opencode-version=$(tr -d v <<< "${OPENCODE_VERSION}")" | tee -a "${GITHUB_OUTPUT}"
     - name: Cache OpenCode
       id: cache
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
       with:
         path: ~/.opencode/bin
-        key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+        key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.opencode-version }}
     - name: Install OpenCode
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: >
+        steps.cache.outputs.cache-hit != 'true'
       shell: bash -euo pipefail {0}
+      env:
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
       run: >
-        curl -fsSL https://opencode.ai/install | bash
+        curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}"
     - name: Add OpenCode to PATH
       shell: bash -euo pipefail {0}
       run: >
-        echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
+        echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
     - name: Run OpenCode
-      shell: bash -euo pipefail {0}
       id: run_opencode
+      shell: bash -euo pipefail {0}
       env:
         MODEL: ${{ inputs.model }}
         AGENT: ${{ inputs.agent }}

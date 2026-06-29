@@ -26,8 +26,18 @@ jobs:
     uses: dceoy/gh-actions-for-devops/.github/workflows/github-actions-lint-and-scan.yml@main   # zizmor: ignore[unpinned-uses]
     with:
       search-path: .github/workflows
-      go-version: stable
-      python-version: 3.x
+      use-yamllint: false
+  yaml-lint:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: dceoy/gh-actions-for-devops/.github/workflows/yaml-lint.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      search-path: .
+      yamllint-config-data: '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
   github-major-version-tag:
     if: >
       (github.event_name == 'release' && github.event.action == 'released')
