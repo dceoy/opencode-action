@@ -53,16 +53,16 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 
 ## Inputs
 
-| Input | Required | Default | Description |
-| --- | --- | --- | --- |
-| `model` | Yes | | Model to use, in `provider/model` format. |
-| `agent` | No | | OpenCode primary agent to use. |
-| `share` | No | | Share the OpenCode session. Defaults to true for public repositories. |
-| `prompt` | No | | Custom prompt to override the default prompt. |
-| `use_github_token` | No | `false` | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange. |
-| `mentions` | No | | Comma-separated trigger phrases. Defaults to `/opencode,/oc`. |
-| `variant` | No | | Provider-specific model variant, such as `high`, `max`, or `minimal`. |
-| `oidc_base_url` | No | | Custom OIDC token exchange API base URL. |
+| Input              | Required | Default | Description                                                           |
+| ------------------ | -------- | ------- | --------------------------------------------------------------------- |
+| `model`            | Yes      |         | Model to use, in `provider/model` format.                             |
+| `agent`            | No       |         | OpenCode primary agent to use.                                        |
+| `share`            | No       |         | Share the OpenCode session. Defaults to true for public repositories. |
+| `prompt`           | No       |         | Custom prompt to override the default prompt.                         |
+| `use_github_token` | No       | `false` | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.   |
+| `mentions`         | No       |         | Comma-separated trigger phrases. Defaults to `/opencode,/oc`.         |
+| `variant`          | No       |         | Provider-specific model variant, such as `high`, `max`, or `minimal`. |
+| `oidc_base_url`    | No       |         | Custom OIDC token exchange API base URL.                              |
 
 ## Secrets
 
