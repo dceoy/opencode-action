@@ -85,7 +85,7 @@ runs:
       run: >
         echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
     - name: Copy bundled OpenCode config
-      if: ${{ inputs['enable-toolkit'] == 'true' }}
+      if: inputs.enable-toolkit == 'true' }}
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -103,9 +103,9 @@ runs:
         AGENT: ${{ inputs.agent }}
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
-        USE_GITHUB_TOKEN: ${{ inputs['use-github-token'] }}
+        USE_GITHUB_TOKEN: ${{ inputs.use-github-token }}
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
-        OIDC_BASE_URL: ${{ inputs['oidc-base-url'] }}
+        OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
       run: >
         opencode github run
