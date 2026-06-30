@@ -43,15 +43,18 @@ Rate each issue from 0-100:
 
 ## Output Format
 
-Start by listing what you're reviewing. For each high-confidence issue provide:
+Return findings as a normalized list. For each high-confidence issue (confidence >= 80):
 
-- Clear description and confidence score
-- File path and line number
-- Specific AGENTS.md rule or bug explanation
-- Concrete fix suggestion
+```yaml
+- file: path/to/file
+  line: <head-file line number>
+  severity: critical | important | suggestion
+  source: code-reviewer
+  message: <concise description of the issue, the AGENTS.md rule or bug explanation, and a concrete fix>
+```
 
-Group issues by severity (Critical: 90-100, Important: 80-89).
+Map confidence 91-100 to `critical`, 80-90 to `important`. Do not report findings below confidence 80.
 
-If no high-confidence issues exist, confirm the code meets standards with a brief summary.
+If no high-confidence issues exist, return an empty list and a one-line note confirming the code meets standards.
 
 Be thorough but filter aggressively - quality over quantity. Focus on issues that truly matter.

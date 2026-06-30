@@ -43,9 +43,10 @@ When a mode disables an action, skip that destructive or externally visible acti
 
 Gather the complete feedback set before editing:
 
-- Fetch unresolved review threads, requested-change reviews, PR-level summary comments, and copied comments.
+- Fetch unresolved review threads, requested-change reviews, inline comments, copied comments, and PR-level summary comments.
 - Use platform-native APIs/CLI when available. Paginate results; do not inspect only the first page of threads or comments.
-- For bot reviewers that post both summary comments and inline comments, collect both. Summary comments often contain severity, rationale, and fix instructions; inline comments contain the exact file and line context.
+- For bot reviewers that post both summary comments and inline comments, prefer inline comments for actionable triage. Incorporate summary findings only when they contain distinct severity, rationale, or fix instructions not already captured from inline comments.
+- Summary comments may be excluded from triage when they do not add distinct actionable context.
 - Preserve every thread/comment identifier needed to reply or resolve later.
 - Compare each comment with the current diff and file contents because review lines can become outdated.
 
@@ -56,7 +57,7 @@ Build one triage record per distinct finding:
 - Prefer exact review-thread identity when available.
 - For duplicate bot findings appearing in both summary and inline comments, merge by exact issue title first, then by file path plus line range as a fallback.
 - Prefer inline comments for location and current code context.
-- Prefer summary comments for severity, category, rationale, and detailed agent prompts.
+- Use summary comments only for distinct severity, category, rationale, or detailed agent prompts that are not already available from inline comments.
 - Preserve the reviewer’s exact issue title and original wording where practical. Do not rename findings in a way that would make replies hard to map back to comments.
 - Preserve the reviewer’s original ordering unless the user asks for priority reordering. Many review bots already order findings by severity.
 
@@ -70,13 +71,20 @@ Keep a thread open only when it still needs reviewer, maintainer, or product inp
 
 When resolving a thread, add a concise reply first only if it provides useful context, such as what changed, why no code change was needed, why a finding was intentionally deferred, or why the original comment is now outdated. Do not add noisy replies for self-evident fixes unless project norms require them.
 
+## Platform Comment Style
+
+- Keep every posted reply or comment brief: one sentence by default, two short sentences only when necessary.
+- Do not post PR-level summary or status comments by default. Omit them when they only restate completed fixes, resolved threads, or verification already visible in commits/checks.
+- Avoid templates, long bullet lists, exhaustive status logs, and duplicated explanations in platform comments.
+- For simple fixes, already-addressed findings, or outdated findings, prefer `resolve_only` over adding a reply.
+
 ## Platform Action Contract
 
-Do not treat triage as complete until every collected source ID reaches an explicit terminal state:
+Do not treat triage as complete until every incorporated source ID reaches an explicit terminal state:
 
 - `resolved`: a platform resolve action succeeded, or a re-check shows the thread is already resolved.
 - `replied_left_open`: a reply or question was posted and the thread is intentionally left unresolved.
-- `not_resolvable`: the source is a PR-level summary comment or copied comment that has no platform-level resolve action; reply or post a PR summary when useful.
+- `not_resolvable`: the source is a PR-level summary comment or copied comment that has no platform-level resolve action; post a brief reply only when useful.
 - `skipped_by_mode`: `dry_run`, `no_push`, or `no_reply` prevented the external action.
 - `failed_action`: a reply or resolve action was attempted and failed; include the attempted action and failure in the final summary.
 
@@ -85,7 +93,7 @@ In normal mode, build and execute a platform action queue after fixes are verifi
 - `reply_then_resolve`: use for handled threads where the reviewer needs context before resolution.
 - `resolve_only`: use for self-evident fixes and already-addressed or outdated threads where an extra reply would add noise.
 - `reply_leave_open`: use only for clarification requests, blocked work, or intentionally open follow-ups.
-- `reply_only`: use for PR-level comments or summaries that cannot be resolved as review threads.
+- `reply_only`: use for PR-level comments or summaries that cannot be resolved, only when a short reply adds value.
 
 For duplicate findings, execute the terminal action for every source thread ID, not only the primary triage record. If one finding is represented by three unresolved inline threads, all three must be resolved or explicitly left open.
 
@@ -150,9 +158,9 @@ flowchart TD
 ## Compact Workflow
 
 1. **Collect all relevant feedback**
-   - Identify the PR and gather unresolved review threads, requested-change reviews, PR-level summaries, inline comments, and copied comments.
+   - Identify the PR and gather unresolved review threads, requested-change reviews, inline comments, copied comments, and PR-level summaries.
    - Paginate all platform calls and keep comment/thread IDs for later replies and resolution.
-   - For bot reviews, collect both summary and inline comments, then merge duplicates rather than fixing the same finding twice.
+   - For bot reviews, prioritize inline comments and incorporate summary findings only when they add distinct actionable context.
 
 2. **Classify each triage record**
    - **Fix**: Valid requested change; make the smallest focused edit when not in `dry_run`.
@@ -168,7 +176,7 @@ flowchart TD
    - In `dry_run`, stop at triage, proposed fixes, suggested replies, and verification plan.
    - In `no_push`, local edits are allowed, but do not push or resolve threads whose fix is only local. Reply or resolve non-code, already-addressed, or outdated threads only when the action does not depend on unpushed work and `no_reply` is not set.
    - In `no_reply`, do not post replies or resolve threads; report suggested replies/actions instead.
-   - In normal mode, commit and push changed code when appropriate, then execute the platform action queue for every collected source ID.
+   - In normal mode, commit and push changed code when appropriate, then execute the platform action queue for every incorporated source ID.
 
 4. **Verify before claiming completion**
    - For fixes, run appropriate checks or explain why they could not run.
@@ -178,15 +186,16 @@ flowchart TD
    - If a resolve or reply operation fails, retry once when safe; then report `failed_action` with the affected source ID and reason.
 
 5. **Finish**
-   - Normal mode: commit/push changes when appropriate, post useful replies or a summary, resolve all handled threads by default, and reconcile the final unresolved set.
+   - Normal mode: commit/push changes when appropriate, post only useful short replies/comments, omit PR-level summaries when they add no value, resolve all handled threads by default, and reconcile the final unresolved set.
    - Safe modes: report the local state and the exact replies/resolution actions a human could take.
 
 ## Reply Guidance
 
-- Keep inline replies short and tied to the original title or concern.
-- For fixed findings, mention the concrete change or commit if useful.
-- For already-addressed or outdated findings, cite the current code path or behavior that makes the finding no longer applicable.
+- Keep inline replies short: one sentence by default, two short sentences only when needed.
+- For fixed findings, mention the concrete change or commit only if it helps the reviewer.
+- For already-addressed or outdated findings, cite the current code path or behavior only as briefly as needed.
 - For deferred or won't-fix findings, provide the reason and any follow-up issue or owner if known.
+- Avoid posting PR-level summary comments unless they communicate a decision, blocker, or requested reviewer action.
 - If a reply or resolve operation fails, continue with the remaining threads and report the failure in the final summary.
 
 ## Final Summary Checklist

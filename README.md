@@ -100,6 +100,42 @@ Example OpenCode step:
     prompt: /review-pr
 ```
 
+### Review commands
+
+The bundled toolkit combines Claude Code Action-style core reviewers with `pr-review-toolkit` specialty agents. Use `/review-pr` with any of the following aspect keywords:
+
+| Command                           | What runs                                                                                                                                                                                                                                                                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/review-pr` or `/review-pr all`  | Core reviewers (`code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, `code-reviewer`) plus specialty agents (`pr-test-analyzer`, `silent-failure-hunter`, `comment-analyzer`, `type-design-analyzer`) when triggered by diff content |
+| `/review-pr security performance` | `security-code-reviewer`, `performance-reviewer`                                                                                                                                                                                                                                                                        |
+| `/review-pr tests docs`           | `test-coverage-reviewer`, `pr-test-analyzer`, `documentation-accuracy-reviewer`                                                                                                                                                                                                                                         |
+| `/review-pr code`                 | `code-reviewer`, `code-quality-reviewer`                                                                                                                                                                                                                                                                                |
+| `/review-pr quality`              | `code-quality-reviewer`                                                                                                                                                                                                                                                                                                 |
+| `/review-pr coverage`             | `test-coverage-reviewer`, `pr-test-analyzer`                                                                                                                                                                                                                                                                            |
+| `/review-pr documentation`        | `documentation-accuracy-reviewer`                                                                                                                                                                                                                                                                                       |
+| `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
+| `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
+| `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
+| `/review-pr simplify`             | `code-simplifier` — refinement only, does not post a review                                                                                                                                                                                                                                                             |
+
+#### Core reviewers (Claude Code Action-compatible)
+
+- **`code-quality-reviewer`** — general quality, maintainability, edge cases, robustness, type safety
+- **`test-coverage-reviewer`** — missing critical test scenarios, brittle tests, error coverage gaps
+- **`documentation-accuracy-reviewer`** — README, API docs, docstrings, examples vs. implementation
+
+#### Specialty reviewers (pr-review-toolkit style)
+
+- **`code-reviewer`** — project-guideline compliance (AGENTS.md), bugs, and quality
+- **`performance-reviewer`** — algorithmic complexity, N+1, resource leaks
+- **`security-code-reviewer`** — trust boundaries, injection, secrets, auth/authz
+- **`pr-test-analyzer`** — behavioral test coverage and critical coverage gaps
+- **`silent-failure-hunter`** — silent failures, broad catch blocks, fallback logic
+- **`comment-analyzer`** — comment accuracy, completeness, and comment rot
+- **`type-design-analyzer`** — type invariants, encapsulation, and design quality
+
+Findings are normalized, deduplicated across agents, and validated against the PR diff before posting. **Posting policy:** anchored findings become inline comments on the specific representative line; unanchorable findings (changed file but no safe diff line) move to the summary body as `file:line` references; duplicated root causes produce one representative inline comment plus a summary-body entry listing all affected files. Cross-document or cross-file consistency problems are summarized once in the review body instead of repeated at each location. If the reviews API call fails, the skill falls back to a single top-level PR comment.
+
 ## Examples
 
 Explain an issue:

@@ -60,15 +60,17 @@ Rate each issue from 0-100:
 
 ## Output Format
 
-For each high-confidence finding, provide:
+Return findings as a normalized list. For each high-confidence finding:
 
-- **file**: path
-- **line**: line number in the PR head file (so an inline review comment can anchor to it)
-- **severity**: critical | important | suggestion
-- **impact**: estimated complexity or resource cost and the scale at which it bites
-- **message**: concise description and concrete fix (with a short before/after snippet when helpful)
+```yaml
+- file: path/to/file
+  line: <head-file line number>
+  severity: critical | important | suggestion
+  source: performance-reviewer
+  message: <concise description of the issue, the estimated complexity or resource cost and the scale at which it bites, and a concrete fix (with a short before/after snippet when helpful)>
+```
 
-Group findings by severity (Critical, Important, Suggestion). If no high-confidence issues exist, return an empty list and a one-line note stating the change is performant, calling out any particularly well-optimized sections.
+Map confidence 91-100 to `critical`, 80-90 to `important`. Do not report findings below confidence 80. If no high-confidence issues exist, return an empty list and a one-line note stating the change is performant.
 
 ## Tone
 

@@ -107,15 +107,19 @@ Check AGENTS.md for the project's error-handling conventions, for example:
 
 ## Your Output Format
 
-For each issue you find, provide:
+Return findings as a normalized list. For each issue found:
 
-1. **Location**: File path and line number(s)
-2. **Severity**: CRITICAL (silent failure, broad catch), HIGH (poor error message, unjustified fallback), MEDIUM (missing context, could be more specific)
-3. **Issue Description**: What's wrong and why it's problematic
-4. **Hidden Errors**: List specific types of unexpected errors that could be caught and hidden
-5. **User Impact**: How this affects the user experience and debugging
-6. **Recommendation**: Specific code changes needed to fix the issue
-7. **Example**: Show what the corrected code should look like
+```yaml
+- file: path/to/file
+  line: <head-file line number>
+  severity: critical | important | suggestion
+  source: silent-failure-hunter
+  message: <concise description of the silent-failure or error-handling issue and the specific fix>
+```
+
+Map CRITICAL (silent failure, broad catch) to `critical`, HIGH (poor error message, unjustified fallback) to `important`, MEDIUM (missing context, could be more specific) to `suggestion`.
+
+If no issues are found, return an empty list and a one-line note confirming error handling is adequate.
 
 ## Your Tone
 
