@@ -100,6 +100,42 @@ Example OpenCode step:
     prompt: /review-pr
 ```
 
+### Review commands
+
+The bundled toolkit combines Claude Code Action-style core reviewers with `pr-review-toolkit` specialty agents. Use `/review-pr` with any of the following aspect keywords:
+
+| Command                           | What runs                                                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/review-pr` or `/review-pr all`  | All applicable reviewers: code quality, performance, tests, documentation, security, plus specialty agents when triggered by diff content |
+| `/review-pr security performance` | Security and performance reviewers only                                                                                                   |
+| `/review-pr tests docs`           | Test coverage and documentation accuracy reviewers                                                                                        |
+| `/review-pr code`                 | Code reviewer (guidelines) and code-quality reviewer                                                                                      |
+| `/review-pr quality`              | Code-quality reviewer (edge cases, robustness, type safety)                                                                               |
+| `/review-pr coverage`             | Test-coverage reviewer and PR test analyzer                                                                                               |
+| `/review-pr documentation`        | Documentation accuracy reviewer                                                                                                           |
+| `/review-pr errors`               | Silent-failure hunter (error handling, catch blocks, fallback logic)                                                                      |
+| `/review-pr comments`             | Comment analyzer (code comment accuracy and maintainability)                                                                              |
+| `/review-pr types`                | Type-design analyzer (invariants, encapsulation)                                                                                          |
+| `/review-pr simplify`             | Code simplifier — refinement only, does not post a review                                                                                 |
+
+#### Core reviewers (Claude Code Action-compatible)
+
+- **`code-quality-reviewer`** — general quality, maintainability, edge cases, robustness, type safety
+- **`test-coverage-reviewer`** — missing critical test scenarios, brittle tests, error coverage gaps
+- **`documentation-accuracy-reviewer`** — README, API docs, docstrings, examples vs. implementation
+
+#### Specialty reviewers (pr-review-toolkit style)
+
+- **`code-reviewer`** — project-guideline compliance (AGENTS.md), bugs, and quality
+- **`performance-reviewer`** — algorithmic complexity, N+1, resource leaks
+- **`security-code-reviewer`** — trust boundaries, injection, secrets, auth/authz
+- **`pr-test-analyzer`** — behavioral test coverage and critical coverage gaps
+- **`silent-failure-hunter`** — silent failures, broad catch blocks, fallback logic
+- **`comment-analyzer`** — comment accuracy, completeness, and comment rot
+- **`type-design-analyzer`** — type invariants, encapsulation, and design quality
+
+Findings are normalized, deduplicated across agents, and validated against the PR diff before posting. Inline comments are used only when the line can be safely anchored to the diff; unanchorable findings move to the summary body. If the reviews API call fails, the skill falls back to a single top-level PR comment.
+
 ## Examples
 
 Explain an issue:
