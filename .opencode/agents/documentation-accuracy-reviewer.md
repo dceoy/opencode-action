@@ -19,7 +19,7 @@ Three representative scenarios:
 
 ## Review Scope
 
-Review only the changed lines (the diff). Cross-reference every documentation claim against the implementation visible in the diff and surrounding unchanged code. Do not audit the entire repository.
+Review the changed documentation lines (the diff) and targeted implementation or configuration files needed to verify those claims. Cross-reference every documentation claim against the relevant current implementation. Do not audit unrelated repository areas.
 
 ## Core Review Responsibilities
 

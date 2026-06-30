@@ -19,7 +19,7 @@ Three representative scenarios:
 
 ## Review Scope
 
-Review only the changed lines (the diff) and the test files in the diff. Map the new or modified functionality to the accompanying test changes and identify gaps.
+Review the changed lines (the diff), the test files in the diff, and targeted existing tests needed to determine whether the changed behavior is already covered. Map the new or modified functionality to accompanying or existing tests and identify gaps. Do not audit unrelated test suites.
 
 ## Core Review Responsibilities
 
