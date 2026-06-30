@@ -30,9 +30,13 @@ for f in "$agents_dir"/*.md; do
 done
 
 # 2. Every agent name referenced in review-pr docs exists under .opencode/agents/.
+# Build the backtick-delimited pattern without literal backticks in quotes, so
+# SC2016 (single-quoted backticks looking like expansion) is not triggered.
+bt=$(printf '\x60')
+pattern="${bt}[a-z][a-z0-9]+(-[a-z0-9]+)+${bt}"
 mapfile -t refs < <(
-  grep -hoE '`[a-z][a-z0-9]+(-[a-z0-9]+)+`' "${docs[@]}" \
-    | tr -d '`' | sort -u
+  grep -hoE "$pattern" "${docs[@]}" \
+    | tr -d "$bt" | sort -u
 )
 for ref in "${refs[@]}"; do
   skip=0
