@@ -47,13 +47,14 @@ When `all` is requested or no aspect is specified, the following **core reviewer
 3. `test-coverage-reviewer` — Claude Code Action-compatible: missing critical tests and brittle tests
 4. `documentation-accuracy-reviewer` — Claude Code Action-compatible: docs and README accuracy
 5. `security-code-reviewer` — trust boundaries, injection, secrets, auth
+6. `code-reviewer` — always run; AGENTS.md/project-guideline compliance and high-precision bug detection; avoids duplicating `code-quality-reviewer` findings
 
 The following **specialty reviewers** run conditionally:
 
+- `pr-test-analyzer` — when test files changed (paths matching `*test*`, `*spec*`, or test directories)
 - `silent-failure-hunter` — when error handling, catch blocks, fallback logic, retries, logging, or failure paths changed
 - `comment-analyzer` — when code comments or docstrings changed
 - `type-design-analyzer` — when new or modified types, interfaces, classes, schemas, domain models, or struct definitions are introduced
-- `code-reviewer` — as the AGENTS.md/project-guideline-focused reviewer; avoids duplicating `code-quality-reviewer` findings
 
 `code-simplifier` is never part of the `all` review set; it is a separate post-review refinement step.
 
@@ -103,7 +104,7 @@ Every subagent returns findings in this normalized structure:
 
 1. Drop praise-only items (no actionable issue).
 2. Drop nitpicks (cosmetic preferences, no real-world impact).
-3. Drop findings not supported by the diff (file or line not in the changed-file set).
+3. Drop findings not supported by the diff (file not in the changed-file set; leave line validation to the anchoring step).
 4. Deduplicate across agents (keep the most specific finding when two agents report the same issue at the same location).
 5. Orchestrator second filter: the orchestrator reviews every remaining finding and discards any it does not also deem noteworthy.
 

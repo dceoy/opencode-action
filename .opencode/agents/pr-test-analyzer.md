@@ -59,13 +59,19 @@ Three representative scenarios:
 
 **Output Format:**
 
-Structure your analysis as:
+Return findings as a normalized list. For each gap or quality issue rated >= 7:
 
-1. **Summary**: Brief overview of test coverage quality
-2. **Critical Gaps** (if any): Tests rated 8-10 that must be added
-3. **Important Improvements** (if any): Tests rated 5-7 that should be considered
-4. **Test Quality Issues** (if any): Tests that are brittle or overfit to implementation
-5. **Positive Observations**: What's well-tested and follows best practices
+```yaml
+- file: path/to/file
+  line: <line number of the code or test being referenced>
+  severity: critical | important | suggestion
+  source: pr-test-analyzer
+  message: <concise description of the gap or quality issue and what test should cover it>
+```
+
+Map ratings 9-10 to `critical`, 7-8 to `important`, 5-6 to `suggestion`. Do not report findings rated below 7.
+
+If no high-confidence gaps exist, return an empty list and a one-line note confirming coverage is adequate.
 
 **Important Considerations:**
 

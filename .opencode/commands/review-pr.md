@@ -47,11 +47,11 @@ Capture the changed-file list, the full diff, and the PR metadata (title, body, 
 
 Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 
-- `code` → `code-reviewer` and/or `code-quality-reviewer`
+- `code` → `code-reviewer` and `code-quality-reviewer`
 - `quality` → `code-quality-reviewer`
 - `performance` → `performance-reviewer`
 - `security` → `security-code-reviewer`
-- `tests` or `coverage` → `test-coverage-reviewer` and/or `pr-test-analyzer`
+- `tests` or `coverage` → `test-coverage-reviewer` and `pr-test-analyzer`
 - `docs` or `documentation` → `documentation-accuracy-reviewer`
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
@@ -68,13 +68,14 @@ When `all` is requested or no aspect is specified, run the following **core revi
 3. `test-coverage-reviewer` — missing critical tests and brittle tests
 4. `documentation-accuracy-reviewer` — docs and README accuracy vs implementation
 5. `security-code-reviewer` — trust boundaries, injection, secrets, auth
+6. `code-reviewer` — always run; AGENTS.md/project-guideline compliance and high-precision bug detection; do not duplicate findings from `code-quality-reviewer`
 
 Also run the following **specialty reviewers** conditionally:
 
+- `pr-test-analyzer` — when test files changed (paths matching `*test*`, `*spec*`, or test directories)
 - `silent-failure-hunter` — when the diff contains: try/catch, except, rescue, `.catch(`, `on_error`, `fallback`, retry logic, or logging/error-handling paths
 - `comment-analyzer` — when the diff contains changes to code comments, docstrings, or inline docs (`//`, `#`, `/*`, `"""`, `'''`)
 - `type-design-analyzer` — when the diff introduces new types, interfaces, classes, schemas, domain models, or struct definitions
-- `code-reviewer` — run as the AGENTS.md/project-guideline-focused reviewer; do not duplicate findings already captured by `code-quality-reviewer`
 
 Do **not** include `code-simplifier` in the `all` review set; it is a separate post-review refinement step.
 
@@ -117,7 +118,7 @@ Collect all findings from all subagents. Each finding must have `file`, `line`, 
 
 1. **Drop praise-only items**: remove any entry whose message is only positive (no actionable issue).
 2. **Drop nitpicks**: remove cosmetic preferences, style-only feedback, or issues with no real-world impact.
-3. **Drop findings not supported by the diff**: if the file or line referenced is not in the changed-file set, drop the finding.
+3. **Drop findings not supported by the diff**: if the file referenced is not in the changed-file set, drop the finding. Leave line validation to the diff-anchoring step (step 6).
 4. **Deduplicate across agents**: if two or more agents report substantially the same issue at the same location, keep the most specific one (usually from the specialized agent) and discard the duplicate.
 5. **Orchestrator second filter**: review every remaining finding yourself and remove any you do not also deem noteworthy. This filter keeps the signal high.
 

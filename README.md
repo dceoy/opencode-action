@@ -108,7 +108,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `/review-pr` or `/review-pr all`  | All applicable reviewers: code quality, performance, tests, documentation, security, plus specialty agents when triggered by diff content |
 | `/review-pr security performance` | Security and performance reviewers only                                                                                                   |
-| `/review-pr tests docs`           | Test coverage and documentation accuracy reviewers                                                                                        |
+| `/review-pr tests docs`           | Test coverage and documentation accuracy reviewers (`test-coverage-reviewer`, `pr-test-analyzer`, `documentation-accuracy-reviewer`)      |
 | `/review-pr code`                 | Code reviewer (guidelines) and code-quality reviewer                                                                                      |
 | `/review-pr quality`              | Code-quality reviewer (edge cases, robustness, type safety)                                                                               |
 | `/review-pr coverage`             | Test-coverage reviewer and PR test analyzer                                                                                               |

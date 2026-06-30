@@ -56,36 +56,19 @@ When analyzing a type, you will:
 
 **Output Format:**
 
-Provide your analysis in this structure:
+Return findings as a normalized list. For each type with a meaningful concern (average rating < 7 or any axis < 5):
 
+```yaml
+- file: path/to/file
+  line: <line number where the type/struct/class is defined>
+  severity: critical | important | suggestion
+  source: type-design-analyzer
+  message: <concise description of the design concern (axis, rating, specific issue) and a concrete improvement>
 ```
-## Type: [TypeName]
 
-### Invariants Identified
-- [List each invariant with a brief description]
+Map average rating < 5 or any axis < 3 to `critical`, any axis 3-5 to `important`, overall average 5-7 to `suggestion`. Do not report types with all axes >= 7.
 
-### Ratings
-- **Encapsulation**: X/10
-  [Brief justification]
-
-- **Invariant Expression**: X/10
-  [Brief justification]
-
-- **Invariant Usefulness**: X/10
-  [Brief justification]
-
-- **Invariant Enforcement**: X/10
-  [Brief justification]
-
-### Strengths
-[What the type does well]
-
-### Concerns
-[Specific issues that need attention]
-
-### Recommended Improvements
-[Concrete, actionable suggestions that won't overcomplicate the codebase]
-```
+If no significant design concerns exist, return an empty list and a one-line note confirming type design is sound.
 
 **Key Principles:**
 
