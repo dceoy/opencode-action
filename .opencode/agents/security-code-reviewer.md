@@ -73,16 +73,17 @@ Rate each issue from 0-100:
 
 ## Output Format
 
-For each high-confidence finding, provide:
+Return findings as a normalized list. For each high-confidence finding:
 
-- **file**: path
-- **line**: line number in the PR head file (so an inline review comment can anchor to it)
-- **severity**: critical | important | suggestion
-- **vulnerability**: clear description of the issue (with CWE reference when relevant)
-- **impact**: what an attacker could do if exploited
-- **message**: concise remediation with a short code example when helpful
+```yaml
+- file: path/to/file
+  line: <head-file line number>
+  severity: critical | important | suggestion
+  source: security-code-reviewer
+  message: <concise description of the vulnerability (with CWE reference when relevant), what an attacker could do if exploited, and the remediation (with a short code example when helpful)>
+```
 
-Order findings by severity (Critical, High/Important, Suggestion). If no high-confidence issues exist, return an empty list and a one-line note confirming the review completed, highlighting any positive security practices observed.
+Map confidence 91-100 to `critical`, 80-90 to `important`. Do not report findings below confidence 80. If no high-confidence issues exist, return an empty list and a one-line note confirming the review completed.
 
 ## Tone
 

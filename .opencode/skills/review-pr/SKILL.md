@@ -104,11 +104,12 @@ Every subagent returns findings in this normalized structure:
 
 1. Drop praise-only items (no actionable issue).
 2. Drop nitpicks (cosmetic preferences, no real-world impact).
-3. Drop findings not supported by the diff (file not in the changed-file set; leave line validation to the anchoring step).
+3. Drop findings not supported by the diff — check **file membership only**; the changed-file set contains paths, not line numbers. Leave line validation to the anchoring step.
 4. Deduplicate across agents (keep the most specific finding when two agents report the same issue at the same location).
-5. Orchestrator second filter: the orchestrator reviews every remaining finding and discards any it does not also deem noteworthy.
+5. **Aggregate by root cause**: when several findings share the same underlying root cause (e.g. the same inconsistency repeated across README, SKILL.md, and command files), keep one representative finding as an inline comment and collapse the rest into the summary body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
+6. Orchestrator second filter: the orchestrator reviews every remaining finding and discards any it does not also deem noteworthy.
 
-Prefer fewer, higher-signal comments over exhaustive lists.
+Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
 
 ## Inline Comment Anchoring
 
@@ -116,7 +117,7 @@ Before building the review payload, every finding is validated against the PR di
 
 - Inline comments use `side: "RIGHT"` and the head-file line number.
 - A line is anchored if it falls within a `+` hunk or surrounding unchanged-context lines of that hunk for the given file.
-- Findings whose line cannot be safely anchored are moved to the summary body as `file:line` references.
+- Findings whose line cannot be safely anchored are **moved to the summary body** as `file:line` references — not dropped, since the file is a changed file and only the line is unanchorable.
 - One invalid comment never fails the entire review.
 
 ## Review Posting Policy
@@ -126,10 +127,18 @@ Post one review via `gh api -X POST repos/{owner}/{repo}/pulls/$PR_NUMBER/review
 - `event: "COMMENT"` — normal reviews.
 - `event: "REQUEST_CHANGES"` — only when critical findings block merge.
 
-Use inline comments for specific, anchored findings. Use the review body for:
+**Posting policy:**
+
+- **Anchored findings** → inline comments on the specific representative line.
+- **Unanchorable findings** (changed file but no safe diff line) → summary body as `file:line` references.
+- **Duplicated root causes** → one representative inline comment plus a summary-body entry listing all affected files.
+- Reserve inline comments for issues tied to a specific representative line. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated across every affected file.
+
+Use the review body for:
 
 - Concise summary of areas reviewed
 - Unanchorable findings
+- Aggregated root-cause occurrences and their affected files
 - General observations
 - No-finding confirmation
 
@@ -150,8 +159,8 @@ Never leave the user with no feedback.
 2. **Gather diff** — `gh pr diff` in PR mode; `git diff` in local mode.
 3. **Choose reviewers** — based on `$ARGUMENTS` and diff content.
 4. **Launch subagents in parallel** — pass diff, files, and PR metadata.
-5. **Normalize and filter** — apply filtering rules and orchestrator second filter.
-6. **Validate anchoring** — check each finding against the diff; move unanchored findings to summary.
+5. **Normalize, filter, and aggregate** — apply filtering rules, root-cause aggregation, and orchestrator second filter.
+6. **Validate anchoring** — check each finding against the diff; move unanchored findings to summary (do not drop them).
 7. **Post** — single review in PR mode; print summary in local mode.
 
 ## Workflow Integration

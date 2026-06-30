@@ -118,9 +118,10 @@ Collect all findings from all subagents. Each finding must have `file`, `line`, 
 
 1. **Drop praise-only items**: remove any entry whose message is only positive (no actionable issue).
 2. **Drop nitpicks**: remove cosmetic preferences, style-only feedback, or issues with no real-world impact.
-3. **Drop findings not supported by the diff**: if the file referenced is not in the changed-file set, drop the finding. Leave line validation to the diff-anchoring step (step 6).
+3. **Drop findings not supported by the diff**: if the file referenced is not in the changed-file set, drop the finding. Do **not** compare `line` against the changed-file set — it contains paths, not line numbers. Leave line validation to the diff-anchoring step (step 6).
 4. **Deduplicate across agents**: if two or more agents report substantially the same issue at the same location, keep the most specific one (usually from the specialized agent) and discard the duplicate.
-5. **Orchestrator second filter**: review every remaining finding yourself and remove any you do not also deem noteworthy. This filter keeps the signal high.
+5. **Aggregate by root cause**: when several findings share the same underlying root cause (for example, the same inconsistency repeated across README, SKILL.md, and command files), keep **one representative finding** as an inline comment and collapse the remaining occurrences into the summary body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
+6. **Orchestrator second filter**: review every remaining finding yourself and remove any you do not also deem noteworthy. This filter keeps the signal high.
 
 ### Grouping
 
@@ -130,7 +131,7 @@ Group surviving findings by severity:
 - **Important** — should fix
 - **Suggestions** — optional improvements
 
-Prefer fewer, higher-signal comments over exhaustive lists.
+Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
 
 ## 6. Validate inline comment anchoring
 
@@ -142,7 +143,7 @@ Before building the review payload, validate every finding against the PR diff.
 - For each finding, check whether its `line` appears in the diff or diff context for `file`.
   - A line is anchored if: it falls within a `+` hunk in the diff for the given file, or within the surrounding unchanged-context lines of that hunk.
   - Use `side: "RIGHT"` and the head-file line number for every inline comment.
-- If a finding's line **cannot be safely anchored** to the diff, move it to the summary body as a `file:line` reference instead of an inline comment.
+- If a finding's line **cannot be safely anchored** to the diff, move it to the summary body as a `file:line` reference instead of an inline comment. Do **not** drop it — the file is a changed file, only the line is unanchorable.
 - Never fail the entire review because one comment is unanchorable. Move it and continue.
 
 ## 7. Post the results
@@ -170,6 +171,13 @@ Use `{owner}` and `{repo}` from the git remote. Use the explicit `PR_NUMBER` fro
 - Use `event: "COMMENT"` for normal reviews.
 - Use `event: "REQUEST_CHANGES"` only when there are critical findings that block merge.
 
+**Posting policy:**
+
+- **Anchored findings** → inline comments on the specific representative line.
+- **Unanchorable findings** (changed file but no safe diff line) → summary body as `file:line` references.
+- **Duplicated root causes** → one representative inline comment plus a summary-body entry listing all affected files.
+- Reserve inline comments for issues tied to a specific representative line. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated across every affected file.
+
 **Inline comment format:**
 
 Each inline comment body should begin with the severity tag: `**critical**:`, `**important**:`, or `**suggestion**:`, followed by the finding message.
@@ -183,16 +191,18 @@ Reviewed <N> files across <M> areas: <comma-separated agent names>.
 
 ### Critical (<count>)
 
-- `file:line` — issue (unanchorable findings only; anchored ones appear inline)
+- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences; anchored ones appear inline)
 
 ### Important (<count>)
 
-- `file:line` — issue (unanchorable findings only)
+- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences)
 
 ### Suggestions (<count>)
 
-- `file:line` — issue (unanchorable findings only)
+- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences)
 ```
+
+When a root cause affects multiple files, list the representative inline comment once and add a single summary entry naming all affected files (e.g. `Same inconsistency across README.md, SKILL.md, review-pr.md — see inline comment on README.md:42`).
 
 If there are **no findings at all**, post:
 
