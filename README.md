@@ -80,11 +80,9 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command posts reviews back to GitHub with `gh`. Workflows that invoke it must provide:
+The bundled `/review-pr` command produces a single markdown review response that the OpenCode GitHub integration posts to the PR as `opencode-agent[bot]`. The command does not post to GitHub directly, so a review run yields one OpenCode PR comment rather than a separate `github-actions[bot]` review. Workflows that invoke it must provide:
 
-- `pull-requests: write`
-- `issues: write` when falling back to `gh pr comment`
-- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}`
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff` / `gh pr view` reads
 - A valid API key for the selected model provider with available credits or quota
 
 Example OpenCode step:
@@ -116,7 +114,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 | `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
 | `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
 | `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
-| `/review-pr simplify`             | `code-simplifier` — refinement only, does not post a review                                                                                                                                                                                                                                                             |
+| `/review-pr simplify`             | `code-simplifier` — refinement only, does not return a review                                                                                                                                                                                                                                                           |
 
 #### Core reviewers (Claude Code Action-compatible)
 
@@ -134,7 +132,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 - **`comment-analyzer`** — comment accuracy, completeness, and comment rot
 - **`type-design-analyzer`** — type invariants, encapsulation, and design quality
 
-Findings are normalized, deduplicated across agents, and validated against the PR diff before posting. **Posting policy:** anchored findings become inline comments on the specific representative line; unanchorable findings (changed file but no safe diff line) move to the summary body as `file:line` references; duplicated root causes produce one representative inline comment plus a summary-body entry listing all affected files. Cross-document or cross-file consistency problems are summarized once in the review body instead of repeated at each location. If the reviews API call fails, the skill falls back to a single top-level PR comment.
+Findings are normalized, deduplicated across agents, and validated against the PR diff before being returned. All findings go into a single markdown response as `file:line` references; duplicated root causes produce one summary entry listing all affected files, and cross-document or cross-file consistency problems are summarized once instead of repeated at each location. The surrounding `opencode github run` integration posts that response to the PR as `opencode-agent[bot]`.
 
 ## Examples
 

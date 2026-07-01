@@ -59,9 +59,15 @@ runs:
       shell: bash -euo pipefail {0}
       env:
         INPUT_VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         if [[ "${INPUT_VERSION}" == "latest" ]]; then
-          OPENCODE_VERSION="$(curl -fsSL https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r '.tag_name')"
+          if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+            auth_header=(-H "Authorization: token ${GITHUB_TOKEN}")
+          else
+            auth_header=()
+          fi
+          OPENCODE_VERSION="$(curl -fsSL "${auth_header[@]}" https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r '.tag_name')"
         else
           OPENCODE_VERSION="${INPUT_VERSION}"
         fi
