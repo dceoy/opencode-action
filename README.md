@@ -80,11 +80,13 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command posts reviews back to GitHub with `gh`. Workflows that invoke it must provide:
+The bundled `/review-pr` command returns a single concise markdown review response. The surrounding `opencode github run` integration posts that response to the PR as a single `opencode-agent[bot]` comment. `/review-pr` does **not** post a GitHub Review or inline review comments directly, so no `pull-requests: write` or `issues: write` permission is required for the review workflow.
 
-- `pull-requests: write`
-- `issues: write` when falling back to `gh pr comment`
-- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}`
+Workflows that invoke `/review-pr` must provide:
+
+- `pull-requests: read` (for `gh pr diff` / `gh pr view`)
+- `id-token: write` (for the OpenCode App token exchange)
+- `GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}` or `GITHUB_TOKEN: ${{ github.token }}` with at least read access to pull requests
 - A valid API key for the selected model provider with available credits or quota
 
 Example OpenCode step:
@@ -116,7 +118,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 | `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
 | `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
 | `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
-| `/review-pr simplify`             | `code-simplifier` — refinement only, does not post a review                                                                                                                                                                                                                                                             |
+| `/review-pr simplify`             | `code-simplifier` — refinement only, does not return a review                                                                                                                                                                                                                                                           |
 
 #### Core reviewers (Claude Code Action-compatible)
 
@@ -134,7 +136,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 - **`comment-analyzer`** — comment accuracy, completeness, and comment rot
 - **`type-design-analyzer`** — type invariants, encapsulation, and design quality
 
-Findings are normalized, deduplicated across agents, and validated against the PR diff before posting. **Posting policy:** anchored findings become inline comments on the specific representative line; unanchorable findings (changed file but no safe diff line) move to the summary body as `file:line` references; duplicated root causes produce one representative inline comment plus a summary-body entry listing all affected files. Cross-document or cross-file consistency problems are summarized once in the review body instead of repeated at each location. If the reviews API call fails, the skill falls back to a single top-level PR comment.
+Findings are normalized, deduplicated across agents, and validated against the PR diff before the response is assembled. **Output policy:** the orchestrator returns a single markdown response grouped by severity; each finding includes an actionable `file:line` reference (demoted to a `file`-only reference when the line cannot be validated against the diff); duplicated root causes produce one representative `file:line` entry plus a body entry listing all affected files; cross-document or cross-file consistency problems are summarized once in the review body instead of repeated at each location. `opencode github run` posts that response to the PR as a single `opencode-agent[bot]` comment. `github-actions[bot]` does not post a review.
 
 ## Examples
 

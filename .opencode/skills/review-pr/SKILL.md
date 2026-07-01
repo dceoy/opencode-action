@@ -1,11 +1,11 @@
 ---
 name: review-pr
-description: Run a comprehensive pull request review across changed files using Claude Code Action-compatible core reviewers and pr-review-toolkit specialty agents. Gathers the PR via gh, runs agents in parallel, normalizes and deduplicates findings, validates inline comment anchoring, and posts a single review with inline and summary comments back to the PR. Use when reviewing a PR before merge, before requesting review, after addressing feedback, or when the user asks to review a diff or recent changes.
+description: Run a comprehensive pull request review across changed files using Claude Code Action-compatible core reviewers and pr-review-toolkit specialty agents. Gathers the PR via gh, runs agents in parallel, normalizes and deduplicates findings, validates file:line references, and returns a single concise markdown review response. The surrounding `opencode github run` integration posts the returned response to the PR as `opencode-agent[bot]`. Use when reviewing a PR before merge, before requesting review, after addressing feedback, or when the user asks to review a diff or recent changes.
 ---
 
 # Comprehensive PR Review
 
-Run a comprehensive pull request review by orchestrating specialized review agents, each focusing on one aspect of code quality. The orchestrator gathers the PR, spawns agents as subagents via the `task` tool, normalizes and deduplicates findings, validates inline comment anchoring, and posts the results back to the PR.
+Run a comprehensive pull request review by orchestrating specialized review agents, each focusing on one aspect of code quality. The orchestrator gathers the PR, spawns agents as subagents via the `task` tool, normalizes and deduplicates findings, validates `file:line` references against the diff, and **returns a single concise markdown review response**. The surrounding `opencode github run` integration posts that response to the PR as `opencode-agent[bot]`.
 
 ## When to Use
 
@@ -35,7 +35,7 @@ If no aspects are specified, run all applicable reviews.
 | `comments`                | `comment-analyzer`                           | Code comment accuracy and maintainability           |
 | `errors`                  | `silent-failure-hunter`                      | Silent failures, broad catch blocks, error handling |
 | `types`                   | `type-design-analyzer`                       | Type design and invariant expression                |
-| `simplify`                | `code-simplifier`                            | Refinement only — does not post a review            |
+| `simplify`                | `code-simplifier`                            | Refinement only — does not return a review          |
 | `all` (default)           | All applicable (see below)                   | Deterministic full review                           |
 
 ## Deterministic `all` Behavior
@@ -100,58 +100,41 @@ Every subagent returns findings in this normalized structure:
   message: <concise issue and concrete fix>
 ```
 
-### Filtering rules applied before posting
+### Filtering rules applied before assembling the response
 
 1. Drop praise-only items (no actionable issue).
 2. Drop nitpicks (cosmetic preferences, no real-world impact).
-3. Drop findings not supported by the diff — check **file membership only**; the changed-file set contains paths, not line numbers. Leave line validation to the anchoring step.
+3. Drop findings not supported by the diff — check **file membership only**; the changed-file set contains paths, not line numbers. Leave line validation to the `file:line` reference validation step.
 4. Deduplicate across agents (keep the most specific finding when two agents report the same issue at the same location).
-5. **Aggregate by root cause**: when several findings share the same underlying root cause (e.g. the same inconsistency repeated across README, SKILL.md, and command files), keep one representative finding as an inline comment and collapse the rest into the summary body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
+5. **Aggregate by root cause**: when several findings share the same underlying root cause (e.g. the same inconsistency repeated across README, SKILL.md, and command files), keep one representative finding as a `file:line` reference and collapse the rest into the review body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
 6. Orchestrator second filter: the orchestrator reviews every remaining finding and discards any it does not also deem noteworthy.
 
-Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
+Prefer fewer, higher-signal references over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
 
-## Inline Comment Anchoring
+## file:line Reference Validation
 
-Before building the review payload, every finding is validated against the PR diff:
+Before assembling the response, every finding is validated against the PR diff:
 
-- Inline comments use `side: "RIGHT"` and the head-file line number.
-- A line is anchored if it falls within a `+` hunk or surrounding unchanged-context lines of that hunk for the given file.
-- Findings whose line cannot be safely anchored are **moved to the summary body** as `file:line` references — not dropped, since the file is a changed file and only the line is unanchorable.
-- One invalid comment never fails the entire review.
+- Use the head-file line number for every `file:line` reference.
+- A `file:line` reference is valid if the line falls within a `+` hunk or surrounding unchanged-context lines of that hunk for the given file.
+- Findings whose line cannot be safely validated are **kept in the review body as `file`-only references** (drop the unverified `:line`) — not dropped, since the file is a changed file and only the line is unverifiable.
+- One unverifiable `file:line` reference never fails the entire review.
 
-## Review Posting Policy
+## Review Output Policy
 
-Post one review via `gh api -X POST repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews`.
-
-- `event: "COMMENT"` — normal reviews.
-- `event: "REQUEST_CHANGES"` — only when critical findings block merge.
-
-**Posting policy:**
-
-- **Anchored findings** → inline comments on the specific representative line.
-- **Unanchorable findings** (changed file but no safe diff line) → summary body as `file:line` references.
-- **Duplicated root causes** → one representative inline comment plus a summary-body entry listing all affected files.
-- Reserve inline comments for issues tied to a specific representative line. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated across every affected file.
-
-Use the review body for:
-
-- Concise summary of areas reviewed
-- Unanchorable findings
-- Aggregated root-cause occurrences and their affected files
-- General observations
-- No-finding confirmation
-
-If no findings: post `No noteworthy issues found.` — one line, no padding.
-
-## Fallback Behavior
-
-If the reviews API call fails:
-
-1. Retry once after removing the invalid inline comment (move it to the summary body).
-2. If still failing, fall back to one top-level `gh pr comment "$PR_NUMBER" --body "$SUMMARY"`.
-
-Never leave the user with no feedback.
+- Return **one final markdown response only**. Do not split it into multiple posts.
+- Do **not** call `gh api`, `gh pr review`, or `gh pr comment`. Do **not** post a GitHub Review or inline review comments.
+- The surrounding `opencode github run` integration posts the returned response to the PR as `opencode-agent[bot]`.
+- The orchestrator never writes to GitHub; it only assembles and returns the review.
+- Group findings by severity in the response:
+  - **Critical** — must fix before merge
+  - **Important** — should fix
+  - **Suggestions** — optional improvements
+- Each finding entry begins with its severity tag (`**critical**:`, `**important**:`, or `**suggestion**:`) followed by the message and an actionable `file:line` reference.
+- **Unverifiable-line findings** (changed file but no safe diff line) → review body as `file`-only references.
+- **Duplicated root causes** → one representative `file:line` entry plus a body entry listing all affected files.
+- Reserve `file:line` references for issues tied to a specific representative line. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated across every affected file.
+- If there are no findings, return only `No noteworthy issues found.` — one line, no padding, no praise, no status logs.
 
 ## Workflow
 
@@ -160,8 +143,8 @@ Never leave the user with no feedback.
 3. **Choose reviewers** — based on `$ARGUMENTS` and diff content.
 4. **Launch subagents in parallel** — pass diff, files, and PR metadata.
 5. **Normalize, filter, and aggregate** — apply filtering rules, root-cause aggregation, and orchestrator second filter.
-6. **Validate anchoring** — check each finding against the diff; move unanchored findings to summary (do not drop them).
-7. **Post** — single review in PR mode; print summary in local mode.
+6. **Validate `file:line` references** — check each finding against the diff; demote unverified findings to `file`-only references (do not drop them).
+7. **Return response** — single markdown review in both PR and local mode. `opencode github run` posts it to the PR as `opencode-agent[bot]` in PR mode.
 
 ## Workflow Integration
 
@@ -183,8 +166,9 @@ Never leave the user with no feedback.
 **In GitHub Actions:**
 
 1. The `opencode.yml` workflow runs `/review-pr` on PR open / ready for review.
-2. The orchestrator gathers the PR via `gh`, runs the agents, and posts a review with inline comments.
-3. Re-run by commenting `/opencode` or `/oc` on the PR.
+2. The orchestrator gathers the PR via read-only `gh` calls, runs the agents, and returns one review response.
+3. `opencode github run` posts that response to the PR as a single `opencode-agent[bot]` comment. The orchestrator does **not** post a GitHub Review or inline comments.
+4. Re-run by commenting `/opencode` or `/oc` on the PR.
 
 **After PR feedback:**
 
@@ -198,4 +182,5 @@ Never leave the user with no feedback.
 - Agents run autonomously and return structured findings.
 - Each agent focuses on its specialty for deep analysis.
 - Results are actionable with specific `file:line` references.
-- Never post secrets, tokens, or full file contents in review comments.
+- Never include secrets, tokens, or full file contents in the response.
+- The only PR-visible review output from an automated OpenCode review run is the final response posted by `opencode-agent[bot]`. `github-actions[bot]` does not post a review.
