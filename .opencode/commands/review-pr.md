@@ -1,11 +1,11 @@
 ---
-description: Comprehensive GitHub PR review — gathers the PR via gh, runs specialized review subagents in parallel, normalizes and deduplicates findings, validates inline comment anchoring, and posts a single review with inline and summary comments back to the PR.
+description: Comprehensive GitHub PR review — gathers the PR via gh, runs specialized review subagents in parallel, normalizes and deduplicates findings, validates file:line references against the diff, and returns a single review response for the OpenCode GitHub integration to post.
 agent: general
 ---
 
 # Comprehensive PR Review
 
-Perform a comprehensive pull request review by orchestrating specialized review subagents in parallel. Each subagent returns only noteworthy findings in a normalized format. You then deduplicate and filter across agents, validate that findings can be anchored to the diff, and post a single review back to the PR.
+Perform a comprehensive pull request review by orchestrating specialized review subagents in parallel. Each subagent returns only noteworthy findings in a normalized format. You then deduplicate and filter across agents, validate file:line references against the diff, and return a single review response. The surrounding `opencode github run` integration posts that response to the PR as `opencode-agent[bot]`; do not post to GitHub yourself.
 
 **Requested review aspects (optional):** "$ARGUMENTS"
 
@@ -32,7 +32,7 @@ fi
 ```
 
 - If `PR_NUMBER` is set, run `gh pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName,files,url` to confirm a PR is available.
-  - If it succeeds, you are in **PR mode**: post results back with `gh` (step 7).
+  - If it succeeds, you are in **PR mode**: return a review response (step 7).
   - If it fails (no PR or not in CI), fall back to **local mode**: review `git diff` and `git status`, and report findings directly to the user without posting anything to GitHub.
 - Do not rely on the current git branch to identify the PR. GitHub Actions pull request workflows usually check out a detached merge ref.
 
@@ -56,7 +56,7 @@ Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
 - `types` → `type-design-analyzer`
-- `simplify` → run `code-simplifier` as a refinement step only; **do not post a review**; stop after simplification
+- `simplify` → run `code-simplifier` as a refinement step only; **do not return a review**; stop after simplification
 - `all` or no argument → run all applicable reviewers (see below)
 
 ### Deterministic reviewer set for `all`
@@ -106,7 +106,7 @@ Instruct every subagent to:
 
 - If no noteworthy findings exist, return an empty list and a one-line "no issues" note.
 
-Do **not** let subagents post comments themselves. The orchestrator is the only one that posts.
+Do **not** let subagents post comments themselves. The orchestrator returns the final response; the `opencode github run` integration posts it.
 
 ## 5. Normalize, filter, and aggregate findings
 
@@ -120,7 +120,7 @@ Collect all findings from all subagents. Each finding must have `file`, `line`, 
 2. **Drop nitpicks**: remove cosmetic preferences, style-only feedback, or issues with no real-world impact.
 3. **Drop findings not supported by the diff**: if the file referenced is not in the changed-file set, drop the finding. Do **not** compare `line` against the changed-file set — it contains paths, not line numbers. Leave line validation to the diff-anchoring step (step 6).
 4. **Deduplicate across agents**: if two or more agents report substantially the same issue at the same location, keep the most specific one (usually from the specialized agent) and discard the duplicate.
-5. **Aggregate by root cause**: when several findings share the same underlying root cause (for example, the same inconsistency repeated across README, SKILL.md, and command files), keep **one representative finding** as an inline comment and collapse the remaining occurrences into the summary body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
+5. **Aggregate by root cause**: when several findings share the same underlying root cause (for example, the same inconsistency repeated across README, SKILL.md, and command files), keep **one representative finding** as a `file:line` reference and collapse the remaining occurrences into the summary body. Prefer root-cause aggregation over line-by-line repetition. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated at each affected location.
 6. **Orchestrator second filter**: review every remaining finding yourself and remove any you do not also deem noteworthy. This filter keeps the signal high.
 
 ### Grouping
@@ -133,54 +133,25 @@ Group surviving findings by severity:
 
 Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
 
-## 6. Validate inline comment anchoring
+## 6. Validate file:line references against the diff
 
-Before building the review payload, validate every finding against the PR diff.
+Before building the review response, validate every finding against the PR diff so the `file:line` references in the single OpenCode comment stay accurate.
 
-### Anchoring rules
+### Validation rules
 
 - Obtain the diff hunk list from `gh pr diff "$PR_NUMBER"` (already gathered in step 2).
 - For each finding, check whether its `line` appears in the diff or diff context for `file`.
-  - A line is anchored if: it falls within a `+` hunk in the diff for the given file, or within the surrounding unchanged-context lines of that hunk.
-  - Use `side: "RIGHT"` and the head-file line number for every inline comment.
-- If a finding's line **cannot be safely anchored** to the diff, move it to the summary body as a `file:line` reference instead of an inline comment. Do **not** drop it — the file is a changed file, only the line is unanchorable.
-- Never fail the entire review because one comment is unanchorable. Move it and continue.
+  - A line is valid if: it falls within a `+` hunk in the diff for the given file, or within the surrounding unchanged-context lines of that hunk.
+- If a finding's line **cannot be safely matched** to the diff, keep it in the summary body but reference the nearest valid anchor line (or the file alone) instead of an unverified line number. Do **not** drop it — the file is a changed file, only the line is unverifiable.
+- Never fail the entire review because one finding's line is unverifiable. Adjust the reference and continue.
 
-## 7. Post the results
+## 7. Return the results
 
 ### PR mode
 
-Post a **single review** via:
+Return a **single concise markdown review response**. Do **not** call `gh api`, `gh pr review`, or `gh pr comment` — the surrounding `opencode github run` integration is responsible for posting the final response to the PR as `opencode-agent[bot]`. Calling GitHub write APIs directly would create a duplicate `github-actions[bot]` posting.
 
-```bash
-gh api -X POST repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews --input - <<'EOF'
-{
-  "event": "COMMENT",
-  "body": "<summary — see format below>",
-  "comments": [
-    {"path": "src/foo.ts", "line": 42, "side": "RIGHT", "body": "**important**: ..."}
-  ]
-}
-EOF
-```
-
-Use `{owner}` and `{repo}` from the git remote. Use the explicit `PR_NUMBER` from step 1.
-
-**Review event policy:**
-
-- Use `event: "COMMENT"` for normal reviews.
-- Use `event: "REQUEST_CHANGES"` only when there are critical findings that block merge.
-
-**Posting policy:**
-
-- **Anchored findings** → inline comments on the specific representative line.
-- **Unanchorable findings** (changed file but no safe diff line) → summary body as `file:line` references.
-- **Duplicated root causes** → one representative inline comment plus a summary-body entry listing all affected files.
-- Reserve inline comments for issues tied to a specific representative line. Cross-document or cross-file consistency problems should usually be summarized once in the review body instead of repeated across every affected file.
-
-**Inline comment format:**
-
-Each inline comment body should begin with the severity tag: `**critical**:`, `**important**:`, or `**suggestion**:`, followed by the finding message.
+Include all findings (whether or not their line matched the diff) in the summary body as `file:line` references so the single top-level OpenCode comment stays actionable.
 
 **Summary body format:**
 
@@ -191,39 +162,26 @@ Reviewed <N> files across <M> areas: <comma-separated agent names>.
 
 ### Critical (<count>)
 
-- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences; anchored ones appear inline)
+- `file:line` — issue
 
 ### Important (<count>)
 
-- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences)
+- `file:line` — issue
 
 ### Suggestions (<count>)
 
-- `file:line` — issue (unanchorable findings and aggregated root-cause occurrences)
+- `file:line` — issue
 ```
 
-When a root cause affects multiple files, list the representative inline comment once and add a single summary entry naming all affected files (e.g. `Same inconsistency across README.md, SKILL.md, review-pr.md — see inline comment on README.md:42`).
+When a root cause affects multiple files, add a single summary entry naming all affected files (e.g. `Same inconsistency across README.md, SKILL.md, review-pr.md`).
 
-If there are **no findings at all**, post:
+If there are **no findings at all**, return:
 
 ```text
 No noteworthy issues found.
 ```
 
 Do not spam praise or padding. One concise confirmation is sufficient.
-
-### Failure fallback
-
-If `gh api .../reviews` fails:
-
-1. **Retry without invalid inline comments**: if the error message identifies a specific invalid comment, remove it (move that finding to the summary body) and retry once.
-2. **Fall back to top-level comment**: if still failing, post a single top-level comment with the full summary plus all findings as `file:line` references:
-
-```bash
-gh pr comment "$PR_NUMBER" --body "$SUMMARY"
-```
-
-Never leave the user with no feedback.
 
 ### Local mode
 
@@ -232,7 +190,7 @@ Print the same summary to the user. Do not call `gh`.
 ## 8. Notes
 
 - Keep feedback concise. A short review with real signal beats a long review with padding.
-- Never post secrets, tokens, or full file contents in comments.
-- The workflow grants `pull-requests: write`, so `GH_TOKEN` or `GITHUB_TOKEN` can post reviews when passed to the OpenCode step. Do not attempt to push commits or merge.
+- Never include secrets, tokens, or full file contents in the review response.
+- The `opencode github run` integration posts your final response to the PR as `opencode-agent[bot]`; do not call `gh api`, `gh pr review`, or `gh pr comment` yourself. The workflow may still grant `pull-requests: write` for the integration's posting, and `GH_TOKEN` or `GITHUB_TOKEN` is needed only for `gh pr diff` / `gh pr view` reads. Do not attempt to push commits or merge.
 - If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
 - Re-run after fixes to verify issues are resolved.
