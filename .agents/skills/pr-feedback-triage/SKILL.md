@@ -1,6 +1,7 @@
 ---
 name: pr-feedback-triage
 description: Triage pull request review comments into fixes, replies, clarification requests, or open follow-ups while respecting safe execution modes.
+allowed-tools: Bash(git:*), Bash(gh:*), mcp__github__*, Read, Grep, Glob, Edit, MultiEdit, Write
 ---
 
 # PR Feedback Triage
@@ -44,7 +45,7 @@ When a mode disables an action, skip that destructive or externally visible acti
 Gather the complete feedback set before editing:
 
 - Fetch unresolved review threads, requested-change reviews, inline comments, copied comments, and PR-level summary comments.
-- Use platform-native APIs/CLI when available. Paginate results; do not inspect only the first page of threads or comments.
+- Use whichever authenticated GitHub-capable interface is available and reliable. This skill explicitly permits both `gh` and GitHub MCP tools; paginate results and do not inspect only the first page of threads or comments.
 - For bot reviewers that post both summary comments and inline comments, prefer inline comments for actionable triage. Incorporate summary findings only when they contain distinct severity, rationale, or fix instructions not already captured from inline comments.
 - Summary comments may be excluded from triage when they do not add distinct actionable context.
 - Preserve every thread/comment identifier needed to reply or resolve later.
@@ -99,7 +100,7 @@ For duplicate findings, execute the terminal action for every source thread ID, 
 
 ## GitHub Action Guidance
 
-Prefer platform-native APIs or `gh` commands that expose review-thread resolution state. For GitHub inline review threads, use the thread node ID and the GraphQL `resolveReviewThread` mutation rather than assuming that a reply resolves the conversation.
+Use whichever authenticated GitHub-capable interface is available and reliable, preferably `gh` or GitHub MCP. Prefer interfaces that expose review-thread resolution state. For GitHub inline review threads, use the thread node ID and the GraphQL `resolveReviewThread` mutation, or an equivalent GitHub MCP resolve-thread tool, rather than assuming that a reply resolves the conversation.
 
 A reliable pattern is:
 
