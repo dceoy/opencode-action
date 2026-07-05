@@ -45,11 +45,31 @@ jobs:
     permissions:
       contents: write
     uses: dceoy/gh-actions-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
+  repo-qa:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Validate OpenCode agent frontmatter and review-pr references
+        run: ./.agents/skills/local-qa/scripts/validate-opencode.sh
+      - name: Shellcheck repository scripts
+        run: git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 shellcheck
+      - name: Scan action.yml with zizmor
+        run: pipx run zizmor action.yml
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
     needs:
       - github-actions-lint-and-scan
+      - repo-qa
     permissions:
       contents: write
       pull-requests: write

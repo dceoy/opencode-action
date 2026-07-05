@@ -12,7 +12,7 @@ There is no build step. Validate local changes with the repository QA script:
 .agents/skills/local-qa/scripts/qa.sh
 ```
 
-The script checks core action metadata and README examples, including the composite action declaration, `opencode github run`, and documented usage. For end-to-end testing, run the action from a temporary workflow or push a branch and reference it from a test repository workflow.
+The script formats and lints the repository and mutates files in place: it runs `prettier --write` on markdown files, `yamllint` on tracked YAML, `shellcheck` on tracked shell scripts, `zizmor --fix=safe` and `actionlint` on `.github/workflows`, `checkov` across the repo, and `.agents/skills/local-qa/scripts/validate-opencode.sh` (which validates `.opencode/` agent frontmatter and the agent references in `.opencode/commands/review-pr.md` and `.opencode/skills/review-pr/SKILL.md`). Review the diff it produces before committing. For end-to-end testing, run the action from a temporary workflow or push a branch and reference it from a test repository workflow.
 
 ## Coding Style & Naming Conventions
 

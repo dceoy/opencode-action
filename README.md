@@ -35,7 +35,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@main
+        uses: dceoy/opencode-action@v0
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,6 +44,8 @@ jobs:
 ```
 
 Then comment `/opencode` or `/oc` on an issue, pull request, or pull request review comment.
+
+`@v0` tracks the latest `v0.x.y` release. Pin to an exact release tag (e.g. `@v0.2.4`) or a full commit SHA for stricter supply-chain control.
 
 ## Inputs
 
@@ -89,7 +91,7 @@ Example OpenCode step:
 
 ```yaml
 - name: Run OpenCode review
-  uses: dceoy/opencode-action@main
+  uses: dceoy/opencode-action@v0
   env:
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     GH_TOKEN: ${{ github.token }}
