@@ -11,9 +11,6 @@ on:
   pull_request_review_comment:
     types:
       - created
-  pull_request_review:
-    types:
-      - submitted
   issues:
     types:
       - opened
@@ -61,10 +58,6 @@ jobs:
           || startsWith(github.event.comment.body, '/opencode')
           || contains(github.event.comment.body, ' /opencode')
         )
-      ) || (
-        github.event_name == 'pull_request_review'
-        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
-        && (contains(github.event.review.body, '/oc') || contains(github.event.review.body, '/opencode'))
       ) || (
         github.event_name == 'issues'
         && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
