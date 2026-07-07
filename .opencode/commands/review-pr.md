@@ -180,31 +180,33 @@ Do not post a GitHub review with an empty comments array.
 
 Submit a single GitHub pull request review using the REST API via `gh api`. Do not use `gh pr review` for inline findings because it cannot submit a structured `comments` array for per-line anchors in this workflow.
 
-Build a payload like this:
+Build the review body from trusted strings and normalized findings. It must enumerate every summary-only item, including its fallback reason:
 
-```json
-{
-  "commit_id": "<headRefOid>",
-  "event": "COMMENT",
-  "body": "OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).",
-  "comments": [
-    {
-      "path": "path/to/file",
-      "line": 123,
-      "side": "RIGHT",
-      "body": "**important · security-code-reviewer**: Validate the user-controlled value before passing it to the shell."
-    }
-  ]
-}
+```markdown
+OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).
+
+Summary-only findings:
+- `<file>` — <fallback reason>: <issue and concrete fix>
 ```
 
-Then submit it:
+Build the JSON payload with `jq`, not string interpolation, so PR-authored content cannot break JSON structure or inject fields. Write it to a private temporary file and always remove it after submission:
 
 ```bash
+review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
+chmod 600 "$review_payload"
+trap 'rm -f "$review_payload"' EXIT
+
+jq -n \
+  --arg commit_id "$head_oid" \
+  --arg body "$review_body" \
+  --argjson comments "$comments_json" \
+  '{commit_id: $commit_id, event: "COMMENT", body: $body, comments: $comments}' \
+  > "$review_payload"
+
 gh api \
   --method POST \
   "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
-  --input /tmp/opencode-pr-review.json
+  --input "$review_payload"
 ```
 
 Operational requirements:
@@ -212,8 +214,11 @@ Operational requirements:
 - `GH_TOKEN` or `GITHUB_TOKEN` must have `pull-requests: write` permission.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
-- If GitHub rejects the review because one inline anchor is invalid, remove only the rejected/unverifiable inline comment, move it to `summary_only` with the failure reason, and retry once.
-- If the retry still fails, return a concise failure report that includes the attempted inline comment count, the failing anchor(s), and the summary-only fallback body. Do not claim inline comments were posted.
+- Handle only GitHub 422 anchor-validation failures with the inline-comment retry path. Inspect the response `errors[].field` values such as `comments[0].line` to map failures back to specific `comments[N]` entries.
+- If GitHub rejects one or more inline anchors and the offending entries can be identified, move only those findings to `summary_only` with the rejection reason and retry once.
+- If a 422 anchor error does not identify the offending `comments[N]` entry, move all inline findings from that failed attempt to `summary_only` before retrying or falling back so no finding is lost.
+- If the error indicates the `commit_id` is stale or is no longer part of the pull request, refetch `headRefOid`, rebuild the payload with the new SHA, and retry once. If the refetched SHA still fails, use the fallback path.
+- If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason.
 
 After a successful submission, return only a concise status for the surrounding OpenCode integration to post, for example:
 
