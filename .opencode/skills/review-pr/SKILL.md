@@ -24,6 +24,32 @@ Do not use this skill to triage existing review comments on a PR; use `pr-feedba
 
 If no aspects are specified, run all applicable reviews.
 
+## GitHub Auth for Inline Reviews
+
+When `opencode github run` uses the default OpenCode GitHub App flow (`use-github-token: false`), OpenCode configures the Git remote extraheader with an `opencode-agent[bot]` App token before the agent runs. Before calling `gh`, prefer that App token over any workflow `GITHUB_TOKEN` so direct `gh api` review submissions are authored by `opencode-agent[bot]`.
+
+```bash
+prepare_opencode_gh_token() {
+  local extraheader encoded decoded token
+  extraheader="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  if [[ "${extraheader}" =~ ^AUTHORIZATION:\ basic\ (.+)$ ]]; then
+    encoded="${BASH_REMATCH[1]}"
+    decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null || true)"
+    token="${decoded#x-access-token:}"
+    if [[ -n "${token}" && "${token}" != "${decoded}" ]]; then
+      export GH_TOKEN="${token}"
+      export GITHUB_TOKEN="${token}"
+      return 0
+    fi
+  fi
+  return 0
+}
+
+prepare_opencode_gh_token
+```
+
+If no OpenCode App token is available in Git config, keep the existing `GH_TOKEN` or `GITHUB_TOKEN` fallback. This happens when the workflow explicitly uses `use-github-token: true` or when running locally. Do not print tokens or decoded authentication headers.
+
 ## Supported Aspects
 
 | Aspect                    | Agent(s)                                     | Notes                                               |
@@ -149,6 +175,8 @@ Do not submit an empty GitHub review.
 
 Submit one GitHub pull request review via `gh api` using a structured review payload with `comments` entries. Use `gh api` instead of `gh pr review` because this workflow needs explicit per-line anchors.
 
+Before submission, call `prepare_opencode_gh_token` again. This ensures `gh api` uses the OpenCode GitHub App token when available, even if the workflow also provided a default `GITHUB_TOKEN`.
+
 The review body must enumerate every summary-only item, including its fallback reason:
 
 ```markdown
@@ -161,6 +189,8 @@ Summary-only findings:
 Build the review payload with `jq`, not string interpolation, and write it to a private temporary file:
 
 ```bash
+prepare_opencode_gh_token
+
 review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
 chmod 600 "$review_payload"
 trap 'rm -f "$review_payload"' EXIT
@@ -180,7 +210,8 @@ gh api \
 
 Operational requirements:
 
-- `GH_TOKEN` or `GITHUB_TOKEN` must have pull request write permission.
+- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions are authored by `opencode-agent[bot]`.
+- If no OpenCode App token is available, fall back to `GH_TOKEN` or `GITHUB_TOKEN`; this may make direct review submissions appear as `github-actions[bot]`.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
 - Handle only GitHub 422 anchor-validation failures with the inline-comment retry path. Inspect `errors[].field` values such as `comments[0].line` to map failures back to specific `comments[N]` entries.
@@ -205,7 +236,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 
 ## Workflow
 
-1. **Detect context** — GitHub Actions (PR mode) or local (local mode).
+1. **Detect context** — GitHub Actions (PR mode) or local (local mode). Prefer the OpenCode App token from Git config for `gh` when available.
 2. **Gather diff** — `gh pr diff` in PR mode; `git diff` in local mode.
 3. **Choose reviewers** — based on requested aspects and diff content.
 4. **Launch subagents in parallel** — pass diff, files, and PR metadata.
@@ -233,7 +264,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 **In GitHub Actions:**
 
 1. The `opencode.yml` workflow runs `/review-pr` on PR open / ready for review.
-2. The orchestrator gathers the PR via `gh`, runs the agents, validates anchors, and submits a GitHub review with inline comments for anchorable findings. The `opencode github run` integration then posts only a short status comment.
+2. The orchestrator gathers the PR via `gh`, runs the agents, validates anchors, and submits a GitHub review with inline comments for anchorable findings. Direct review submissions prefer the OpenCode App token from Git config, so they are authored by `opencode-agent[bot]` when the default App-token flow is used. The `opencode github run` integration then posts only a short status comment.
 3. Re-run by commenting `/opencode` or `/oc` on the PR.
 
 **After PR feedback:**
@@ -250,3 +281,4 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 - Results are actionable with specific inline anchors whenever the diff supports them.
 - The skill posts a GitHub review only in PR mode when inline anchors exist; otherwise it uses the documented fallback.
 - Never include secrets, tokens, or full file contents in the review response or GitHub comments.
+- Never print tokens or decoded authentication headers in logs.
