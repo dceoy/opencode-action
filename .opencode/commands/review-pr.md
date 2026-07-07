@@ -16,6 +16,29 @@ The surrounding `opencode github run` integration always posts your final text a
 Determine whether you are reviewing a real GitHub PR (running in GitHub Actions) or working locally.
 
 - In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (e.g. `refs/pull/42/merge`), and `GITHUB_EVENT_PATH`. The `gh` CLI also requires `GH_TOKEN` or `GITHUB_TOKEN` to be available in the environment.
+- Before using `gh`, prefer the OpenCode GitHub App token that `opencode github run` installs into the Git extraheader when `use-github-token` is false. This makes direct `gh api` review submissions appear as `opencode-agent[bot]` instead of `github-actions[bot]`.
+
+```bash
+prepare_opencode_gh_token() {
+  local extraheader encoded decoded token
+  extraheader="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  if [[ "${extraheader}" =~ ^AUTHORIZATION:\ basic\ (.+)$ ]]; then
+    encoded="${BASH_REMATCH[1]}"
+    decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null || true)"
+    token="${decoded#x-access-token:}"
+    if [[ -n "${token}" && "${token}" != "${decoded}" ]]; then
+      export GH_TOKEN="${token}"
+      export GITHUB_TOKEN="${token}"
+      return 0
+    fi
+  fi
+  return 0
+}
+
+prepare_opencode_gh_token
+```
+
+- If no OpenCode App token is available in Git config, keep the existing `GH_TOKEN` or `GITHUB_TOKEN` fallback. This happens when the workflow uses `use-github-token: true` or when running locally.
 - Derive the PR number from the event payload first:
 
 ```bash
@@ -180,6 +203,8 @@ Do not post a GitHub review with an empty comments array.
 
 Submit a single GitHub pull request review using the REST API via `gh api`. Do not use `gh pr review` for inline findings because it cannot submit a structured `comments` array for per-line anchors in this workflow.
 
+Before submission, call `prepare_opencode_gh_token` again. This ensures `gh api` uses the OpenCode GitHub App token when available, even if the workflow also provided a default `GITHUB_TOKEN`.
+
 Build the review body from trusted strings and normalized findings. It must enumerate every summary-only item, including its fallback reason:
 
 ```markdown
@@ -192,6 +217,8 @@ Summary-only findings:
 Build the JSON payload with `jq`, not string interpolation, so PR-authored content cannot break JSON structure or inject fields. Write it to a private temporary file and always remove it after submission:
 
 ```bash
+prepare_opencode_gh_token
+
 review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
 chmod 600 "$review_payload"
 trap 'rm -f "$review_payload"' EXIT
@@ -211,7 +238,8 @@ gh api \
 
 Operational requirements:
 
-- `GH_TOKEN` or `GITHUB_TOKEN` must have `pull-requests: write` permission.
+- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions are authored by `opencode-agent[bot]`.
+- If no OpenCode App token is available, fall back to `GH_TOKEN` or `GITHUB_TOKEN`; this may make direct review submissions appear as `github-actions[bot]`.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
 - Handle only GitHub 422 anchor-validation failures with the inline-comment retry path. Inspect the response `errors[].field` values such as `comments[0].line` to map failures back to specific `comments[N]` entries.
@@ -238,6 +266,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 
 - Keep feedback concise. A short review with real signal beats a long review with padding.
 - Never include secrets, tokens, or full file contents in the review response or GitHub comments.
+- Do not print tokens or decoded Git authentication headers in logs.
 - Do not call `gh pr comment`; it creates top-level noise and bypasses inline review anchors.
 - Use `gh api` only for the single final PR review submission after all findings are normalized, deduplicated, and anchor-validated.
 - If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
