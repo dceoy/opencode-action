@@ -82,7 +82,7 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items. The surrounding `opencode github run` integration still posts the command's final text to the PR, so the command returns only a short status message after a successful inline review submission.
+The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. The surrounding `opencode github run` integration still posts the command's final text to the PR, so the command returns only a short status message after a successful inline review submission.
 
 Workflows that invoke `/review-pr` must provide:
 
@@ -137,7 +137,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 - **`comment-analyzer`** — comment accuracy, completeness, and comment rot
 - **`type-design-analyzer`** — type invariants, encapsulation, and design quality
 
-Findings are normalized, deduplicated across agents, and validated against the PR diff before being posted. Diff-anchorable findings are submitted as GitHub inline review comments. Findings that cannot be safely anchored remain in the PR review body with an explicit fallback reason instead of being silently skipped.
+Findings are normalized, deduplicated across agents, and validated against the PR diff before being posted. Diff-anchorable findings are submitted as GitHub inline review comments. When inline comments are submitted, findings that cannot be safely anchored remain in the GitHub review body with an explicit fallback reason. When no inline anchors are available, the command returns a top-level fallback response instead.
 
 ## Examples
 
