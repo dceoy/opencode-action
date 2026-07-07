@@ -6,8 +6,9 @@ cd "$(git rev-parse --show-toplevel)"
 agents_dir=".opencode/agents"
 docs=(.opencode/commands/review-pr.md .opencode/skills/review-pr/SKILL.md)
 required_keys=(name description mode permission)
-# Backtick-quoted identifiers in the docs that are skills/toolkits, not agents.
-non_agents=(pr-feedback-triage pr-review-toolkit)
+# Backtick-quoted identifiers in the docs that are skills, toolkits, or config
+# inputs rather than agents.
+non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
 fail=0
 
 warn() { echo "ERROR: $*" >&2; fail=1; }
