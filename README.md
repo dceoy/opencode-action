@@ -66,7 +66,7 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 
 | Output             | Description                                     |
 | ------------------ | ----------------------------------------------- |
-| `opencode-version` | OpenCode version resolved for the workflow run. |
+| `opencode-version` | OpenCode version resolved for this run.         |
 | `cache-hit`        | Whether the OpenCode binary cache was restored. |
 
 ## Secrets
@@ -84,10 +84,12 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. The surrounding `opencode github run` integration still posts the command's final text to the PR, so the command returns only a short status message after a successful inline review submission.
 
+When the default OpenCode GitHub App flow is used (`use-github-token: false`), `/review-pr` restores the App token that OpenCode configured in the local Git extraheader and exports it for `gh`. Direct inline review submissions are therefore authored by `opencode-agent[bot]`. If the workflow explicitly opts into `use-github-token: true`, `/review-pr` falls back to the workflow token and direct review submissions may appear as `github-actions[bot]`.
+
 Workflows that invoke `/review-pr` must provide:
 
 - `pull-requests: write` permission
-- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission when using `use-github-token: true`; with the default App-token flow, `/review-pr` prefers the OpenCode App token from Git config for `gh api`
 - A valid API key for the selected model provider with available credits or quota
 
 Example OpenCode step:
@@ -97,7 +99,6 @@ Example OpenCode step:
   uses: dceoy/opencode-action@v0
   env:
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-    GH_TOKEN: ${{ github.token }}
   with:
     model: openrouter/openrouter/free
     prompt: /review-pr
