@@ -38,7 +38,7 @@ jobs:
         uses: dceoy/opencode-action@v0
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           model: opencode-go/glm-5.2
 ```
@@ -82,9 +82,12 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command produces a single markdown review response that the OpenCode GitHub integration posts to the PR as `opencode-agent[bot]`. The command does not post to GitHub directly, so a review run yields one OpenCode PR comment rather than a separate `github-actions[bot]` review. Workflows that invoke it must provide:
+The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items. The surrounding `opencode github run` integration still posts the command's final text to the PR, so the command returns only a short status message after a successful inline review submission.
 
-- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff` / `gh pr view` reads
+Workflows that invoke `/review-pr` must provide:
+
+- `pull-requests: write` permission
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission
 - A valid API key for the selected model provider with available credits or quota
 
 Example OpenCode step:
@@ -134,7 +137,7 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 - **`comment-analyzer`** — comment accuracy, completeness, and comment rot
 - **`type-design-analyzer`** — type invariants, encapsulation, and design quality
 
-Findings are normalized, deduplicated across agents, and validated against the PR diff before being returned. All findings go into a single markdown response as `file:line` references; duplicated root causes produce one summary entry listing all affected files, and cross-document or cross-file consistency problems are summarized once instead of repeated at each location. The surrounding `opencode github run` integration posts that response to the PR as `opencode-agent[bot]`.
+Findings are normalized, deduplicated across agents, and validated against the PR diff before being posted. Diff-anchorable findings are submitted as GitHub inline review comments. Findings that cannot be safely anchored remain in the PR review body with an explicit fallback reason instead of being silently skipped.
 
 ## Examples
 
