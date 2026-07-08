@@ -7,7 +7,7 @@ description: Run a comprehensive pull request review across changed files using 
 
 Run a comprehensive pull request review by orchestrating specialized review agents, each focusing on one aspect of code quality. The orchestrator gathers the PR, spawns agents as subagents via the `task` tool, normalizes and deduplicates findings, validates every finding against the PR diff, and submits one GitHub pull request review with inline comments for every diff-anchorable finding.
 
-When the orchestrator successfully submits a structured GitHub review, that review already creates the desired top-level review body in the PR. Do not return any final assistant text, status line, or markdown after a successful structured review submission; otherwise `opencode github run` can post a second top-level PR comment. Keep the structured review body as the only top-level OpenCode review comment.
+When the orchestrator successfully submits a structured GitHub review, that review creates the desired top-level review summary in the PR. Do not create a second top-level PR comment for the final status. Instead, capture the submitted review ID, update that same review summary comment with the final status/run link, and return no normal final assistant text.
 
 ## When to Use
 
@@ -171,7 +171,7 @@ Submit one GitHub pull request review via `gh api` using a structured review pay
 
 Before submission, call `prepare_opencode_gh_token` again. This ensures `gh api` uses the OpenCode GitHub App token when available, even if the workflow also provided a default `GITHUB_TOKEN`.
 
-The review body must enumerate every summary-only item, including its fallback reason:
+The initial review body must enumerate every summary-only item, including its fallback reason:
 
 ```markdown
 OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).
@@ -181,14 +181,15 @@ Summary-only findings:
 - `<file>` — <fallback reason>: <issue and concrete fix>
 ```
 
-Build the review payload with `jq`, not string interpolation, and write it to a private temporary file:
+Submit the review, capture the returned review ID, then update that same review summary with the final status that would otherwise have become a second top-level PR comment. Use the Pull Request Reviews update endpoint, not issue comments:
 
 ```bash
 prepare_opencode_gh_token
 
 review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
-chmod 600 "$review_payload"
-trap 'rm -f "$review_payload"' EXIT
+review_update_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review-update.XXXXXX.json")"
+chmod 600 "$review_payload" "$review_update_payload"
+trap 'rm -f "${review_payload:-}" "${review_update_payload:-}"' EXIT
 
 jq -n \
   --arg commit_id "$head_oid" \
@@ -197,25 +198,59 @@ jq -n \
   '{commit_id: $commit_id, event: "COMMENT", body: $body, comments: $comments}' \
   > "$review_payload"
 
-gh api \
+review_response="$(gh api \
   --method POST \
   "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
-  --input "$review_payload"
+  --input "$review_payload")"
+review_id="$(jq -r '.id // empty' <<<"$review_response")"
+
+if [[ -z "$review_id" ]]; then
+  echo "Failed to capture submitted review ID; cannot update the review summary." >&2
+  exit 1
+fi
+
+run_url=""
+if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" && -n "${GITHUB_RUN_ID:-}" ]]; then
+  run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+fi
+
+final_status="Submitted OpenCode PR review with ${inline_count} inline comment(s) and ${summary_only_count} summary-only finding(s)."
+if [[ -n "$run_url" ]]; then
+  final_status="${final_status}
+
+[github run](${run_url})"
+fi
+
+updated_review_body="${review_body}
+
+---
+
+${final_status}"
+
+jq -n --arg body "$updated_review_body" '{body: $body}' > "$review_update_payload"
+
+gh api \
+  --method PUT \
+  "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${review_id}" \
+  --input "$review_update_payload"
 ```
 
 Operational requirements:
 
-- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions are authored by `opencode-agent[bot]`.
+- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions and review summary updates are authored by `opencode-agent[bot]`.
 - If no OpenCode App token is available, fall back to `GH_TOKEN` or `GITHUB_TOKEN`; this may make direct review submissions appear as `github-actions[bot]`.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
+- Build `inline_count` and `summary_only_count` from the same normalized finding sets used to build the review body.
+- Do not call `gh pr comment` or the issue comment API for the success status.
+- If the review summary update fails, do not silently succeed; report the update failure so the workflow surfaces the broken behavior.
 - Handle only GitHub 422 anchor-validation failures with the inline-comment retry path. Inspect `errors[].field` values such as `comments[0].line` to map failures back to specific `comments[N]` entries.
 - If GitHub rejects one or more inline anchors and the offending entries can be identified, move only those findings to `summary_only` with the rejection reason and retry once.
 - If a 422 anchor error does not identify the offending `comments[N]` entry, move all inline findings from that failed attempt to `summary_only` before retrying or falling back so no finding is lost.
 - If the error indicates the `commit_id` is stale or is no longer part of the pull request, refetch `headRefOid`, rebuild the payload with the new SHA, and retry once. If the refetched SHA still fails, use the fallback path.
 - If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason.
 
-After a successful structured review submission, do not return a status message. Emit no final assistant text at all, not even a success note. A status line such as `Submitted OpenCode PR review...` is a duplicate top-level PR comment because `opencode github run` posts final assistant text to the PR.
+After a successful structured review submission and review summary update, do not return a status message. The final status must already be appended to the first review summary. A separate status line such as `Submitted OpenCode PR review...` becomes a duplicate top-level PR comment because `opencode github run` posts final assistant text to the PR.
 
 ### PR mode without inline findings
 
@@ -233,7 +268,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 4. **Launch subagents in parallel** — pass diff, files, and PR metadata.
 5. **Normalize, filter, and aggregate** — apply filtering rules, root-cause aggregation, and orchestrator second filter.
 6. **Validate anchors** — classify findings as inline or summary-only; adjust nearby anchors when safe.
-7. **Submit or return** — submit an inline GitHub review in PR mode when anchors exist; return no final assistant text after a successful structured review. Otherwise use the documented fallback. In local mode, print the summary only.
+7. **Submit or return** — submit an inline GitHub review in PR mode when anchors exist; then update that same review summary with the final status and return no normal final assistant text. Otherwise use the documented fallback. In local mode, print the summary only.
 
 ## Workflow Integration
 
@@ -256,7 +291,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 
 1. The `opencode.yml` workflow runs `/review-pr` on PR open / ready for review.
 2. The orchestrator gathers the PR via `gh`, runs the agents, validates anchors, and submits a GitHub review with inline comments for anchorable findings. Direct review submissions prefer the OpenCode App token from Git config, so they are authored by `opencode-agent[bot]` when the default App-token flow is used.
-3. After a successful structured review submission, the orchestrator emits no final assistant text. This avoids the extra status-only top-level PR comment and leaves the structured review body as the single top-level OpenCode review comment.
+3. After a successful structured review submission, the orchestrator updates the same review summary with the final status/run link. This avoids the extra status-only top-level PR comment while preserving the final message content in the first review summary.
 4. Re-run by commenting `/opencode` or `/oc` on the PR.
 
 **After PR feedback:**
@@ -274,3 +309,4 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 - The skill posts a GitHub review only in PR mode when inline anchors exist; otherwise it uses the documented fallback.
 - Never include secrets, tokens, or full file contents in the review response or GitHub comments.
 - Never print tokens or decoded authentication headers in logs.
+- Use `gh api` only for the final PR review submission and the follow-up update of that same review summary.
