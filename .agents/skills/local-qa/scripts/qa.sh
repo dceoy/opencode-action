@@ -21,4 +21,4 @@ checkov --framework=all --output=github_failed_only --directory=.
 ./.agents/skills/local-qa/scripts/validate-opencode.sh
 
 # PR review token resolution regressions
-./.agents/skills/local-qa/scripts/test-resolve-app-token.sh
+bats .agents/skills/local-qa/scripts/test-resolve-app-token.bats

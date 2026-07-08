@@ -52,6 +52,16 @@ jobs:
     uses: dceoy/gh-actions-for-devops/.github/workflows/shell-lint.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
+  bats-test:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: dceoy/gh-actions-for-devops/.github/workflows/bats-test.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      search-path: .
   github-codeql-analysis:
     if: >
       github.event_name == 'push'
@@ -106,6 +116,7 @@ jobs:
       - github-actions-lint-and-scan
       - yaml-lint
       - shell-lint
+      - bats-test
       - github-codeql-analysis
       - repo-qa
     permissions:
