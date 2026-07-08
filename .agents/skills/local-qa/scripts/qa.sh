@@ -17,8 +17,6 @@ zizmor --fix=safe .github/workflows action.yml
 git ls-files -z -- '.github/workflows/*.yml' | xargs -0 -t actionlint
 checkov --framework=all --output=github_failed_only --directory=.
 
-# OpenCode agent frontmatter and review-pr references
-./.agents/skills/local-qa/scripts/validate-opencode.sh
-
-# PR review token resolution regressions
-bats .agents/skills/local-qa/scripts/test-resolve-app-token.bats
+# Bats regression suites: OpenCode agent frontmatter/review-pr references,
+# and PR review token resolution.
+git ls-files -z -- '*.bats' | xargs -0 -t bats
