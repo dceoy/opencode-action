@@ -183,6 +183,7 @@ The review body must enumerate every summary-only item, including its fallback r
 OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).
 
 Summary-only findings:
+
 - `<file>` — <fallback reason>: <issue and concrete fix>
 ```
 

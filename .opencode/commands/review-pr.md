@@ -211,6 +211,7 @@ Build the review body from trusted strings and normalized findings. It must enum
 OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).
 
 Summary-only findings:
+
 - `<file>` — <fallback reason>: <issue and concrete fix>
 ```
 
