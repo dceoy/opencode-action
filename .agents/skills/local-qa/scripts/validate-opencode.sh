@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 agents_dir=".opencode/agents"
-docs=(.opencode/commands/review-pr.md .opencode/skills/review-pr/SKILL.md)
+docs=(.opencode/commands/review-pr.md)
 required_keys=(name description mode permission)
 # Backtick-quoted identifiers in the docs that are skills, toolkits, or config
 # inputs rather than agents.
