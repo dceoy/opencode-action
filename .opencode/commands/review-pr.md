@@ -16,29 +16,32 @@ When a structured GitHub review is submitted successfully, that review creates t
 Determine whether you are reviewing a real GitHub PR in GitHub Actions or working locally.
 
 - In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (for example, `refs/pull/42/merge`), and `GITHUB_EVENT_PATH`. The `gh` CLI also requires `GH_TOKEN` or `GITHUB_TOKEN`.
-- Before using `gh`, prefer the OpenCode GitHub App token that `opencode github run` installs into the Git extraheader when `use-github-token` is false. This makes direct `gh api` review submissions appear as `opencode-agent[bot]` instead of `github-actions[bot]`.
+- Before using `gh`, prefer the OpenCode GitHub App token that `opencode github run` installs into git credential configuration when `use-github-token` is false. This makes direct `gh api` review submissions appear as `opencode-agent[bot]` instead of `github-actions[bot]`.
+
+Load the shared token resolver that the bundled toolkit installs alongside this command, falling back to inline stubs if it is ever missing:
 
 ```bash
-prepare_opencode_gh_token() {
-  local extraheader encoded decoded token
-  extraheader="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
-  if [[ "${extraheader}" =~ ^AUTHORIZATION:\ basic\ (.+)$ ]]; then
-    encoded="${BASH_REMATCH[1]}"
-    decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null || true)"
-    token="${decoded#x-access-token:}"
-    if [[ -n "${token}" && "${token}" != "${decoded}" ]]; then
-      export GH_TOKEN="${token}"
-      export GITHUB_TOKEN="${token}"
-      return 0
-    fi
-  fi
-  return 0
-}
+opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
+if [[ -f "${opencode_app_token_lib}" ]]; then
+  # shellcheck source=/dev/null
+  source "${opencode_app_token_lib}"
+else
+  opencode_resolve_app_token() { return 1; }
+  opencode_prepare_gh_token() { return 1; }
+  opencode_require_app_token_for_review() {
+    [[ "${1:-false}" == "true" ]] && return 0
+    echo "::error::OpenCode App token resolver script not found at ${HOME}/.config/opencode/scripts/resolve-app-token.sh; refusing to submit the PR review with a fallback token." >&2
+    return 1
+  }
+fi
 
-prepare_opencode_gh_token
+opencode_prepare_gh_token
 ```
 
-- If no OpenCode App token is available in Git config, keep the existing `GH_TOKEN` or `GITHUB_TOKEN` fallback. This happens when the workflow uses `use-github-token: true` or when running locally.
+`opencode_resolve_app_token` checks, in order: the exact local git-config key `http.https://github.com/.extraheader`, `git config --get-urlmatch http.extraheader https://github.com/`, every `http.*.extraheader` key via `git config --get-regexp 'http\..*\.extraheader'`, and the same via `git config --show-origin --get-regexp 'http\..*\.extraheader'` for includeIf/global-style credential files. It decodes only GitHub basic-auth extraheaders (`AUTHORIZATION: basic <base64 of x-access-token:<token>>`) and never prints the token, the decoded header, or other credential material.
+
+- `opencode_prepare_gh_token` above is a best-effort call for read operations (`gh pr view`, `gh pr diff`): it exports `GH_TOKEN`/`GITHUB_TOKEN` when an App token is found and otherwise leaves the workflow's existing `GH_TOKEN`/`GITHUB_TOKEN` untouched. This happens when the workflow uses `use-github-token: true` or when running locally.
+- Reads may use the fallback token. Structured PR review **submissions** (step 7) must not; they call `opencode_require_app_token_for_review` immediately before every write and fail fast per that step's rules.
 - Derive the PR number from the event payload first:
 
 ```bash
@@ -168,7 +171,17 @@ Do not post a GitHub review with an empty comments array.
 
 Submit one GitHub pull request review via `gh api` using a structured review payload with `comments` entries. Use `gh api` instead of `gh pr review` because this workflow needs explicit per-line anchors.
 
-Before submission, call `prepare_opencode_gh_token` again. This ensures `gh api` uses the OpenCode GitHub App token when available, even if the workflow also provided a default `GITHUB_TOKEN`.
+Before doing anything else in this section, enforce the token policy:
+
+```bash
+if ! opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}"; then
+  exit 1
+fi
+```
+
+- If an OpenCode App token is resolvable, this exports it as `GH_TOKEN`/`GITHUB_TOKEN` so the submission is authored by `opencode-agent[bot]`.
+- If no App token is resolvable and `USE_GITHUB_TOKEN` is not `"true"`, this fails fast (`::error::...` plus non-zero exit) instead of silently submitting the review under the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, which would make it appear as `github-actions[bot]`.
+- If no App token is resolvable and `USE_GITHUB_TOKEN` is `"true"`, this succeeds and the existing `GH_TOKEN`/`GITHUB_TOKEN` is used deliberately; a `github-actions[bot]`-authored review is expected in that mode.
 
 Build the initial review body from trusted strings and normalized findings. It must enumerate every summary-only item, including its fallback reason:
 
@@ -183,7 +196,9 @@ Summary-only findings:
 Submit the review, capture the returned review ID, then update that same review summary with the final status that would otherwise have become a second top-level PR comment. Use the Pull Request Reviews update endpoint, not issue comments:
 
 ```bash
-prepare_opencode_gh_token
+if ! opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}"; then
+  exit 1
+fi
 
 review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
 review_update_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review-update.XXXXXX.json")"
@@ -228,16 +243,42 @@ ${final_status}"
 
 jq -n --arg body "$updated_review_body" '{body: $body}' > "$review_update_payload"
 
+if ! opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}"; then
+  exit 1
+fi
+
 gh api \
   --method PUT \
   "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${review_id}" \
   --input "$review_update_payload"
 ```
 
+After the update succeeds, write the internal marker file that the action uses to suppress `opencode github run`'s separate completion comment (see step 9). Never guess this path; only act when the action provided it:
+
+```bash
+if [[ -n "${OPENCODE_REVIEW_MARKER_FILE:-}" ]]; then
+  actor_login="$(gh api user --jq '.login' 2>/dev/null || true)"
+  submitted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  if [[ -n "$actor_login" ]]; then
+    review_marker_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-review-marker.XXXXXX.json")"
+    jq -n \
+      --arg repository "${GITHUB_REPOSITORY:-}" \
+      --arg pr_number "${PR_NUMBER}" \
+      --arg review_id "${review_id}" \
+      --arg actor_login "$actor_login" \
+      --arg submitted_at "$submitted_at" \
+      '{repository: $repository, pr_number: ($pr_number | tonumber), review_id: ($review_id | tonumber), actor_login: $actor_login, submitted_at: $submitted_at}' \
+      > "$review_marker_payload"
+    mv "$review_marker_payload" "${OPENCODE_REVIEW_MARKER_FILE}"
+  fi
+fi
+```
+
 Operational requirements:
 
-- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions and review summary updates are authored by `opencode-agent[bot]`.
-- If no OpenCode App token is available, fall back to `GH_TOKEN` or `GITHUB_TOKEN`; this may make direct review submissions appear as `github-actions[bot]`.
+- Never submit, update, or retry a structured review without first calling `opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}"` immediately beforehand, including inside the retry path below. Do not rely on a token exported earlier in the run; re-assert it right before each write.
+- Do not fall back to a bare `GH_TOKEN`/`GITHUB_TOKEN` for a structured review submission when `use-github-token` is false and no OpenCode App token is resolvable — fail the run instead (see the token-policy snippet above).
+- When `use-github-token` is true, a `github-actions[bot]`-authored review is expected and acceptable.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
 - Build `inline_count` and `summary_only_count` from the same normalized finding sets used to build the review body.
@@ -247,9 +288,9 @@ Operational requirements:
 - If GitHub rejects one or more inline anchors and the offending entries can be identified, move only those findings to `summary_only` with the rejection reason and retry once.
 - If a 422 anchor error does not identify the offending `comments[N]` entry, move all inline findings from that failed attempt to `summary_only` before retrying or falling back so no finding is lost.
 - If the error indicates the `commit_id` is stale or is no longer part of the pull request, refetch `headRefOid`, rebuild the payload with the new SHA, and retry once. If the refetched SHA still fails, use the fallback path.
-- If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason.
+- If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason. Do not write the marker file in this case.
 
-After a successful structured review submission and review summary update, do not return a status message. The final status must already be appended to the first review summary. A separate status line such as `Submitted OpenCode PR review...` becomes a duplicate top-level PR comment because `opencode github run` posts final assistant text to the PR.
+After a successful structured review submission, review summary update, and marker write, do not return a status message. The final status must already be appended to the first review summary. Do not rely on this alone, though: `opencode github run` still posts whatever final assistant text this turn produces as a separate top-level PR comment, so the action itself deletes that comment after the run using the marker file written above (matched by actor and timestamp, never by comment body text). Returning no normal final text keeps that cleanup step a no-op-if-nothing-to-delete safety net rather than the only line of defense.
 
 ### Findings without inline anchors
 
@@ -266,5 +307,6 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 - Do not print tokens or decoded Git authentication headers in logs.
 - Do not call `gh pr comment`; it creates top-level noise and bypasses inline review anchors.
 - Use `gh api` only for the final PR review submission and the follow-up update of that same review summary.
+- The `OPENCODE_REVIEW_MARKER_FILE` env var, when set by the action, is where step 7 records that a structured review was submitted (repository, PR number, review ID, authoring actor, submission time). The action reads that file after this run to delete its own separate completion comment authored by the same actor at or after that time, so the review stays the single top-level artifact. It never matches on comment body text and never touches comments from other users or bots.
 - If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
 - Re-run after fixes to verify issues are resolved.

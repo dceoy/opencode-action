@@ -19,3 +19,7 @@ checkov --framework=all --output=github_failed_only --directory=.
 
 # OpenCode agent frontmatter and review-pr references
 ./.agents/skills/local-qa/scripts/validate-opencode.sh
+
+# PR review token resolution and duplicate-comment suppression regressions
+./.agents/skills/local-qa/scripts/test-resolve-app-token.sh
+./.agents/skills/local-qa/scripts/test-suppress-duplicate-review-comment.sh
