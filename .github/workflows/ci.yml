@@ -13,6 +13,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+    working-directory: .
 jobs:
   github-actions-lint-and-scan:
     if: >
@@ -38,6 +42,16 @@ jobs:
     with:
       search-path: .
       yamllint-config-data: '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
+  shell-lint:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: dceoy/gh-actions-for-devops/.github/workflows/shell-lint.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      search-path: .
   github-major-version-tag:
     if: >
       (github.event_name == 'release' && github.event.action == 'released')
@@ -52,6 +66,8 @@ jobs:
       || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
+      actions: read
+      security-events: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -59,11 +75,17 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate OpenCode agent frontmatter and review-pr references
-        run: ./.agents/skills/local-qa/scripts/validate-opencode.sh
-      - name: Shellcheck repository scripts
-        run: git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 shellcheck
-      - name: Scan action.yml with zizmor
-        run: pipx run zizmor action.yml
+        run: >
+          ./.agents/skills/local-qa/scripts/validate-opencode.sh
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa  # v0.5.7
+        with:
+          inputs: action.yml
+          online-audits: true
+          persona: auditor
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
+          advanced-security: true
+          annotations: false
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'

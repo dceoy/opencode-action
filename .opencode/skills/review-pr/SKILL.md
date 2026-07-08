@@ -5,9 +5,9 @@ description: Run a comprehensive pull request review across changed files using 
 
 # Comprehensive PR Review
 
-Run a comprehensive pull request review by orchestrating specialized review agents, each focusing on one aspect of code quality. The orchestrator gathers the PR, spawns agents as subagents via the `task` tool, normalizes and deduplicates findings, validates every finding against the PR diff, and submits GitHub inline review comments for every diff-anchorable finding.
+Run a comprehensive pull request review by orchestrating specialized review agents, each focusing on one aspect of code quality. The orchestrator gathers the PR, spawns agents as subagents via the `task` tool, normalizes and deduplicates findings, validates every finding against the PR diff, and submits one GitHub pull request review with inline comments for every diff-anchorable finding.
 
-The surrounding `opencode github run` integration always posts the final assistant text to the PR. After a successful inline review submission, return only a short status message so the integration does not duplicate the full review as a top-level comment.
+When the orchestrator successfully submits a structured GitHub review, that review creates the desired top-level review summary in the PR. Do not create a second top-level PR comment for the final status. Instead, capture the submitted review ID, update that same review summary comment with the final status/run link, and return no normal final assistant text.
 
 ## When to Use
 
@@ -64,11 +64,11 @@ If no OpenCode App token is available in Git config, keep the existing `GH_TOKEN
 | `errors`                  | `silent-failure-hunter`                      | Silent failures, broad catch blocks, error handling |
 | `types`                   | `type-design-analyzer`                       | Type design and invariant expression                |
 | `simplify`                | `code-simplifier`                            | Refinement only — does not return a review          |
-| `all` (default)           | All applicable (see below)                   | Deterministic full review                           |
+| `all` (default)           | All applicable                               | Deterministic full review                           |
 
 ## Deterministic `all` Behavior
 
-When `all` is requested or no aspect is specified, the following **core reviewers** run unconditionally:
+When `all` is requested or no aspect is specified, run these core reviewers unconditionally:
 
 1. `code-quality-reviewer` — Claude Code Action-compatible: general quality, edge cases, robustness
 2. `performance-reviewer` — algorithmic complexity, N+1, resource leaks
@@ -77,7 +77,7 @@ When `all` is requested or no aspect is specified, the following **core reviewer
 5. `security-code-reviewer` — trust boundaries, injection, secrets, auth
 6. `code-reviewer` — always run; AGENTS.md/project-guideline compliance and high-precision bug detection; avoids duplicating `code-quality-reviewer` findings
 
-The following **specialty reviewers** run conditionally:
+Run specialty reviewers conditionally:
 
 - `pr-test-analyzer` — when test files changed (paths matching `*test*`, `*spec*`, or test directories)
 - `silent-failure-hunter` — when error handling, catch blocks, fallback logic, retries, logging, or failure paths changed
@@ -86,19 +86,13 @@ The following **specialty reviewers** run conditionally:
 
 `code-simplifier` is never part of the `all` review set; it is a separate post-review refinement step.
 
-## Claude Code Action-Compatible Core Reviewers
-
-These three agents mirror the intent of Claude Code Action's corresponding review agents:
+## Reviewer Agents
 
 **`code-quality-reviewer`**: General code quality, maintainability, clean code principles, edge cases, robustness, and type safety. Reports findings with confidence >= 80.
 
 **`test-coverage-reviewer`**: Test coverage and test quality. Identifies missing critical test scenarios, brittle tests, and missing edge or error coverage. Reports gaps rated >= 7 out of 10.
 
 **`documentation-accuracy-reviewer`**: Verifies code docs, README, API docs, examples, configuration docs, and public interface documentation against the implementation. Reports findings with confidence >= 80.
-
-## pr-review-toolkit Specialty Reviewers
-
-These agents cover focused specialty concerns:
 
 **`code-reviewer`**: Checks AGENTS.md compliance; detects bugs and quality issues with high precision (confidence >= 80).
 
@@ -114,7 +108,7 @@ These agents cover focused specialty concerns:
 
 **`type-design-analyzer`**: Analyzes type encapsulation, invariant expression, and design quality.
 
-**`code-simplifier`** (refinement, not review): Simplifies complex code for clarity; run after review passes.
+**`code-simplifier`**: Simplifies complex code for clarity as a refinement step, not as PR review output.
 
 ## Finding Normalization
 
@@ -132,12 +126,12 @@ Every subagent returns findings in this normalized structure:
 
 1. Drop praise-only items (no actionable issue).
 2. Drop nitpicks (cosmetic preferences, no real-world impact).
-3. Drop findings not supported by the diff — check **file membership only**; the changed-file set contains paths, not line numbers. Leave line validation to the anchoring step.
-4. Deduplicate across agents (keep the most specific finding when two agents report the same issue at the same location).
-5. Aggregate by root cause only when it still preserves an actionable inline anchor. If several findings share one root cause, keep one representative inline comment at the best anchor and mention the other affected files briefly in that comment. Do not collapse an anchorable finding into a top-level-only summary.
+3. Drop findings not supported by the diff — check file membership only; the changed-file set contains paths, not line numbers. Leave line validation to the anchoring step.
+4. Deduplicate across agents. Keep the most specific finding when two agents report the same issue at the same location.
+5. Aggregate by root cause only when it still preserves an actionable inline anchor. Do not collapse an anchorable finding into a top-level-only summary.
 6. Orchestrator second filter: the orchestrator reviews every remaining finding and discards any it does not also deem noteworthy.
 
-Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions (such as adding tests for agent frontmatter or reference validation) should be downgraded to `suggestion` severity at most.
+Prefer fewer, higher-signal comments over exhaustive lists. Optional guardrail suggestions should be downgraded to `suggestion` severity at most.
 
 ## Diff Anchor Validation
 
@@ -177,23 +171,25 @@ Submit one GitHub pull request review via `gh api` using a structured review pay
 
 Before submission, call `prepare_opencode_gh_token` again. This ensures `gh api` uses the OpenCode GitHub App token when available, even if the workflow also provided a default `GITHUB_TOKEN`.
 
-The review body must enumerate every summary-only item, including its fallback reason:
+The initial review body must enumerate every summary-only item, including its fallback reason:
 
 ```markdown
 OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).
 
 Summary-only findings:
+
 - `<file>` — <fallback reason>: <issue and concrete fix>
 ```
 
-Build the review payload with `jq`, not string interpolation, and write it to a private temporary file:
+Submit the review, capture the returned review ID, then update that same review summary with the final status that would otherwise have become a second top-level PR comment. Use the Pull Request Reviews update endpoint, not issue comments:
 
 ```bash
 prepare_opencode_gh_token
 
 review_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
-chmod 600 "$review_payload"
-trap 'rm -f "$review_payload"' EXIT
+review_update_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review-update.XXXXXX.json")"
+chmod 600 "$review_payload" "$review_update_payload"
+trap 'rm -f "${review_payload:-}" "${review_update_payload:-}"' EXIT
 
 jq -n \
   --arg commit_id "$head_oid" \
@@ -202,29 +198,59 @@ jq -n \
   '{commit_id: $commit_id, event: "COMMENT", body: $body, comments: $comments}' \
   > "$review_payload"
 
-gh api \
+review_response="$(gh api \
   --method POST \
   "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
-  --input "$review_payload"
+  --input "$review_payload")"
+review_id="$(jq -r '.id // empty' <<<"$review_response")"
+
+if [[ -z "$review_id" ]]; then
+  echo "Failed to capture submitted review ID; cannot update the review summary." >&2
+  exit 1
+fi
+
+run_url=""
+if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" && -n "${GITHUB_RUN_ID:-}" ]]; then
+  run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+fi
+
+final_status="Submitted OpenCode PR review with ${inline_count} inline comment(s) and ${summary_only_count} summary-only finding(s)."
+if [[ -n "$run_url" ]]; then
+  final_status="${final_status}
+
+[github run](${run_url})"
+fi
+
+updated_review_body="${review_body}
+
+---
+
+${final_status}"
+
+jq -n --arg body "$updated_review_body" '{body: $body}' > "$review_update_payload"
+
+gh api \
+  --method PUT \
+  "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${review_id}" \
+  --input "$review_update_payload"
 ```
 
 Operational requirements:
 
-- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions are authored by `opencode-agent[bot]`.
+- Prefer the OpenCode GitHub App token from Git config for `gh` commands so inline review submissions and review summary updates are authored by `opencode-agent[bot]`.
 - If no OpenCode App token is available, fall back to `GH_TOKEN` or `GITHUB_TOKEN`; this may make direct review submissions appear as `github-actions[bot]`.
 - Use the PR head SHA from `gh pr view --json headRefOid` as `commit_id`.
 - Include `summary_only` findings in the review `body`, not as fake inline comments.
+- Build `inline_count` and `summary_only_count` from the same normalized finding sets used to build the review body.
+- Do not call `gh pr comment` or the issue comment API for the success status.
+- If the review summary update fails, do not silently succeed; report the update failure so the workflow surfaces the broken behavior.
 - Handle only GitHub 422 anchor-validation failures with the inline-comment retry path. Inspect `errors[].field` values such as `comments[0].line` to map failures back to specific `comments[N]` entries.
 - If GitHub rejects one or more inline anchors and the offending entries can be identified, move only those findings to `summary_only` with the rejection reason and retry once.
 - If a 422 anchor error does not identify the offending `comments[N]` entry, move all inline findings from that failed attempt to `summary_only` before retrying or falling back so no finding is lost.
 - If the error indicates the `commit_id` is stale or is no longer part of the pull request, refetch `headRefOid`, rebuild the payload with the new SHA, and retry once. If the refetched SHA still fails, use the fallback path.
 - If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason.
 
-After a successful submission, return only a concise status, for example:
-
-```text
-Submitted OpenCode PR review with 3 inline comment(s) and 1 summary-only finding.
-```
+After a successful structured review submission and review summary update, do not return a status message. The final status must already be appended to the first review summary. A separate status line such as `Submitted OpenCode PR review...` becomes a duplicate top-level PR comment because `opencode github run` posts final assistant text to the PR.
 
 ### PR mode without inline findings
 
@@ -242,7 +268,7 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 4. **Launch subagents in parallel** — pass diff, files, and PR metadata.
 5. **Normalize, filter, and aggregate** — apply filtering rules, root-cause aggregation, and orchestrator second filter.
 6. **Validate anchors** — classify findings as inline or summary-only; adjust nearby anchors when safe.
-7. **Submit or return** — submit an inline GitHub review in PR mode when anchors exist; otherwise use the documented fallback. In local mode, print the summary only.
+7. **Submit or return** — submit an inline GitHub review in PR mode when anchors exist; then update that same review summary with the final status and return no normal final assistant text. Otherwise use the documented fallback. In local mode, print the summary only.
 
 ## Workflow Integration
 
@@ -264,8 +290,9 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 **In GitHub Actions:**
 
 1. The `opencode.yml` workflow runs `/review-pr` on PR open / ready for review.
-2. The orchestrator gathers the PR via `gh`, runs the agents, validates anchors, and submits a GitHub review with inline comments for anchorable findings. Direct review submissions prefer the OpenCode App token from Git config, so they are authored by `opencode-agent[bot]` when the default App-token flow is used. The `opencode github run` integration then posts only a short status comment.
-3. Re-run by commenting `/opencode` or `/oc` on the PR.
+2. The orchestrator gathers the PR via `gh`, runs the agents, validates anchors, and submits a GitHub review with inline comments for anchorable findings. Direct review submissions prefer the OpenCode App token from Git config, so they are authored by `opencode-agent[bot]` when the default App-token flow is used.
+3. After a successful structured review submission, the orchestrator updates the same review summary with the final status/run link. This avoids the extra status-only top-level PR comment while preserving the final message content in the first review summary.
+4. Re-run by commenting `/opencode` or `/oc` on the PR.
 
 **After PR feedback:**
 
@@ -282,3 +309,4 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 - The skill posts a GitHub review only in PR mode when inline anchors exist; otherwise it uses the documented fallback.
 - Never include secrets, tokens, or full file contents in the review response or GitHub comments.
 - Never print tokens or decoded authentication headers in logs.
+- Use `gh api` only for the final PR review submission and the follow-up update of that same review summary.
