@@ -13,7 +13,7 @@ git ls-files -z -- '*.yml' | xargs -0 -t uvx yamllint -d '{"extends": "relaxed",
 git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 -t shellcheck
 
 # GitHub Actions
-zizmor --fix=safe .github/workflows
+zizmor --fix=safe .github/workflows action.yml
 git ls-files -z -- '.github/workflows/*.yml' | xargs -0 -t actionlint
 checkov --framework=all --output=github_failed_only --directory=.
 
