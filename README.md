@@ -49,19 +49,18 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 
 ## Inputs
 
-| Input                               | Required | Default                   | Description                                                                                                                                                                                                                  |
-| ----------------------------------- | -------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`                             | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                                                                                    |
-| `agent`                             | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                                                                                            |
-| `share`                             | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                                                                                       |
-| `prompt`                            | No       |                           | Custom prompt to override the default prompt.                                                                                                                                                                                |
-| `use-github-token`                  | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                                                                                          |
-| `mentions`                          | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                                                                                 |
-| `variant`                           | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                                                                                   |
-| `oidc-base-url`                     | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                                                                                        |
-| `version`                           | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                                                                                |
-| `enable-toolkit`                    | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved.                                                               |
-| `suppress-duplicate-review-comment` | No       | `true`                    | After a run in which `/review-pr` submits a structured PR review with inline comments, delete the separate top-level completion comment that `opencode github run` posts, so the review stays the single top-level artifact. |
+| Input              | Required | Default                   | Description                                                                                                                                                    |
+| ------------------ | -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                      |
+| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                              |
+| `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                         |
+| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                  |
+| `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                            |
+| `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                   |
+| `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                     |
+| `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
+| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                  |
+| `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved. |
 
 ## Outputs
 
@@ -85,7 +84,7 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead.
 
-A successful structured review run produces exactly one top-level artifact on the PR: the GitHub review summary (with its inline comments). `opencode github run` normally also posts the command's final assistant text as a separate top-level completion comment; when `/review-pr` has already submitted a structured review, the action deletes that separate completion comment afterward (see `suppress-duplicate-review-comment` below), so a second `Review submitted: ...`-style comment never appears.
+A successful structured review run produces exactly one top-level artifact on the PR: the GitHub review summary (with its inline comments). `opencode github run` normally also posts the command's final assistant text as a separate top-level completion comment; `/review-pr` returns no additional final assistant text after submitting the review, so a second `Review submitted: ...`-style comment never appears.
 
 ### Review author and the OpenCode App token
 
@@ -100,10 +99,6 @@ Workflows that invoke `/review-pr` must provide:
 - `pull-requests: write` permission
 - `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission when using `use-github-token: true`; with the default App-token flow, `/review-pr` requires the OpenCode App token from git credential configuration for `gh api` review submission and fails fast if it is unavailable
 - A valid API key for the selected model provider with available credits or quota
-
-### Duplicate completion comment suppression
-
-The `suppress-duplicate-review-comment` input (default `true`) controls the cleanup step described above. After a run where `/review-pr` wrote its internal marker (recording the repository, PR number, authoring actor, and submission time of the review it just submitted), the action deletes only the completion comment made by that same actor at or after that time — never by matching comment text, and never comments from users or other bots. Set it to `false` to disable the cleanup step, for example while debugging.
 
 Example OpenCode step:
 

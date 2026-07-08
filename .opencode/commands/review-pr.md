@@ -253,27 +253,6 @@ gh api \
   --input "$review_update_payload"
 ```
 
-After the update succeeds, write the internal marker file that the action uses to suppress `opencode github run`'s separate completion comment (see step 9). Never guess this path; only act when the action provided it:
-
-```bash
-if [[ -n "${OPENCODE_REVIEW_MARKER_FILE:-}" ]]; then
-  actor_login="$(gh api user --jq '.login' 2>/dev/null || true)"
-  submitted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  if [[ -n "$actor_login" ]]; then
-    review_marker_payload="$(mktemp "${TMPDIR:-/tmp}/opencode-review-marker.XXXXXX.json")"
-    jq -n \
-      --arg repository "${GITHUB_REPOSITORY:-}" \
-      --arg pr_number "${PR_NUMBER}" \
-      --arg review_id "${review_id}" \
-      --arg actor_login "$actor_login" \
-      --arg submitted_at "$submitted_at" \
-      '{repository: $repository, pr_number: ($pr_number | tonumber), review_id: ($review_id | tonumber), actor_login: $actor_login, submitted_at: $submitted_at}' \
-      > "$review_marker_payload"
-    mv "$review_marker_payload" "${OPENCODE_REVIEW_MARKER_FILE}"
-  fi
-fi
-```
-
 Operational requirements:
 
 - Never submit, update, or retry a structured review without first calling `opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}"` immediately beforehand, including inside the retry path below. Do not rely on a token exported earlier in the run; re-assert it right before each write.
@@ -288,9 +267,9 @@ Operational requirements:
 - If GitHub rejects one or more inline anchors and the offending entries can be identified, move only those findings to `summary_only` with the rejection reason and retry once.
 - If a 422 anchor error does not identify the offending `comments[N]` entry, move all inline findings from that failed attempt to `summary_only` before retrying or falling back so no finding is lost.
 - If the error indicates the `commit_id` is stale or is no longer part of the pull request, refetch `headRefOid`, rebuild the payload with the new SHA, and retry once. If the refetched SHA still fails, use the fallback path.
-- If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason. Do not write the marker file in this case.
+- If the retry still fails, do not claim inline comments were posted. Return a concise failure report and convert every attempted inline finding into a summary-only fallback entry, including its file, line, severity, source, message, and failure reason.
 
-After a successful structured review submission, review summary update, and marker write, do not return a status message. The final status must already be appended to the first review summary. Do not rely on this alone, though: `opencode github run` still posts whatever final assistant text this turn produces as a separate top-level PR comment, so the action itself deletes that comment after the run using the marker file written above (matched by actor and timestamp, never by comment body text). Returning no normal final text keeps that cleanup step a no-op-if-nothing-to-delete safety net rather than the only line of defense.
+After a successful structured review submission and review summary update, do not return a status message. The final status must already be appended to the first review summary. `opencode github run` posts whatever final assistant text this turn produces as a separate top-level PR comment, so returning no normal final text is what keeps the review the single top-level artifact.
 
 ### Findings without inline anchors
 
@@ -307,6 +286,5 @@ Print the same normalized review summary to the user. Do not call `gh api`, `gh 
 - Do not print tokens or decoded Git authentication headers in logs.
 - Do not call `gh pr comment`; it creates top-level noise and bypasses inline review anchors.
 - Use `gh api` only for the final PR review submission and the follow-up update of that same review summary.
-- The `OPENCODE_REVIEW_MARKER_FILE` env var, when set by the action, is where step 7 records that a structured review was submitted (repository, PR number, review ID, authoring actor, submission time). The action reads that file after this run to delete its own separate completion comment authored by the same actor at or after that time, so the review stays the single top-level artifact. It never matches on comment body text and never touches comments from other users or bots.
 - If `$ARGUMENTS` lists specific aspects, respect them and skip the rest.
 - Re-run after fixes to verify issues are resolved.

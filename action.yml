@@ -44,10 +44,6 @@ inputs:
     required: false
     description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
     default: 'true'
-  suppress-duplicate-review-comment:
-    required: false
-    description: After a run in which the bundled /review-pr command submits a structured PR review with inline comments, delete the separate top-level PR completion comment that `opencode github run` posts, so the review summary is the only top-level artifact.
-    default: 'true'
 outputs:
   opencode-version:
     description: OpenCode version resolved for this run.
@@ -117,9 +113,7 @@ runs:
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
-        OPENCODE_REVIEW_MARKER_FILE: ${{ runner.temp }}/opencode-review-marker-${{ github.run_id }}-${{ github.run_attempt }}.json
       run: |
-        rm -f "${OPENCODE_REVIEW_MARKER_FILE}"
         output_file="$(mktemp)"
         set +e
         opencode github run 2>&1 | tee "${output_file}"
@@ -137,12 +131,3 @@ runs:
         fi
 
         rm -f "${output_file}"
-    - name: Suppress duplicate PR review completion comment
-      if: always() && inputs.suppress-duplicate-review-comment == 'true'
-      shell: bash -euo pipefail {0}
-      env:
-        OPENCODE_REVIEW_MARKER_FILE: ${{ runner.temp }}/opencode-review-marker-${{ github.run_id }}-${{ github.run_attempt }}.json
-        GH_TOKEN: ${{ github.token }}
-        ACTION_PATH: ${{ github.action_path }}
-      run: >
-        "${ACTION_PATH}/scripts/suppress-duplicate-review-comment.sh" "${OPENCODE_REVIEW_MARKER_FILE}"
