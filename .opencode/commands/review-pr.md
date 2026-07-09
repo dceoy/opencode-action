@@ -173,13 +173,7 @@ Do not post a GitHub review with an empty comments array.
 
 Submit one GitHub pull request review via `gh api` using a structured review payload with `comments` entries. Use `gh api` instead of `gh pr review` because this workflow needs explicit per-line anchors.
 
-Before doing anything else in this section, enforce the token policy:
-
-```bash
-if ! opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${GITHUB_REPOSITORY}" "${PR_NUMBER}"; then
-  exit 1
-fi
-```
+The token policy is enforced immediately before each write below (first the review submission, then its summary update), not before any of the local payload-building steps in between, since re-running the gate without an intervening write would just repeat the same result at extra cost:
 
 - If a candidate OpenCode App token is resolvable and verifies as `opencode-agent[bot]` (via a throwaway pending-review identity probe), this exports it as `GH_TOKEN`/`GITHUB_TOKEN` so the submission is authored by `opencode-agent[bot]`.
 - If no token verifies and `USE_GITHUB_TOKEN` is not `"true"`, this fails fast (`::error::...` plus non-zero exit) instead of silently submitting the review under the workflow's `GH_TOKEN`/`GITHUB_TOKEN` or an unverified candidate, either of which could make the review appear under the wrong identity.

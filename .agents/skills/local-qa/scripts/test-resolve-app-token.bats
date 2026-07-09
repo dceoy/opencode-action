@@ -22,7 +22,7 @@ mk_repo() {
   printf '%s' "${d}"
 }
 
-encode_header() { printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 -w0)"; }
+encode_header() { printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"; }
 
 # Writes a fake `gh` onto a fresh directory that answers the two `gh api`
 # shapes opencode_verify_app_token_identity issues: a POST to create a
@@ -79,6 +79,56 @@ if [[ "\${joined}" == *"--method POST"* ]]; then
 fi
 if [[ "\${joined}" == *"--method DELETE"* ]]; then
   exit 0
+fi
+echo "gh stub: unexpected invocation" >&2
+exit 1
+STUB
+  chmod +x "${dir}/gh"
+}
+
+# Like mk_gh_stub, but returns the given raw body for the POST instead of a
+# well-formed `{"id": ..., "user": {"login": ...}}` payload, exercising the
+# malformed/unexpected-shape identity-probe response path. Never echoes its
+# arguments or stdin.
+mk_gh_stub_response_body() {
+  local dir="$1" body="$2"
+  mkdir -p "${dir}"
+  cat > "${dir}/gh" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+joined="\$*"
+if [[ "\${joined}" == *"--method POST"* ]]; then
+  cat >/dev/null
+  printf '%s' '${body}'
+  exit 0
+fi
+if [[ "\${joined}" == *"--method DELETE"* ]]; then
+  exit 0
+fi
+echo "gh stub: unexpected invocation" >&2
+exit 1
+STUB
+  chmod +x "${dir}/gh"
+}
+
+# Like mk_gh_stub, but the DELETE cleanup call fails (non-zero exit),
+# exercising the "Failed to delete the throwaway ... pending review" warning
+# path. The POST still succeeds and returns the given login, so identity
+# verification itself must not depend on the cleanup outcome.
+mk_gh_stub_delete_fails() {
+  local dir="$1" login="$2"
+  mkdir -p "${dir}"
+  cat > "${dir}/gh" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+joined="\$*"
+if [[ "\${joined}" == *"--method POST"* ]]; then
+  cat >/dev/null
+  printf '{"id": 4242, "user": {"login": "${login}"}}'
+  exit 0
+fi
+if [[ "\${joined}" == *"--method DELETE"* ]]; then
+  exit 1
 fi
 echo "gh stub: unexpected invocation" >&2
 exit 1
@@ -185,6 +235,7 @@ STUB
 
   [ "${status}" -ne 0 ]
   [[ "${output}" == *'opencode-agent[bot]'* ]]
+  [[ "${output}" == *'No OpenCode App token candidates found'* ]]
 }
 
 @test "allows the explicit use-github-token=true fallback when no App token candidate is configured" {
@@ -428,4 +479,67 @@ STUB
   [[ "${output}" == *'Found 2 candidate'* ]]
   [[ "${output}" != *'ghs_checkout_tok'* ]]
   [[ "${output}" != *'ghp_pat_tok'* ]]
+}
+
+@test "rejects an identity-probe response missing .user.login" {
+  local repo stub
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_malformed_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub_response_body "${stub}" '{"id": 4242}'
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_require_app_token_for_review false owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=1 gh=unset gt=unset'* ]]
+  [[ "${output}" != *'ghs_malformed_tok'* ]]
+}
+
+@test "rejects a non-JSON identity-probe response" {
+  local repo stub
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_nonjson_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub_response_body "${stub}" 'not json at all'
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_require_app_token_for_review false owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=1 gh=unset gt=unset'* ]]
+  [[ "${output}" != *'ghs_nonjson_tok'* ]]
+}
+
+@test "verifies identity and warns, but still succeeds, when the throwaway pending review DELETE cleanup fails" {
+  local repo stub
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_local_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub_delete_fails "${stub}" 'opencode-agent[bot]'
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_require_app_token_for_review false owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=0 gh=ghs_local_tok gt=ghs_local_tok'* ]]
+  [[ "${output}" == *'Failed to delete the throwaway'* ]]
 }

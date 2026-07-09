@@ -97,7 +97,7 @@ When the default OpenCode GitHub App flow is used (`use-github-token: false`), `
 
 **If no App token can be verified as `opencode-agent[bot]` while `use-github-token` is `false`, `/review-pr` fails the run instead of submitting the review.** It never silently falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, or to an unverified candidate, for a structured review submission, because either could make the review appear under the wrong identity instead of `opencode-agent[bot]`.
 
-If the workflow explicitly opts into `use-github-token: true`, this is intentional: `/review-pr` uses the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, and direct review submissions are expected to appear as `github-actions[bot]`.
+If the workflow explicitly opts into `use-github-token: true` and no candidate App token verifies, this is intentional: `/review-pr` falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, and direct review submissions are expected to appear as `github-actions[bot]` in that case. A verified `opencode-agent[bot]` candidate still takes precedence over that fallback when one is found — see the exact precedence rules below.
 
 **Exact credential precedence for every structured review write, regardless of `use-github-token`:**
 

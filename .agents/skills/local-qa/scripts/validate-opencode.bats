@@ -5,6 +5,7 @@ setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
   review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
+  opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
@@ -81,4 +82,8 @@ frontmatter() {
     printf 'referenced agent has no file under .opencode/agents/: %s\n' "${missing[@]}"
     return 1
   }
+}
+
+@test "opencode.jsonc parses as JSON once its // comments are stripped" {
+  sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
 }

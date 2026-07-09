@@ -189,18 +189,28 @@ opencode_prepare_gh_token() {
 # $3: token to verify
 opencode_verify_app_token_identity() {
   local repo="${1:-}" pr_number="${2:-}" token="${3:-}"
-  local probe_response probe_id probe_login
+  local probe_response probe_id probe_login probe_stderr probe_rc
 
   [[ -n "${repo}" && -n "${pr_number}" && -n "${token}" ]] || return 1
   command -v gh >/dev/null 2>&1 || return 1
   command -v jq >/dev/null 2>&1 || return 1
 
+  probe_stderr="$(mktemp)"
   probe_response="$(
     printf '{}' | GH_TOKEN="${token}" GITHUB_TOKEN="${token}" gh api \
       --method POST \
       "repos/${repo}/pulls/${pr_number}/reviews" \
-      --input - 2>/dev/null
-  )" || return 1
+      --input - 2>"${probe_stderr}"
+  )"
+  probe_rc=$?
+  if [[ "${probe_rc}" -ne 0 ]]; then
+    if [[ -s "${probe_stderr}" ]]; then
+      echo "::warning::Identity-verification probe request failed for a candidate token (this is a transient/API error, not necessarily an identity mismatch): $(tr '\n' ' ' <"${probe_stderr}")" >&2
+    fi
+    rm -f "${probe_stderr}"
+    return 1
+  fi
+  rm -f "${probe_stderr}"
 
   probe_id="$(jq -r '.id // empty' <<<"${probe_response}" 2>/dev/null)"
   probe_login="$(jq -r '.user.login // empty' <<<"${probe_response}" 2>/dev/null)"
@@ -254,6 +264,8 @@ opencode_require_app_token_for_review() {
 
   if [[ "${tried}" -gt 0 ]]; then
     echo "::warning::Found ${tried} candidate OpenCode App token(s) in git credential configuration, but none verified as ${OPENCODE_REVIEW_BOT_LOGIN}; ignoring them instead of risking a review authored by the wrong identity." >&2
+  else
+    echo "::warning::No OpenCode App token candidates found in git credential configuration (checked local, urlmatch, and includeIf/global extraheader sources)." >&2
   fi
 
   if [[ "${use_github_token}" == "true" ]]; then

@@ -46,7 +46,7 @@ inputs:
     default: 'true'
   timeout-minutes:
     required: false
-    description: Maximum minutes to let 'opencode github run' execute before it is killed.
+    description: Maximum minutes to let 'opencode github run' execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
     default: '60'
 outputs:
   opencode-version:
@@ -118,6 +118,7 @@ runs:
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
       run: |
         output_file="$(mktemp)"
+        trap 'rm -f "${output_file}"' EXIT
         timeout_cmd=()
         if command -v timeout >/dev/null 2>&1; then
           timeout_cmd=(timeout "${TIMEOUT_MINUTES}m")
@@ -139,8 +140,5 @@ runs:
           else
             echo "::error::OpenCode failed with exit code ${opencode_status} for model '${MODEL:-unknown}'."
           fi
-          rm -f "${output_file}"
           exit "${opencode_status}"
         fi
-
-        rm -f "${output_file}"
