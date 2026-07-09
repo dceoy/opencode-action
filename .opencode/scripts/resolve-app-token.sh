@@ -145,9 +145,22 @@ opencode_resolve_app_token() {
 # Best-effort resolution: exports GH_TOKEN/GITHUB_TOKEN when a *candidate*
 # App token is found, without verifying its identity. Only safe for reads
 # (gh pr view, gh pr diff); never use this to gate a structured PR review
-# write. Returns 1 without touching either variable when none is found.
+# write.
+#
+# $1: the workflow's use-github-token input value ("true"/"false"/empty).
+#     When "true", the caller has explicitly opted into using its own
+#     GH_TOKEN/GITHUB_TOKEN and this is a no-op: it never overwrites that
+#     token with an unverified git-config candidate (for example a
+#     checkout-persisted credential at the same extraheader key an App
+#     token would use), so the explicit fallback that
+#     opencode_require_app_token_for_review relies on later is never
+#     silently replaced before the write gate runs.
+#
+# Returns 1 without touching either variable when use-github-token is
+# "true", or when no candidate is found.
 opencode_prepare_gh_token() {
-  local token
+  local use_github_token="${1:-false}" token
+  [[ "${use_github_token}" == "true" ]] && return 1
   token="$(opencode_resolve_app_token)" || return 1
   [[ -n "${token}" ]] || return 1
   export GH_TOKEN="${token}"

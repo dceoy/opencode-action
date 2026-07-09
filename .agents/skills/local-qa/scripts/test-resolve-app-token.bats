@@ -4,8 +4,11 @@
 # extraheader configurations; exact github.com host matching; opencode-agent
 # [bot] identity verification via a stubbed `gh`, continuing past an
 # unverified candidate to a later one instead of stopping at the first;
-# fail-fast behavior with no verified token; and no fallback to
-# GH_TOKEN/GITHUB_TOKEN for structured PR review submission.
+# fail-fast behavior with no verified token; no fallback to
+# GH_TOKEN/GITHUB_TOKEN for structured PR review submission; and, for
+# use-github-token: true, that opencode_prepare_gh_token never overwrites
+# the caller's explicit workflow token with an unverified candidate while a
+# verified opencode-agent[bot] candidate still takes precedence over it.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -315,6 +318,92 @@ STUB
 
   [ "${status}" -eq 0 ]
   [[ "${output}" == *'rc=0 gh=ghs_real_app_tok gt=ghs_real_app_tok'* ]]
+}
+
+@test "opencode_prepare_gh_token exports a candidate when use-github-token is not true" {
+  local repo
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_local_tok)"
+
+  run bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_prepare_gh_token false
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=0 gh=ghs_local_tok gt=ghs_local_tok'* ]]
+}
+
+@test "opencode_prepare_gh_token never overwrites the workflow token when use-github-token is true" {
+  local repo
+  repo="$(mk_repo)"
+  # A candidate is present (e.g. a checkout-persisted credential at the same
+  # key an App token would use), but must never be trusted here.
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_checkout_tok)"
+
+  run bash -c "
+    cd '${repo}'
+    source '${lib}'
+    export GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok
+    opencode_prepare_gh_token true
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=1 gh=workflow_tok gt=workflow_tok'* ]]
+  [[ "${output}" != *'ghs_checkout_tok'* ]]
+}
+
+@test "use-github-token=true preserves the explicit workflow token through prepare_gh_token and the write gate when no candidate verifies" {
+  local repo stub
+  repo="$(mk_repo)"
+  # A checkout-style/PAT-like extraheader candidate is present but must
+  # never be trusted as, or overwrite, the caller's explicit fallback token.
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_checkout_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub "${stub}" 'github-actions[bot]'
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    export GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok
+    opencode_prepare_gh_token true
+    printf 'prepare_rc=%s gh=%s gt=%s ' \"\$?\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+    opencode_require_app_token_for_review true owner/repo 7
+    rc=\$?
+    printf 'require_rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'prepare_rc=1 gh=workflow_tok gt=workflow_tok'* ]]
+  [[ "${output}" == *'require_rc=0 gh=workflow_tok gt=workflow_tok'* ]]
+  [[ "${output}" != *'ghs_checkout_tok'* ]]
+}
+
+@test "a verified opencode-agent[bot] candidate still takes precedence over the explicit workflow token when use-github-token=true" {
+  local repo stub
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_real_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub "${stub}" 'opencode-agent[bot]'
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    export GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok
+    opencode_prepare_gh_token true
+    opencode_require_app_token_for_review true owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=0 gh=ghs_real_tok gt=ghs_real_tok'* ]]
 }
 
 @test "fails when every candidate is tried and none verifies" {

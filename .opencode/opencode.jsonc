@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // GitHub Actions runs are non-interactive: nobody can answer an "ask"
+  // permission prompt (the built-in default for external_directory), so a
+  // tool call that tries to read outside the checked-out repository (for
+  // example inspecting /opt/pipx/logs/* after a failed tool install) hangs
+  // until the action's timeout-minutes kills the run. /review-pr never
+  // needs to read outside the repository it is reviewing, so deny instead
+  // of ask: the agent gets an immediate, non-interactive denial it can
+  // adapt to rather than a silent hang.
+  "permission": {
+    "external_directory": "deny"
+  }
+}
