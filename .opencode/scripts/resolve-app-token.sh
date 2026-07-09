@@ -30,7 +30,7 @@ opencode_decode_extraheader_token() {
   else
     return 1
   fi
-  decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null)" || return 1
+  decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null)" || decoded="$(printf '%s' "${encoded}" | base64 -D 2>/dev/null)" || return 1
   case "${decoded}" in
     x-access-token:?*)
       printf '%s' "${decoded#x-access-token:}"
@@ -61,7 +61,7 @@ opencode_extraheader_key_host() {
   host="${url%%/*}"
   host="${host%%:*}"
   [[ -n "${host}" ]] || return 1
-  printf '%s' "${host,,}"
+  printf '%s' "${host}" | tr '[:upper:]' '[:lower:]'
 }
 
 # Exact, case-insensitive host match against github.com. Deliberately not a
