@@ -30,18 +30,8 @@ jobs:
     uses: dceoy/gh-actions-for-devops/.github/workflows/github-actions-lint-and-scan.yml@main   # zizmor: ignore[unpinned-uses]
     with:
       search-path: .github/workflows
-      use-yamllint: false
-  yaml-lint:
-    if: >
-      github.event_name == 'push'
-      || github.event_name == 'pull_request'
-      || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-    uses: dceoy/gh-actions-for-devops/.github/workflows/yaml-lint.yml@main  # zizmor: ignore[unpinned-uses]
-    with:
-      search-path: .
-      yamllint-config-data: '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
+      yamllint-search-path: .
+      zizmor-search-path: .
   shell-lint:
     if: >
       github.event_name == 'push'
@@ -82,41 +72,14 @@ jobs:
     permissions:
       contents: write
     uses: dceoy/gh-actions-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
-  repo-qa:
-    if: >
-      github.event_name == 'push'
-      || github.event_name == 'pull_request'
-      || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Run zizmor
-        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa  # v0.5.7
-        with:
-          inputs: action.yml
-          online-audits: true
-          persona: auditor
-          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
-          advanced-security: true
-          annotations: false
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
     needs:
       - github-actions-lint-and-scan
-      - yaml-lint
       - shell-lint
       - bats-test
       - github-codeql-analysis
-      - repo-qa
     permissions:
       contents: write
       pull-requests: write
