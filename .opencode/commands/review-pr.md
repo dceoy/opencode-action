@@ -18,7 +18,7 @@ Determine whether you are reviewing a real GitHub PR in GitHub Actions or workin
 - In GitHub Actions the environment provides `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_REF` (for example, `refs/pull/42/merge`), and `GITHUB_EVENT_PATH`. The `gh` CLI also requires `GH_TOKEN` or `GITHUB_TOKEN`.
 - Before using `gh`, prefer the OpenCode GitHub App token that `opencode github run` installs into git credential configuration when `use-github-token` is false. This makes direct `gh api` review submissions appear as `opencode-agent[bot]` instead of `github-actions[bot]`.
 
-Load the shared token resolver that the bundled toolkit installs alongside this command, falling back to inline stubs if it is ever missing:
+Load the shared token resolver that the bundled toolkit installs alongside this command, falling back to inline stubs if it is ever missing. This path is copied outside the checked-out repository into `~/.config/opencode`, so `.opencode/opencode.jsonc` allow-lists exactly this script under its otherwise-deny `external_directory` permission (see the comment there) — sourcing it does not hang on an unanswerable "ask" prompt or get denied like other external-directory access:
 
 ```bash
 opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"

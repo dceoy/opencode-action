@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
-# Validate .opencode/ agent frontmatter and review-pr command/skill references.
+# Validate .opencode/ agent frontmatter, review-pr command/skill references,
+# that opencode.jsonc parses, and that its external_directory permission
+# allow-lists the resolver path review-pr.md actually sources.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -86,4 +88,43 @@ frontmatter() {
 
 @test "opencode.jsonc parses as JSON once its // comments are stripped" {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
+}
+
+opencode_jsonc_json() {
+  sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
+}
+
+@test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
+  local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
+
+  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
+  [ -n "${resolver_suffix}" ] || {
+    echo "review-pr.md does not set opencode_app_token_lib to a \${HOME}-relative path"
+    return 1
+  }
+  resolver_path="${HOME}/${resolver_suffix}"
+
+  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
+  [ "${default_action}" = "deny" ] || {
+    echo "opencode.jsonc's external_directory has no catch-all \"*\": \"deny\" rule (got: '${default_action}')"
+    return 1
+  }
+
+  mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key')
+  [ "${#allow_patterns[@]}" -gt 0 ] || {
+    echo "opencode.jsonc's external_directory has no narrow allow rule"
+    return 1
+  }
+
+  for pattern in "${allow_patterns[@]}"; do
+    expanded="${pattern/#\$HOME/${HOME}}"
+    expanded="${expanded/#~/${HOME}}"
+    # shellcheck disable=SC2053
+    [[ "${resolver_path}" == ${expanded} ]] && matched=1
+  done
+
+  [ "${matched}" -eq 1 ] || {
+    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+    return 1
+  }
 }
