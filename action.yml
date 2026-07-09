@@ -118,8 +118,16 @@ runs:
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
       run: |
         output_file="$(mktemp)"
+        timeout_cmd=()
+        if command -v timeout >/dev/null 2>&1; then
+          timeout_cmd=(timeout "${TIMEOUT_MINUTES}m")
+        elif command -v gtimeout >/dev/null 2>&1; then
+          timeout_cmd=(gtimeout "${TIMEOUT_MINUTES}m")
+        else
+          echo "::warning::No timeout command found (timeout/gtimeout); running OpenCode without an enforced timeout."
+        fi
         set +e
-        timeout "${TIMEOUT_MINUTES}m" opencode github run 2>&1 | tee "${output_file}"
+        "${timeout_cmd[@]}" opencode github run 2>&1 | tee "${output_file}"
         opencode_status="${PIPESTATUS[0]}"
         set -e
 
