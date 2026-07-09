@@ -2,9 +2,10 @@
 # Regression tests for .opencode/scripts/resolve-app-token.sh: token
 # candidate extraction from local, urlmatch, and includeIf/global-style git
 # extraheader configurations; exact github.com host matching; opencode-agent
-# [bot] identity verification via a stubbed `gh`; fail-fast behavior with no
-# verified token; and no fallback to GH_TOKEN/GITHUB_TOKEN for structured PR
-# review submission.
+# [bot] identity verification via a stubbed `gh`, continuing past an
+# unverified candidate to a later one instead of stopping at the first;
+# fail-fast behavior with no verified token; and no fallback to
+# GH_TOKEN/GITHUB_TOKEN for structured PR review submission.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -34,6 +35,43 @@ joined="\$*"
 if [[ "\${joined}" == *"--method POST"* ]]; then
   cat >/dev/null
   printf '{"id": 4242, "user": {"login": "${login}"}}'
+  exit 0
+fi
+if [[ "\${joined}" == *"--method DELETE"* ]]; then
+  exit 0
+fi
+echo "gh stub: unexpected invocation" >&2
+exit 1
+STUB
+  chmod +x "${dir}/gh"
+}
+
+# Like mk_gh_stub, but the login returned for the POST depends on which
+# token (via $GH_TOKEN) made the call, per "<token>:<login>" pairs. Lets a
+# test simulate several distinct candidate tokens that verify as different
+# identities. Never echoes its arguments or stdin.
+mk_gh_stub_map() {
+  local dir="$1" pair tok login cases=""
+  shift
+  mkdir -p "${dir}"
+  for pair in "$@"; do
+    tok="${pair%%:*}"
+    login="${pair#*:}"
+    cases="${cases}  ${tok}) login=\"${login}\" ;;
+"
+  done
+  cat > "${dir}/gh" <<STUB
+#!/usr/bin/env bash
+set -euo pipefail
+joined="\$*"
+token="\${GH_TOKEN:-}"
+login="unmapped-user"
+case "\${token}" in
+${cases}  *) login="unmapped-user" ;;
+esac
+if [[ "\${joined}" == *"--method POST"* ]]; then
+  cat >/dev/null
+  printf '{"id": 4242, "user": {"login": "%s"}}' "\${login}"
   exit 0
 fi
 if [[ "\${joined}" == *"--method DELETE"* ]]; then
@@ -251,4 +289,54 @@ STUB
   "
 
   [ "${status}" -eq 0 ]
+}
+
+@test "continues past an unverified first candidate to a later verified one" {
+  local repo stub
+  repo="$(mk_repo)"
+  # actions/checkout's default persist-credentials key holds a token that
+  # verifies as github-actions[bot] (highest-priority candidate)...
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_checkout_tok)"
+  # ...while a lower-priority, differently-scoped extraheader key holds the
+  # real OpenCode App token, which verifies as opencode-agent[bot]. Both
+  # must be tried; the search must not stop at the first candidate.
+  git -C "${repo}" config --local --add http.https://github.com/some/path.extraheader "$(encode_header ghs_real_app_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub_map "${stub}" "ghs_checkout_tok:github-actions[bot]" "ghs_real_app_tok:opencode-agent[bot]"
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_require_app_token_for_review false owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=0 gh=ghs_real_app_tok gt=ghs_real_app_tok'* ]]
+}
+
+@test "fails when every candidate is tried and none verifies" {
+  local repo stub
+  repo="$(mk_repo)"
+  git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_checkout_tok)"
+  git -C "${repo}" config --local --add http.https://github.com/some/path.extraheader "$(encode_header ghp_pat_tok)"
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mk_gh_stub_map "${stub}" "ghs_checkout_tok:github-actions[bot]" "ghp_pat_tok:some-human-user"
+
+  run env PATH="${stub}:${PATH}" bash -c "
+    cd '${repo}'
+    source '${lib}'
+    unset GH_TOKEN GITHUB_TOKEN
+    opencode_require_app_token_for_review false owner/repo 7
+    rc=\$?
+    printf 'rc=%s gh=%s gt=%s' \"\${rc}\" \"\${GH_TOKEN:-unset}\" \"\${GITHUB_TOKEN:-unset}\"
+  "
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'rc=1 gh=unset gt=unset'* ]]
+  [[ "${output}" == *'Found 2 candidate'* ]]
+  [[ "${output}" != *'ghs_checkout_tok'* ]]
+  [[ "${output}" != *'ghp_pat_tok'* ]]
 }

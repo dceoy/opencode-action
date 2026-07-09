@@ -71,61 +71,75 @@ opencode_is_github_host() {
   [[ "${1:-}" == "github.com" ]]
 }
 
-# Resolve a *candidate* App token by checking, in order: the exact
-# local-config key used by actions/checkout's default persist-credentials
-# layout, a URL-matched lookup across all config scopes, and every
-# http.*.extraheader key across merged config (including includeIf/global-
-# style credential files), first via `--get-regexp` and then via
-# `--show-origin --get-regexp` as a fallback for git versions/layouts where
-# the former misses an include.
+# Resolve *every* candidate App token, one per line, by checking, in order:
+# the exact local-config key used by actions/checkout's default
+# persist-credentials layout, a URL-matched lookup across all config scopes,
+# and every http.*.extraheader key across merged config (including
+# includeIf/global-style credential files), first via `--get-regexp` and
+# then via `--show-origin --get-regexp` as a fallback for git versions/
+# layouts where the former misses an include. Duplicate token values are
+# printed only once, at their first (highest-priority) occurrence.
 #
-# This is a *candidate* only. The exact local key actions/checkout uses to
-# persist its own GITHUB_TOKEN-derived credential is indistinguishable, by
-# format alone, from an OpenCode App token written to the same key: both are
-# "x-access-token:<opaque ghs_-prefixed token>" basic-auth headers. Callers
-# that gate a structured PR review write must verify the candidate via
-# opencode_verify_app_token_identity before trusting it; use
+# Every line is a *candidate* only. The exact local key actions/checkout
+# uses to persist its own GITHUB_TOKEN-derived credential is
+# indistinguishable, by format alone, from an OpenCode App token written to
+# the same key: both are "x-access-token:<opaque ghs_-prefixed token>"
+# basic-auth headers. A workflow can also legitimately have both a
+# checkout-persisted credential at the exact key *and* a real OpenCode App
+# token from a different (e.g. includeIf/global) source, so callers must not
+# stop at the first candidate: verify every candidate via
+# opencode_verify_app_token_identity until one verifies. Use
 # opencode_require_app_token_for_review, which does this for you.
-opencode_resolve_app_token() {
+opencode_resolve_app_token_candidates() {
   local value line key val rest token host
 
-  value="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
-  if token="$(opencode_decode_extraheader_token "${value}")"; then
-    printf '%s' "${token}"
-    return 0
-  fi
-
-  value="$(git config --get-urlmatch http.extraheader https://github.com/ 2>/dev/null || true)"
-  if token="$(opencode_decode_extraheader_token "${value}")"; then
-    printf '%s' "${token}"
-    return 0
-  fi
-
-  while IFS= read -r line; do
-    [[ -z "${line}" ]] && continue
-    key="${line%% *}"
-    host="$(opencode_extraheader_key_host "${key}")" || continue
-    opencode_is_github_host "${host}" || continue
-    val="${line#* }"
-    if token="$(opencode_decode_extraheader_token "${val}")"; then
-      printf '%s' "${token}"
-      return 0
+  {
+    value="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+    if token="$(opencode_decode_extraheader_token "${value}")"; then
+      printf '%s\n' "${token}"
     fi
-  done < <(git config --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
 
-  while IFS=$'\t' read -r _ rest; do
-    [[ -z "${rest}" ]] && continue
-    key="${rest%% *}"
-    host="$(opencode_extraheader_key_host "${key}")" || continue
-    opencode_is_github_host "${host}" || continue
-    val="${rest#* }"
-    if token="$(opencode_decode_extraheader_token "${val}")"; then
-      printf '%s' "${token}"
-      return 0
+    value="$(git config --get-urlmatch http.extraheader https://github.com/ 2>/dev/null || true)"
+    if token="$(opencode_decode_extraheader_token "${value}")"; then
+      printf '%s\n' "${token}"
     fi
-  done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
 
-  return 1
+    while IFS= read -r line; do
+      [[ -z "${line}" ]] && continue
+      key="${line%% *}"
+      host="$(opencode_extraheader_key_host "${key}")" || continue
+      opencode_is_github_host "${host}" || continue
+      val="${line#* }"
+      if token="$(opencode_decode_extraheader_token "${val}")"; then
+        printf '%s\n' "${token}"
+      fi
+    done < <(git config --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
+
+    while IFS=$'\t' read -r _ rest; do
+      [[ -z "${rest}" ]] && continue
+      key="${rest%% *}"
+      host="$(opencode_extraheader_key_host "${key}")" || continue
+      opencode_is_github_host "${host}" || continue
+      val="${rest#* }"
+      if token="$(opencode_decode_extraheader_token "${val}")"; then
+        printf '%s\n' "${token}"
+      fi
+    done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
+  } | awk '!seen[$0]++'
+}
+
+# Resolve a single *candidate* App token: the first result from
+# opencode_resolve_app_token_candidates. Kept for callers that only want one
+# best-effort candidate without verifying it (reads via
+# opencode_prepare_gh_token). opencode_require_app_token_for_review checks
+# every candidate via opencode_resolve_app_token_candidates, not just this
+# first one, since the first candidate found is not necessarily the one
+# that verifies.
+opencode_resolve_app_token() {
+  local token
+  token="$(opencode_resolve_app_token_candidates | head -n1)"
+  [[ -n "${token}" ]] || return 1
+  printf '%s' "${token}"
 }
 
 # Best-effort resolution: exports GH_TOKEN/GITHUB_TOKEN when a *candidate*
@@ -194,11 +208,15 @@ opencode_verify_app_token_identity() {
 # $2: "<owner>/<repo>", required to verify a candidate token.
 # $3: pull request number, required to verify a candidate token.
 #
-# - A candidate App token is found AND verified as opencode-agent[bot]:
-#   export it and succeed, regardless of use-github-token.
-# - A candidate App token is found but cannot be verified (identity
-#   mismatch, verification error, or $2/$3 missing so verification cannot
-#   run): treat it as absent. Never export an unverified candidate.
+# - Every candidate App token (opencode_resolve_app_token_candidates) is
+#   tried in order until one verifies as opencode-agent[bot]: export it and
+#   succeed, regardless of use-github-token. A workflow can have both a
+#   checkout-persisted credential at the highest-priority key and a real
+#   OpenCode App token from a lower-priority source, so an unverified
+#   earlier candidate must not stop the search.
+# - No candidate verifies (none found, every one mismatched, or $2/$3
+#   missing so verification cannot run): never export an unverified
+#   candidate.
 # - No verified App token, use-github-token=true: succeed without
 #   exporting, so the caller's existing GH_TOKEN/GITHUB_TOKEN (workflow
 #   token) is used as an explicitly opted-in fallback.
@@ -208,15 +226,21 @@ opencode_verify_app_token_identity() {
 #   make the review appear as github-actions[bot] or another identity
 #   instead of opencode-agent[bot].
 opencode_require_app_token_for_review() {
-  local use_github_token="${1:-false}" repo="${2:-}" pr_number="${3:-}" token
+  local use_github_token="${1:-false}" repo="${2:-}" pr_number="${3:-}"
+  local token tried=0
 
-  if token="$(opencode_resolve_app_token)" && [[ -n "${token}" ]]; then
+  while IFS= read -r token; do
+    [[ -n "${token}" ]] || continue
+    tried=$((tried + 1))
     if opencode_verify_app_token_identity "${repo}" "${pr_number}" "${token}"; then
       export GH_TOKEN="${token}"
       export GITHUB_TOKEN="${token}"
       return 0
     fi
-    echo "::warning::Found a candidate OpenCode App token in git credential configuration, but it did not verify as ${OPENCODE_REVIEW_BOT_LOGIN}; ignoring it instead of risking a review authored by the wrong identity." >&2
+  done < <(opencode_resolve_app_token_candidates)
+
+  if [[ "${tried}" -gt 0 ]]; then
+    echo "::warning::Found ${tried} candidate OpenCode App token(s) in git credential configuration, but none verified as ${OPENCODE_REVIEW_BOT_LOGIN}; ignoring them instead of risking a review authored by the wrong identity." >&2
   fi
 
   if [[ "${use_github_token}" == "true" ]]; then
