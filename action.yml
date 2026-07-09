@@ -44,6 +44,10 @@ inputs:
     required: false
     description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
     default: 'true'
+  timeout-minutes:
+    required: false
+    description: Maximum minutes to let 'opencode github run' execute before it is killed.
+    default: '60'
 outputs:
   opencode-version:
     description: OpenCode version resolved for this run.
@@ -96,11 +100,9 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
       run: |
-        if [[ -d "${ACTION_PATH}/.opencode" ]]; then
-          mkdir -p "${HOME}/.config/opencode"
-          cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
-          echo "Copied bundled OpenCode config into ~/.config/opencode/"
-        fi
+        mkdir -p "${HOME}/.config/opencode"
+        cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
+        echo "Copied bundled OpenCode config into ~/.config/opencode/"
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
@@ -113,15 +115,18 @@ runs:
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
       run: |
         output_file="$(mktemp)"
         set +e
-        opencode github run 2>&1 | tee "${output_file}"
+        timeout "${TIMEOUT_MINUTES}m" opencode github run 2>&1 | tee "${output_file}"
         opencode_status="${PIPESTATUS[0]}"
         set -e
 
         if [[ "${opencode_status}" -ne 0 ]]; then
-          if grep -Eiq 'AI_APICallError|Insufficient credits|statusCode:[[:space:]]*402|"code":[[:space:]]*402' "${output_file}"; then
+          if [[ "${opencode_status}" -eq 124 ]]; then
+            echo "::error::OpenCode timed out after ${TIMEOUT_MINUTES} minutes for model '${MODEL:-unknown}'."
+          elif grep -Eiq 'AI_APICallError|Insufficient credits|statusCode:[[:space:]]*402|"code":[[:space:]]*402' "${output_file}"; then
             echo "::error::OpenCode failed with a model provider API error for model '${MODEL:-unknown}'. Check provider credentials, quota, and billing."
           else
             echo "::error::OpenCode failed with exit code ${opencode_status} for model '${MODEL:-unknown}'."
