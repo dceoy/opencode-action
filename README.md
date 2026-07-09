@@ -61,6 +61,7 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 | `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
 | `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                  |
 | `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved. |
+| `timeout-minutes`  | No       | `60`                      | Maximum minutes to let `opencode github run` execute before it is killed (uses `timeout`/`gtimeout` when available; otherwise runs without enforced timeout).  |
 
 ## Outputs
 
@@ -82,14 +83,33 @@ When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workfl
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. The surrounding `opencode github run` integration still posts the command's final text to the PR, so the command returns only a short status message after a successful inline review submission.
+The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. When there are no summary-only findings, the review body is a single line (`OpenCode PR Review: <N> inline finding(s).`) with no empty "Summary-only findings" section.
 
-When the default OpenCode GitHub App flow is used (`use-github-token: false`), `/review-pr` restores the App token that OpenCode configured in the local Git extraheader and exports it for `gh`. Direct inline review submissions are therefore authored by `opencode-agent[bot]`. If the workflow explicitly opts into `use-github-token: true`, `/review-pr` falls back to the workflow token and direct review submissions may appear as `github-actions[bot]`.
+A successful structured review run produces one GitHub review summary (with its inline comments), which `/review-pr` updates in place with the run link. `/review-pr` never calls `gh pr comment` or the issue comment API itself. It may still return a short final assistant message after submitting the review; `opencode github run` posts that as a separate top-level completion comment, so a run can produce the review plus at most one additional completion comment — not necessarily exactly one top-level artifact.
+
+The bundled toolkit ships an `external_directory` permission in `.opencode/opencode.jsonc` (copied into `~/.config/opencode/` with the rest of the toolkit) that denies by default, so a stray attempt to read outside the checked-out repository, such as inspecting `/opt/pipx/logs/*` after a failed tool install, is denied immediately instead of blocking on the default "ask" prompt, which nothing can answer in a non-interactive GitHub Actions run and would otherwise hang until `timeout-minutes` kills it. The one narrow exception is `~/.config/opencode/scripts/resolve-app-token.sh` itself: `/review-pr` sources that bundled script from outside the checked-out repository to resolve the OpenCode App token, so it is individually allow-listed ahead of the catch-all deny rule; no other external path is permitted.
+
+### Review author and the OpenCode App token
+
+When the default OpenCode GitHub App flow is used (`use-github-token: false`), `/review-pr` resolves every _candidate_ App token from git credential configuration (checking the local `http.https://github.com/.extraheader` key, `git config --get-urlmatch`, and `--get-regexp`/`--show-origin --get-regexp` across all config scopes to also cover includeIf/global-style credential files, matching only keys whose URL host is exactly `github.com`). None of these candidates is trusted on format alone: an `actions/checkout`-persisted `GITHUB_TOKEN` credential or a PAT can be written to the exact same git-config key in the exact same `x-access-token:<token>` basic-auth shape as the real OpenCode App token, and a workflow can legitimately have both that checkout-persisted credential at the highest-priority key and a real OpenCode App token from a lower-priority source. So before any structured review write, `/review-pr` tries each candidate in order, verifying it by creating a throwaway pending PR review with it, checking the `user.login` on the response, and immediately deleting that pending review regardless of the outcome. The search stops at, and exports, the first candidate that verifies as `opencode-agent[bot]`; an earlier unverified candidate does not stop it from trying later ones. Every structured review submission, review-body update, and anchor-validation retry re-resolves and re-verifies immediately beforehand.
+
+**Limitation:** GitHub does not expose a read-only "whoami" endpoint for GitHub App installation tokens — `GET /user` requires user-to-server auth and returns 403 for every installation token alike, so it cannot distinguish the OpenCode App token from the workflow's own `GITHUB_TOKEN` or a PAT-backed credential. The pending-review probe above is the safest available alternative: a pending review is never visible to anyone but its own author until submitted, so a failed or mismatched check never publishes anything to the PR, but creating and deleting the probe are still real API writes, not a true read-only check.
+
+**If no App token can be verified as `opencode-agent[bot]` while `use-github-token` is `false`, `/review-pr` fails the run instead of submitting the review.** It never silently falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, or to an unverified candidate, for a structured review submission, because either could make the review appear under the wrong identity instead of `opencode-agent[bot]`.
+
+If the workflow explicitly opts into `use-github-token: true` and no candidate App token verifies, this is intentional: `/review-pr` falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, and direct review submissions are expected to appear as `github-actions[bot]` in that case. A verified `opencode-agent[bot]` candidate still takes precedence over that fallback when one is found — see the exact precedence rules below.
+
+**Exact credential precedence for every structured review write, regardless of `use-github-token`:**
+
+1. Every resolved candidate App token is tried in order; the first one that verifies as `opencode-agent[bot]` always wins, is exported, and is used for that write. This applies even when `use-github-token: true`, so a real App token still takes precedence over the explicit workflow token when one is available and verifies.
+2. Only when **no** candidate verifies does `use-github-token` decide the outcome: `true` falls back to the caller's original `GH_TOKEN`/`GITHUB_TOKEN`, unmodified; `false` fails the run.
+
+That fallback is safe because the best-effort read helper (`opencode_prepare_gh_token`, used for `gh pr view`/`gh pr diff`) is a no-op whenever `use-github-token: true` — it never exports an unverified git-config candidate over the caller's own token, so there is nothing to overwrite the explicit workflow token with before the write gate runs.
 
 Workflows that invoke `/review-pr` must provide:
 
 - `pull-requests: write` permission
-- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission when using `use-github-token: true`; with the default App-token flow, `/review-pr` prefers the OpenCode App token from Git config for `gh api`
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission when using `use-github-token: true`; with the default App-token flow, `/review-pr` requires an App token that verifies as `opencode-agent[bot]` for `gh api` review submission and fails fast if none is available
 - A valid API key for the selected model provider with available credits or quota
 
 Example OpenCode step:

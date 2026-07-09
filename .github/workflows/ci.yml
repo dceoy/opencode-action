@@ -52,6 +52,16 @@ jobs:
     uses: dceoy/gh-actions-for-devops/.github/workflows/shell-lint.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
+  bats-test:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: dceoy/gh-actions-for-devops/.github/workflows/bats-test.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      search-path: .
   github-codeql-analysis:
     if: >
       github.event_name == 'push'
@@ -86,10 +96,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
+          fetch-depth: 1
           persist-credentials: false
-      - name: Validate OpenCode agent frontmatter and review-pr references
-        run: >
-          ./.agents/skills/local-qa/scripts/validate-opencode.sh
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa  # v0.5.7
         with:
@@ -106,6 +114,7 @@ jobs:
       - github-actions-lint-and-scan
       - yaml-lint
       - shell-lint
+      - bats-test
       - github-codeql-analysis
       - repo-qa
     permissions:
