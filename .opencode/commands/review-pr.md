@@ -90,12 +90,11 @@ Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
 - `types` → `type-design-analyzer`
-- `simplify` → run `code-simplifier` as a refinement step only; do not return a review; stop after simplification
 - `all` or no argument → run all applicable reviewers
 
 When `all` is requested or no aspect is specified, run the core reviewers unconditionally: `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`.
 
-Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes. Do not include `code-simplifier` in the `all` review set.
+Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes.
 
 ## 4. Launch the subagents in parallel
 
@@ -103,6 +102,8 @@ Spawn each applicable reviewer as a subagent using the `task` tool with its agen
 
 Instruct every subagent to:
 
+- Treat the supplied metadata, changed-file list, and full diff as the complete review input. Do not use shell tools.
+- Never edit, create, delete, format, or generate files; run QA scripts; invoke formatters, generators, migrations, installers, or any `--fix`, `--write`, or safe-fix mode; run mutating Git commands; or use any command that can alter the checkout.
 - Review only the changed lines and the functions they belong to, not the whole repository.
 - Return only high-confidence, noteworthy findings (no nitpicks, no praise-only output).
 - Format every finding using this normalized structure:

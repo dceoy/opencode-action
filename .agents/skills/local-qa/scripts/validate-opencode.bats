@@ -8,7 +8,6 @@ setup() {
   agents_dir="${repo_root}/.opencode/agents"
   review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
-  action_yml="${repo_root}/action.yml"
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
@@ -93,15 +92,21 @@ frontmatter() {
 
 @test "bundled review workflow uses the read-scoped workflow token" {
   local workflow="${repo_root}/.github/workflows/opencode.yml"
-  grep -Fq 'contents: read' "${workflow}"
-  grep -Fq 'persist-credentials: false' "${workflow}"
-  grep -Fq "GH_TOKEN: \${{ github.token }}" "${workflow}"
-  grep -Fq "GITHUB_TOKEN: \${{ github.token }}" "${workflow}"
-  grep -Fq 'use-github-token: true' "${workflow}"
-  if grep -Fq 'review-only:' "${workflow}"; then
-    echo "bundled review workflow must not use review-only"
-    return 1
-  fi
+  # shellcheck disable=SC2016 # Ruby interpolation is intentionally literal.
+  run ruby -ryaml -e '
+    workflow = YAML.load_file(ARGV[0])
+    job = workflow.fetch("jobs").fetch("opencode-review")
+    permissions = job.fetch("permissions")
+    expected = {"contents" => "read", "pull-requests" => "write", "issues" => "write", "actions" => "read"}
+    abort "unexpected review permissions: #{permissions}" unless permissions == expected
+    checkout = job.fetch("steps").find { |step| step["name"] == "Checkout repository" }.fetch("with")
+    abort unless checkout["persist-credentials"] == false && checkout["token"] == "${{ github.token }}"
+    run = job.fetch("steps").find { |step| step["name"] == "Run OpenCode" }
+    abort unless run.fetch("env").slice("GH_TOKEN", "GITHUB_TOKEN").values.all? { |value| value == "${{ github.token }}" }
+    action = run.fetch("with")
+    abort unless action["use-github-token"] == true && !action.key?("review-only")
+  ' "${workflow}"
+  [ "${status}" -eq 0 ]
 }
 
 @test "review-pr explicitly prohibits repository mutations" {
@@ -111,26 +116,18 @@ frontmatter() {
   grep -Fq $'`git add`, `commit`, `push`, `reset`, `restore`, `checkout`, `switch`, `merge`, `rebase`' "${review_pr_doc}"
 }
 
-@test "review state verification detects an untracked file" {
-  local repo review_state_lib before_state expected_source
-  review_state_lib="${repo_root}/.opencode/scripts/review-state.sh"
-  expected_source="source \"\${ACTION_PATH}/.opencode/scripts/review-state.sh\""
-  grep -Fq "${expected_source}" "${action_yml}"
-  grep -Fq 'Repository state changed during /review-pr' "${action_yml}"
-  repo="${BATS_TEST_TMPDIR}/repo"
-  git init -q "${repo}"
-  git -C "${repo}" config user.name test
-  git -C "${repo}" config user.email test@example.com
-  touch "${repo}/tracked"
-  git -C "${repo}" add tracked
-  git -C "${repo}" commit -qm initial
-
-  # shellcheck source=/dev/null
-  before_state="$(cd "${repo}" && source "${review_state_lib}" && opencode_review_state_snapshot)"
-  touch "${repo}/generated"
-
-  run bash -c 'cd "$1" && source "$2" && opencode_review_state_changed "$3"' _ "${repo}" "${review_state_lib}" "${before_state}"
-  [ "${status}" -eq 0 ]
+@test "every review-pr reviewer is denied edits and shell access" {
+  local agent fm
+  for agent in code-reviewer code-quality-reviewer performance-reviewer test-coverage-reviewer documentation-accuracy-reviewer security-code-reviewer pr-test-analyzer silent-failure-hunter comment-analyzer type-design-analyzer; do
+    fm="$(frontmatter "${agents_dir}/${agent}.md")"
+    grep -q '^  edit: deny$' <<<"${fm}"
+    grep -q '^  bash: deny$' <<<"${fm}"
+  done
+  # shellcheck disable=SC2016 # Backticks are literal Markdown delimiters.
+  if grep -Fq '`simplify`' "${review_pr_doc}"; then
+    echo '/review-pr must not accept simplify'
+    return 1
+  fi
 }
 
 opencode_jsonc_json() {

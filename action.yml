@@ -118,13 +118,15 @@ runs:
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
       run: |
-        review_head=""
-        review_status=""
-        if [[ "${PROMPT}" == /review-pr* ]]; then
+        is_review=false
+        if [[ "${PROMPT}" =~ ^/review-pr($|[[:space:]]) ]]; then
           # shellcheck source=/dev/null
           source "${ACTION_PATH}/.opencode/scripts/review-state.sh"
-          review_head="$(git rev-parse HEAD)"
-          review_status="$(opencode_review_state_snapshot)"
+          if ! opencode_review_prompt "${PROMPT}"; then
+            echo "::error::Unsupported /review-pr aspect. /review-pr accepts only non-mutating review aspects; use a mutation-capable command for simplification." >&2
+            exit 1
+          fi
+          is_review=true
         fi
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
@@ -137,21 +139,18 @@ runs:
           echo "::warning::No timeout command found (timeout/gtimeout); running OpenCode without an enforced timeout."
         fi
         set +e
-        "${timeout_cmd[@]}" opencode github run 2>&1 | tee "${output_file}"
-        opencode_status="${PIPESTATUS[0]}"
-        set -e
-
-        review_state_changed=false
-        if [[ -n "${review_head}" ]] && {
-          [[ "$(git rev-parse HEAD)" != "${review_head}" ]]
-          || opencode_review_state_changed "${review_status}"
-        }; then
-          review_state_changed=true
-          echo "::error::Repository state changed during /review-pr; this is a regression detector, not a sandbox." >&2
-          git status --short >&2 || true
-          git diff --no-ext-diff >&2 || true
-          git diff --cached --no-ext-diff >&2 || true
+        if [[ "${is_review}" == true ]]; then
+          if [[ "${#timeout_cmd[@]}" -eq 0 ]]; then
+            echo '::error::A timeout command is required for isolated /review-pr execution.' >&2
+            exit 1
+          fi
+          opencode_review_run "${TIMEOUT_MINUTES}" "${output_file}"
+          opencode_status="$?"
+        else
+          "${timeout_cmd[@]}" opencode github run 2>&1 | tee "${output_file}"
+          opencode_status="${PIPESTATUS[0]}"
         fi
+        set -e
 
         if [[ "${opencode_status}" -ne 0 ]]; then
           if [[ "${opencode_status}" -eq 124 ]]; then
@@ -163,5 +162,3 @@ runs:
           fi
           exit "${opencode_status}"
         fi
-
-        [[ "${review_state_changed}" == false ]] || exit 1

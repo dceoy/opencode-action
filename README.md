@@ -106,7 +106,7 @@ permissions:
     use-github-token: true
 ```
 
-The action compares `HEAD` and complete porcelain status before and after `/review-pr`. A change prints status and available diffs, then fails without cleaning, resetting, committing, or pushing. This is regression detection and defense in depth, not a repository-read-only sandbox. Normal action behavior, including mutation-capable `/oc fix` workflows, is unchanged.
+`/review-pr` requires a clean caller checkout (including ignored paths), then runs from a detached disposable Git worktree created at the current `HEAD`. The review path uses a fail-closed Git proxy that permits only the read operations the command needs, snapshots every worktree entry (content hashes, modes, symlink targets, directories, ignored paths, and `HEAD`), and discards the worktree on every exit path. Any mutation fails the run with status and safe diffs; the caller checkout is never reset, cleaned, or modified. The documented OpenCode `github run` flags provide no no-commit/no-push control, so this narrow proxy is used only for `/review-pr`. Normal action behavior, including mutation-capable `/oc fix` workflows, is unchanged.
 
 ## Pull Request Reviews
 
@@ -167,7 +167,6 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 | `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
 | `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
 | `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
-| `/review-pr simplify`             | `code-simplifier` — refinement only, does not return a review                                                                                                                                                                                                                                                           |
 
 #### Core reviewers (Claude Code Action-compatible)
 
