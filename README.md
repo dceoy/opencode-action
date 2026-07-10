@@ -49,19 +49,19 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 
 ## Inputs
 
-| Input              | Required | Default                   | Description                                                                                                                                                    |
-| ------------------ | -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                      |
-| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                              |
-| `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                         |
-| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                  |
-| `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                            |
-| `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                   |
-| `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                     |
-| `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
-| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                  |
-| `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved. |
-| `timeout-minutes`  | No       | `60`                      | Maximum minutes to let `opencode github run` execute before it is killed (uses `timeout`/`gtimeout` when available; otherwise runs without enforced timeout).  |
+| Input              | Required | Default                   | Description                                                                                                                                                                                                         |
+| ------------------ | -------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                                                                           |
+| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                                                                                   |
+| `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                                                                              |
+| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                                                                       |
+| `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                                                                                 |
+| `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                                                                        |
+| `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                                                                          |
+| `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                                                                               |
+| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                                                                       |
+| `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved; `/review-pr` uses a temporary trusted configuration. |
+| `timeout-minutes`  | No       | `60`                      | Maximum minutes to let OpenCode execute before it is killed (uses `timeout`/`gtimeout`; `/review-pr` requires one).                                                                                                 |
 
 ## Outputs
 
@@ -89,8 +89,6 @@ For `/review-pr`, make the caller-provided workflow token the security boundary.
 permissions:
   contents: read
   pull-requests: write
-  issues: write
-  actions: read
 
 - uses: actions/checkout@v7
   with:
@@ -98,7 +96,6 @@ permissions:
 
 - uses: dceoy/opencode-action@v0
   env:
-    GH_TOKEN: ${{ github.token }}
     GITHUB_TOKEN: ${{ github.token }}
   with:
     model: opencode-go/glm-5.2
@@ -106,15 +103,15 @@ permissions:
     use-github-token: true
 ```
 
-`/review-pr` requires a clean caller checkout (including ignored paths), then runs from a detached disposable Git worktree created at the current `HEAD`. The review path uses a fail-closed Git proxy that permits only the read operations the command needs, snapshots every worktree entry (content hashes, modes, symlink targets, directories, ignored paths, and `HEAD`), and discards the worktree on every exit path. Any mutation fails the run with status and safe diffs; the caller checkout is never reset, cleaned, or modified. The documented OpenCode `github run` flags provide no no-commit/no-push control, so this narrow proxy is used only for `/review-pr`. Normal action behavior, including mutation-capable `/oc fix` workflows, is unchanged.
+`/review-pr` requires a clean caller checkout (including ignored paths). Trusted action code collects PR metadata and the diff, then creates a disposable plain directory from `git archive`; it is deliberately not a Git worktree, so review analysis has no refs, remotes, Git configuration, hooks, index, or credentials to mutate. The analysis process receives a temporary action-owned OpenCode configuration and no GitHub token. Repository-local OpenCode configuration, commands, agents, plugins, and permission files are moved out of discovery locations before analysis. After it exits, trusted code validates the structured findings and submits the PR review with the workflow token. The disposable directory is removed on success, failure, timeout, and signals. Normal action behavior, including mutation-capable `/oc fix` workflows, is unchanged.
 
 ## Pull Request Reviews
 
-The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. When there are no summary-only findings, the review body is a single line (`OpenCode PR Review: <N> inline finding(s).`) with no empty "Summary-only findings" section.
+The review token boundary is deliberately narrow: use only `${{ github.token }}` with `contents: read` and `pull-requests: write`. `use-github-token: true` is required for this bundled review workflow; it does not inspect or replace that token from Git configuration. The token is available only to trusted PR-context collection and validated review submission, never to the model process.
 
-A successful structured review run produces one GitHub review summary (with its inline comments), which `/review-pr` updates in place with the run link. `/review-pr` never calls `gh pr comment` or the issue comment API itself. It may still return a short final assistant message after submitting the review; `opencode github run` posts that as a separate top-level completion comment, so a run can produce the review plus at most one additional completion comment — not necessarily exactly one top-level artifact.
+Preventive controls are the non-Git disposable analysis directory, temporary action-owned configuration, and restricted analyzer agent. Cleanup and the clean-checkout check are containment and integrity verification, not the primary enforcement mechanism. Review submission is a structured action-owned `gh api` call; no issue-comment permission is needed.
 
-The bundled toolkit ships an `external_directory` permission in `.opencode/opencode.jsonc` (copied into `~/.config/opencode/` with the rest of the toolkit) that denies by default, so a stray attempt to read outside the checked-out repository, such as inspecting `/opt/pipx/logs/*` after a failed tool install, is denied immediately instead of blocking on the default "ask" prompt, which nothing can answer in a non-interactive GitHub Actions run and would otherwise hang until `timeout-minutes` kills it. The one narrow exception is `~/.config/opencode/scripts/resolve-app-token.sh` itself: `/review-pr` sources that bundled script from outside the checked-out repository to resolve the OpenCode App token, so it is individually allow-listed ahead of the catch-all deny rule; no other external path is permitted.
+<!-- Historical App-token flow details below apply to normal OpenCode commands, not /review-pr. -->
 
 ### Review author and the OpenCode App token
 

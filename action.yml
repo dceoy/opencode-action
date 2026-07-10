@@ -42,11 +42,11 @@ inputs:
     default: latest
   enable-toolkit:
     required: false
-    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
+    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved; /review-pr uses temporary trusted configuration.
     default: 'true'
   timeout-minutes:
     required: false
-    description: Maximum minutes to let 'opencode github run' execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
+    description: Maximum minutes to let OpenCode execute before it is killed (uses 'timeout'/'gtimeout' when available; /review-pr requires one).
     default: '60'
 outputs:
   opencode-version:
@@ -144,7 +144,7 @@ runs:
             echo '::error::A timeout command is required for isolated /review-pr execution.' >&2
             exit 1
           fi
-          opencode_review_run "${TIMEOUT_MINUTES}" "${output_file}"
+          opencode_review_run "${TIMEOUT_MINUTES}" "${output_file}" "${ACTION_PATH}"
           opencode_status="$?"
         else
           "${timeout_cmd[@]}" opencode github run 2>&1 | tee "${output_file}"

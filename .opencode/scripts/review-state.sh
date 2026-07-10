@@ -1,42 +1,8 @@
 #!/usr/bin/env bash
-# Sourceable production helpers for the isolated /review-pr execution path.
+# Sourceable helpers for the isolated /review-pr execution path.
 
 opencode_review_prompt() {
   [[ "${1:-}" =~ ^/review-pr([[:space:]]+(all|code|quality|performance|security|tests|coverage|docs|documentation|comments|errors|types))*[[:space:]]*$ ]]
-}
-
-opencode_review_snapshot() {
-  local output="$1" path mode type digest target
-  : >"${output}"
-  # A worktree's .git is an implementation detail, not reviewed content.  All
-  # other entries, including ignored files and empty directories, are recorded.
-  while IFS= read -r -d '' path; do
-    if stat -c '%a' -- "${path}" >/dev/null 2>&1; then
-      mode="$(stat -c '%a' -- "${path}")"
-    else
-      mode="$(stat -f '%Lp' -- "${path}")"
-    fi
-    if [[ -L "${path}" ]]; then
-      target="$(readlink -- "${path}")"
-      printf 'link\t%s\t%s\t%s\n' "${mode}" "${path#./}" "${target}" >>"${output}"
-    elif [[ -f "${path}" ]]; then
-      if command -v sha256sum >/dev/null 2>&1; then
-        digest="$(sha256sum -- "${path}" | awk '{print $1}')"
-      else
-        digest="$(shasum -a 256 -- "${path}" | awk '{print $1}')"
-      fi
-      printf 'file\t%s\t%s\t%s\n' "${mode}" "${path#./}" "${digest}" >>"${output}"
-    elif [[ -d "${path}" ]]; then
-      printf 'dir\t%s\t%s\n' "${mode}" "${path#./}" >>"${output}"
-    else
-      if stat -c '%F' -- "${path}" >/dev/null 2>&1; then
-        type="$(stat -c '%F' -- "${path}")"
-      else
-        type="$(stat -f '%HT' -- "${path}")"
-      fi
-      printf 'other\t%s\t%s\t%s\n' "${mode}" "${path#./}" "${type}" >>"${output}"
-    fi
-  done < <(find -P . -mindepth 1 ! -path './.git' -print0)
 }
 
 opencode_review_checkout_is_clean() {
@@ -49,95 +15,116 @@ opencode_review_checkout_is_clean() {
   fi
 }
 
-opencode_review_git_proxy() {
-  local -a args=("$@")
-  local command='' query=false arg
-  while ((${#args[@]})); do
-    case "${args[0]}" in
-      -C|-c|--config-env|--git-dir|--work-tree|--namespace|--exec-path)
-        ((${#args[@]} >= 2)) || { echo 'review Git proxy: incomplete global option' >&2; return 126; }
-        args=("${args[@]:2}") ;;
-      -C=*|-c=*|--config-env=*|--git-dir=*|--work-tree=*|--namespace=*|--exec-path=*) args=("${args[@]:1}") ;;
-      --no-pager|--paginate|--literal-pathspecs|--no-literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs) args=("${args[@]:1}") ;;
-      --version|-v) exec "${OPENCODE_REAL_GIT:?}" "${args[@]}" ;;
-      --|-*) echo 'review Git proxy: cannot safely classify Git command' >&2; return 126 ;;
-      *) command="${args[0]}"; args=("${args[@]:1}"); break ;;
-    esac
-  done
-  [[ -n "${command}" ]] || { echo 'review Git proxy: missing Git subcommand' >&2; return 126; }
-  case "${command}" in
-    add|am|apply|bisect|branch|checkout|cherry-pick|clean|clone|commit|merge|mv|rebase|reset|restore|revert|rm|sparse-checkout|stash|submodule|switch|tag|update-ref|worktree|push|fetch|pull)
-      echo "review Git proxy: blocked mutating Git command '${command}'" >&2; return 126 ;;
-    config)
-      for arg in "${args[@]}"; do
-        case "${arg}" in
-          --get|--get-all|--get-regexp|--get-urlmatch|--list|-l) query=true ;;
-          --show-origin|--show-scope|--null|-z|--name-only|--fixed-value) ;;
-          --add|--replace-all|--unset|--unset-all|--rename-section|--remove-section|--global|--system|--local|--worktree|--file|--blob|--*) echo 'review Git proxy: blocked or unknown git config option' >&2; return 126 ;;
-        esac
-      done
-      "${query}" || { echo 'review Git proxy: git config is allowed only for reads' >&2; return 126; }
-      ;;
-    cat-file|diff|diff-tree|for-each-ref|grep|log|ls-files|ls-tree|merge-base|name-rev|remote|rev-list|rev-parse|show|show-ref|status|symbolic-ref|describe) ;;
-    *) echo "review Git proxy: cannot safely classify Git subcommand '${command}'" >&2; return 126 ;;
-  esac
-  exec "${OPENCODE_REAL_GIT:?}" "${command}" "${args[@]}"
+opencode_review_pr_number() {
+  local event_path="${GITHUB_EVENT_PATH:-}" number=''
+  if [[ -n "${event_path}" && -f "${event_path}" ]]; then
+    number="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
+  fi
+  if [[ -z "${number}" && "${GITHUB_REF:-}" =~ ^refs/pull/([0-9]+)/merge$ ]]; then
+    number="${BASH_REMATCH[1]}"
+  fi
+  [[ "${number}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "${number}"
+}
+
+opencode_review_prepare_workspace() {
+  local workspace="$1" action_path="$2" pr_number="$3"
+  mkdir -p "${workspace}/.review-input"
+  # git archive gives analysis a plain directory, not a linked worktree: it
+  # has no refs, remotes, config, hooks, or index to mutate.
+  git archive --format=tar HEAD | tar -xf - -C "${workspace}"
+  # OpenCode discovers these names in the project directory. Preserve neither
+  # configuration nor command/plugin code from the reviewed PR at discovery
+  # locations; the action-owned configuration below is the only policy tier.
+  if [[ -e "${workspace}/opencode.json" ]]; then
+    mv "${workspace}/opencode.json" "${workspace}/.review-input/project-opencode.json"
+  fi
+  if [[ -e "${workspace}/opencode.jsonc" ]]; then
+    mv "${workspace}/opencode.jsonc" "${workspace}/.review-input/project-opencode.jsonc"
+  fi
+  if [[ -d "${workspace}/.opencode" ]]; then
+    mv "${workspace}/.opencode" "${workspace}/.review-input/project-opencode"
+  fi
+  gh pr view "${pr_number}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url >"${workspace}/.review-input/pr.json"
+  gh pr diff "${pr_number}" >"${workspace}/.review-input/pr.diff"
+  mkdir -p "${workspace}/trusted-config/opencode"
+  cp -R "${action_path}/.opencode/." "${workspace}/trusted-config/opencode/"
+}
+
+opencode_review_validate_findings() {
+  local findings="$1"
+  jq -e '
+    type == "array" and
+    all(.[]; type == "object" and
+      (.file | type == "string" and length > 0) and
+      (.line | type == "number" and floor == . and . > 0) and
+      (.severity | IN("critical", "important", "suggestion")) and
+      (.message | type == "string" and length > 0 and length <= 4000))
+  ' "${findings}" >/dev/null
+}
+
+opencode_review_submit() {
+  local pr_number="$1" findings="$2" payload response
+  opencode_review_validate_findings "${findings}" || {
+    echo '::error::Review model returned an invalid structured findings payload.' >&2
+    return 1
+  }
+  if [[ "$(jq 'length' "${findings}")" -eq 0 ]]; then
+    echo 'No noteworthy issues found.'
+    return 0
+  fi
+  payload="$(mktemp "${TMPDIR:-/tmp}/opencode-review-payload.XXXXXX")"
+  trap 'rm -f "${payload}"' RETURN
+  jq --argjson findings "$(<"${findings}")" '
+    {event: "COMMENT", body: "OpenCode PR Review", comments:
+      [$findings[] | {path: .file, line: .line, side: "RIGHT", body: ("**" + .severity + "**: " + .message)}]}
+  ' >"${payload}"
+  response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/reviews" --input "${payload}")"
+  jq -e '.id' <<<"${response}" >/dev/null
 }
 
 opencode_review_run() (
   set -euo pipefail
-  local timeout_minutes="$1" output_file="$2" real_git temp_root worktree before after before_head after_head opencode_status
+  local timeout_minutes="$1" output_file="$2" action_path="$3"
+  local temp_root workspace pr_number result_file status timeout_command
   opencode_review_checkout_is_clean
-  real_git="$(command -v git)"
-  temp_root="$(mktemp -d)"
-  worktree="${temp_root}/worktree"
-  # shellcheck disable=SC2329 # Invoked by the EXIT and signal traps below.
-  cleanup() {
-    "${real_git}" worktree remove --force "${worktree}" >/dev/null 2>&1 || true
-    rm -rf "${temp_root}"
+  pr_number="$(opencode_review_pr_number)" || {
+    echo '::error::/review-pr requires a pull request event context.' >&2
+    return 1
   }
-  trap cleanup EXIT
-  trap 'cleanup; exit 130' HUP INT TERM
-  "${real_git}" worktree add --detach "${worktree}" HEAD >/dev/null
-  before="${temp_root}/before.snapshot"
-  after="${temp_root}/after.snapshot"
-  (
-    cd "${worktree}"
-    opencode_review_snapshot "${before}"
-  )
-  before_head="$("${real_git}" -C "${worktree}" rev-parse HEAD)"
-  mkdir "${temp_root}/bin"
-  cp "${BASH_SOURCE[0]}" "${temp_root}/bin/git"
-  chmod 700 "${temp_root}/bin/git"
-  set +e
-  (
-    cd "${worktree}"
-    if command -v timeout >/dev/null 2>&1; then
-      review_timeout=(timeout "${timeout_minutes}m")
-    else
-      review_timeout=(gtimeout "${timeout_minutes}m")
-    fi
-    PATH="${temp_root}/bin:${PATH}" OPENCODE_REVIEW_GIT_PROXY=1 OPENCODE_REAL_GIT="${real_git}" \
-      "${review_timeout[@]}" opencode github run 2>&1 | tee "${output_file}"
-    exit "${PIPESTATUS[0]}"
-  )
-  opencode_status=$?
-  set -e
-  (
-    cd "${worktree}"
-    opencode_review_snapshot "${after}"
-  )
-  after_head="$("${real_git}" -C "${worktree}" rev-parse HEAD)"
-  if [[ "${before_head}" != "${after_head}" ]] || ! cmp -s "${before}" "${after}"; then
-    echo '::error::Unexpected filesystem or Git mutation during /review-pr; the disposable review checkout was discarded.' >&2
-    "${real_git}" -C "${worktree}" status --short --ignored >&2 || true
-    "${real_git}" -C "${worktree}" diff --no-ext-diff >&2 || true
-    "${real_git}" -C "${worktree}" diff --cached --no-ext-diff >&2 || true
+  temp_root="$(mktemp -d)"
+  workspace="${temp_root}/workspace"
+  result_file="${temp_root}/findings.json"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_command=timeout
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_command=gtimeout
+  else
+    echo '::error::A timeout command is required for isolated /review-pr execution.' >&2
     return 1
   fi
-  return "${opencode_status}"
+  # shellcheck disable=SC2329 # Called by the EXIT and signal traps below.
+  cleanup() { rm -rf "${temp_root}"; }
+  trap cleanup EXIT HUP INT TERM
+  opencode_review_prepare_workspace "${workspace}" "${action_path}" "${pr_number}"
+  set +e
+  (
+    cd "${workspace}"
+    # The model receives an isolated, non-Git directory and no GitHub token.
+    # The trusted parent retains the token solely for context collection and
+    # validated review submission.
+    env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM \
+      XDG_CONFIG_HOME="${workspace}/trusted-config" \
+      "${timeout_command}" "${timeout_minutes}m" opencode run /review-pr 2>&1 | tee "${output_file}"
+    exit "${PIPESTATUS[0]}"
+  )
+  status=$?
+  set -e
+  [[ "${status}" -eq 0 ]] || return "${status}"
+  # The trusted command writes only this explicitly named structured artifact.
+  cp "${workspace}/.review-output/findings.json" "${result_file}" || {
+    echo '::error::Review model did not produce .review-output/findings.json.' >&2
+    return 1
+  }
+  opencode_review_submit "${pr_number}" "${result_file}"
 )
-
-if [[ "${OPENCODE_REVIEW_GIT_PROXY:-}" == '1' && "${BASH_SOURCE[0]}" == "$0" ]]; then
-  opencode_review_git_proxy "$@"
-fi

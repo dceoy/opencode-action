@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
-# Validate .opencode/ agent frontmatter, review-pr command/skill references,
-# that opencode.jsonc parses, and that its external_directory permission
-# allow-lists the resolver path review-pr.md actually sources.
+# Validate .opencode agent frontmatter, command references, and workflow token
+# boundaries.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -11,7 +10,7 @@ setup() {
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
-  non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
+  non_agents=(use-github-token)
 }
 
 agent_files() {
@@ -97,74 +96,27 @@ frontmatter() {
     workflow = YAML.load_file(ARGV[0])
     job = workflow.fetch("jobs").fetch("opencode-review")
     permissions = job.fetch("permissions")
-    expected = {"contents" => "read", "pull-requests" => "write", "issues" => "write", "actions" => "read"}
+    expected = {"contents" => "read", "pull-requests" => "write"}
     abort "unexpected review permissions: #{permissions}" unless permissions == expected
     checkout = job.fetch("steps").find { |step| step["name"] == "Checkout repository" }.fetch("with")
     abort unless checkout["persist-credentials"] == false && checkout["token"] == "${{ github.token }}"
     run = job.fetch("steps").find { |step| step["name"] == "Run OpenCode" }
-    abort unless run.fetch("env").slice("GH_TOKEN", "GITHUB_TOKEN").values.all? { |value| value == "${{ github.token }}" }
+    abort unless run.fetch("env") == {"OPENCODE_API_KEY" => "${{ secrets.OPENCODE_API_KEY }}", "GITHUB_TOKEN" => "${{ github.token }}"}
     action = run.fetch("with")
     abort unless action["use-github-token"] == true && !action.key?("review-only")
   ' "${workflow}"
   [ "${status}" -eq 0 ]
 }
 
-@test "review-pr explicitly prohibits repository mutations" {
-  grep -Fq 'Never edit, create, delete, format, or generate repository files.' "${review_pr_doc}"
-  grep -Fq 'Do not run repository QA commands or skills that may mutate files.' "${review_pr_doc}"
-  grep -Fq $'`--fix`, `--write`' "${review_pr_doc}"
-  grep -Fq $'`git add`, `commit`, `push`, `reset`, `restore`, `checkout`, `switch`, `merge`, `rebase`' "${review_pr_doc}"
-}
-
-@test "every review-pr reviewer is denied edits and shell access" {
-  local agent fm
-  for agent in code-reviewer code-quality-reviewer performance-reviewer test-coverage-reviewer documentation-accuracy-reviewer security-code-reviewer pr-test-analyzer silent-failure-hunter comment-analyzer type-design-analyzer; do
-    fm="$(frontmatter "${agents_dir}/${agent}.md")"
-    grep -q '^  edit: deny$' <<<"${fm}"
-    grep -q '^  bash: deny$' <<<"${fm}"
-  done
-  # shellcheck disable=SC2016 # Backticks are literal Markdown delimiters.
-  if grep -Fq '`simplify`' "${review_pr_doc}"; then
-    echo '/review-pr must not accept simplify'
-    return 1
-  fi
+@test "review analysis uses the confined action-owned agent" {
+  local fm
+  grep -Fq 'agent: review-analyzer' "${review_pr_doc}"
+  fm="$(frontmatter "${agents_dir}/review-analyzer.md")"
+  grep -q '^  bash: deny$' <<<"${fm}"
+  grep -q '^  task: deny$' <<<"${fm}"
+  grep -q '^    "\.review-output/findings.json": allow$' <<<"${fm}"
 }
 
 opencode_jsonc_json() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
-}
-
-@test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
-  local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
-
-  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
-  [ -n "${resolver_suffix}" ] || {
-    echo "review-pr.md does not set opencode_app_token_lib to a \${HOME}-relative path"
-    return 1
-  }
-  resolver_path="${HOME}/${resolver_suffix}"
-
-  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
-  [ "${default_action}" = "deny" ] || {
-    echo "opencode.jsonc's external_directory has no catch-all \"*\": \"deny\" rule (got: '${default_action}')"
-    return 1
-  }
-
-  mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key')
-  [ "${#allow_patterns[@]}" -gt 0 ] || {
-    echo "opencode.jsonc's external_directory has no narrow allow rule"
-    return 1
-  }
-
-  for pattern in "${allow_patterns[@]}"; do
-    expanded="${pattern/#\$HOME/${HOME}}"
-    expanded="${expanded/#~/${HOME}}"
-    # shellcheck disable=SC2053
-    [[ "${resolver_path}" == ${expanded} ]] && matched=1
-  done
-
-  [ "${matched}" -eq 1 ] || {
-    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
-    return 1
-  }
 }
