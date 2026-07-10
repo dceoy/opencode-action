@@ -24,10 +24,6 @@ inputs:
     required: false
     description: Whether to use GITHUB_TOKEN directly instead of OpenCode App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var.
     default: 'false'
-  review-only:
-    required: false
-    description: Strict repository-read-only mode; requires a non-writing GITHUB_TOKEN.
-    default: 'false'
   mentions:
     required: false
     description: Comma-separated list of trigger phrases (case-insensitive)
@@ -117,77 +113,19 @@ runs:
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
         USE_GITHUB_TOKEN: ${{ inputs.use-github-token }}
-        REVIEW_ONLY: ${{ inputs.review-only }}
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
       run: |
-        source "${ACTION_PATH}/.opencode/scripts/review-only.sh"
-        USE_GITHUB_TOKEN="$(opencode_normalize_boolean "${USE_GITHUB_TOKEN}" use-github-token)"
-        REVIEW_ONLY="$(opencode_normalize_boolean "${REVIEW_ONLY}" review-only)"
-        review_snapshot=""
-        review_config_home=""
-        git_guard=""
-        output_file=""
-        cleanup_review_only() {
-          local result=$?
-          if [[ "${REVIEW_ONLY}" == true ]]; then
-            opencode_review_only_check_invariant "${review_snapshot}" || result=1
-          fi
-          rm -f "${output_file:-}"
-          rm -rf "${review_config_home:-}" "${git_guard:-}"
-          exit "$result"
-        }
-        if [[ "${REVIEW_ONLY}" == true ]]; then
-          [[ "${USE_GITHUB_TOKEN}" == true ]] || {
-            echo "::error::review-only requires use-github-token: true; App-token exchange is not permission-verifiable." >&2
-            exit 1
-          }
-          : "${GITHUB_TOKEN:?::error::review-only requires GITHUB_TOKEN}"
-          opencode_review_only_assert_clean
-          opencode_review_only_assert_token
-          review_snapshot="$(opencode_review_only_snapshot)"
-          review_config_home="$(mktemp -d)"
-          mkdir -p "${review_config_home}/opencode"
-          if [[ -d "${HOME}/.config/opencode" ]]; then
-            cp -R "${HOME}/.config/opencode/." "${review_config_home}/opencode/"
-          fi
-          printf '%s\n' \
-            '{' \
-            '  "$schema": "https://opencode.ai/config.json",' \
-            '  "permission": {' \
-            '    "edit": "deny",' \
-            '    "bash": {' \
-            '      "*": "deny",' \
-            '      "source $HOME/.config/opencode/scripts/resolve-app-token.sh*": "allow",' \
-            '      "git config *": "allow",' \
-            '      "git diff*": "allow",' \
-            '      "git status*": "allow",' \
-            '      "gh pr view *": "allow",' \
-            '      "gh pr diff *": "allow",' \
-            '      "gh api *": "allow",' \
-            '      "jq *": "allow",' \
-            '      "mktemp *": "allow",' \
-            '      "chmod *": "allow",' \
-            '      "rm -f *": "allow"' \
-            '    },' \
-            '    "external_directory": {' \
-            '      "*": "deny",' \
-            '      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow"' \
-            '    }' \
-            '  }' \
-            '}' >"${review_config_home}/opencode/opencode.jsonc"
-          git_guard="$(mktemp -d)"
-          opencode_review_only_make_git_guard "${git_guard}"
-          export XDG_CONFIG_HOME="${review_config_home}"
-          export PATH="${git_guard}:${PATH}"
-          trap cleanup_review_only EXIT
+        review_head=""
+        review_status=""
+        if [[ "${PROMPT}" == /review-pr* ]]; then
+          review_head="$(git rev-parse HEAD)"
+          review_status="$(git status --porcelain=v1 --untracked-files=all)"
         fi
         output_file="$(mktemp)"
-        if [[ "${REVIEW_ONLY}" != true ]]; then
-          trap 'rm -f "${output_file}"' EXIT
-        fi
+        trap 'rm -f "${output_file}"' EXIT
         timeout_cmd=()
         if command -v timeout >/dev/null 2>&1; then
           timeout_cmd=(timeout "${TIMEOUT_MINUTES}m")
@@ -201,6 +139,18 @@ runs:
         opencode_status="${PIPESTATUS[0]}"
         set -e
 
+        review_state_changed=false
+        if [[ -n "${review_head}" ]] && {
+          [[ "$(git rev-parse HEAD)" != "${review_head}" ]]
+          || [[ "$(git status --porcelain=v1 --untracked-files=all)" != "${review_status}" ]]
+        }; then
+          review_state_changed=true
+          echo "::error::Repository state changed during /review-pr; this is a regression detector, not a sandbox." >&2
+          git status --short >&2 || true
+          git diff --no-ext-diff >&2 || true
+          git diff --cached --no-ext-diff >&2 || true
+        fi
+
         if [[ "${opencode_status}" -ne 0 ]]; then
           if [[ "${opencode_status}" -eq 124 ]]; then
             echo "::error::OpenCode timed out after ${TIMEOUT_MINUTES} minutes for model '${MODEL:-unknown}'."
@@ -211,3 +161,5 @@ runs:
           fi
           exit "${opencode_status}"
         fi
+
+        [[ "${review_state_changed}" == false ]] || exit 1

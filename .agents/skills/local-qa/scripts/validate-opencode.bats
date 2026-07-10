@@ -15,14 +15,6 @@ setup() {
   non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
 }
 
-@test "review-only setup supports a disabled toolkit and narrowly permits review commands" {
-  grep -Fq "if [[ -d \"\${HOME}/.config/opencode\" ]]; then" "${action_yml}"
-  grep -Fq '"*": "deny",' "${action_yml}"
-  grep -Fq '"gh pr view *": "allow",' "${action_yml}"
-  grep -Fq '"gh api *": "allow",' "${action_yml}"
-  grep -Fq "\"\$HOME/.config/opencode/scripts/resolve-app-token.sh\": \"allow\"" "${action_yml}"
-}
-
 agent_files() {
   find "${agents_dir}" -maxdepth 1 -name '*.md' | sort
 }
@@ -97,6 +89,50 @@ frontmatter() {
 
 @test "opencode.jsonc parses as JSON once its // comments are stripped" {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
+}
+
+@test "bundled review workflow uses the read-scoped workflow token" {
+  local workflow="${repo_root}/.github/workflows/opencode.yml"
+  grep -Fq 'contents: read' "${workflow}"
+  grep -Fq 'persist-credentials: false' "${workflow}"
+  grep -Fq "GH_TOKEN: \${{ github.token }}" "${workflow}"
+  grep -Fq "GITHUB_TOKEN: \${{ github.token }}" "${workflow}"
+  grep -Fq 'use-github-token: true' "${workflow}"
+  if grep -Fq 'review-only:' "${workflow}"; then
+    echo "bundled review workflow must not use review-only"
+    return 1
+  fi
+}
+
+@test "review-pr explicitly prohibits repository mutations" {
+  grep -Fq 'Never edit, create, delete, format, or generate repository files.' "${review_pr_doc}"
+  grep -Fq 'Do not run repository QA commands or skills that may mutate files.' "${review_pr_doc}"
+  grep -Fq $'`--fix`, `--write`' "${review_pr_doc}"
+  grep -Fq $'`git add`, `commit`, `push`, `reset`, `restore`, `checkout`, `switch`, `merge`, `rebase`' "${review_pr_doc}"
+}
+
+@test "review state verification detects an untracked file" {
+  local repo before_head before_status
+  grep -Fq "review_status=\"\$(git status --porcelain=v1 --untracked-files=all)\"" "${action_yml}"
+  grep -Fq 'Repository state changed during /review-pr' "${action_yml}"
+  repo="${BATS_TEST_TMPDIR}/repo"
+  git init -q "${repo}"
+  git -C "${repo}" config user.name test
+  git -C "${repo}" config user.email test@example.com
+  touch "${repo}/tracked"
+  git -C "${repo}" add tracked
+  git -C "${repo}" commit -qm initial
+
+  before_head="$(git -C "${repo}" rev-parse HEAD)"
+  before_status="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all)"
+  touch "${repo}/generated"
+
+  run bash -c '
+    repo="$1"; before_head="$2"; before_status="$3"
+    [[ "$(git -C "$repo" rev-parse HEAD)" == "$before_head" ]]
+    && [[ "$(git -C "$repo" status --porcelain=v1 --untracked-files=all)" == "$before_status" ]]
+  ' _ "${repo}" "${before_head}" "${before_status}"
+  [ "${status}" -ne 0 ]
 }
 
 opencode_jsonc_json() {
