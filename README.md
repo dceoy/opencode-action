@@ -56,6 +56,7 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 | `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                         |
 | `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                  |
 | `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                            |
+| `review-only`      | No       | `false`                   | Fail-closed repository-read-only review mode. Requires `use-github-token: true` and a token without contents write.                                            |
 | `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                   |
 | `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                     |
 | `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
@@ -80,6 +81,30 @@ Set the API key required by the selected model provider, for example:
 - `OPENAI_API_KEY` for OpenAI models
 
 When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workflow enough permissions for the requested work.
+
+### Strict review-only mode
+
+`review-only: false` preserves the normal mutation-capable behavior, including `/oc fix`. Set `review-only: true` for PR review runs. The action validates literal boolean values, requires `use-github-token: true`, rejects a token whose effective repository permissions can push, denies OpenCode edit and shell tools, blocks Git commit/push commands, and verifies the complete staged, unstaged, untracked, HEAD, and branch state after the run. A changed state fails the job and is never cleaned, reset, committed, or pushed.
+
+OpenCode v1.17.18 has no supported no-commit/no-push option: its GitHub runner auto-commits and pushes a dirty worktree. The action therefore relies on the enforced token and tool/Git guards above; review-only fails closed if the token permission cannot be verified. The caller's workflow `contents: read` declaration does **not** constrain a separately issued OpenCode App token, which is why App-token exchange is deliberately disallowed in this mode.
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+
+# actions/checkout should use persist-credentials: false.
+- uses: dceoy/opencode-action@v0
+  env:
+    GITHUB_TOKEN: ${{ github.token }}
+  with:
+    model: opencode-go/glm-5.2
+    prompt: /review-pr
+    review-only: true
+    use-github-token: true
+```
 
 ## Pull Request Reviews
 

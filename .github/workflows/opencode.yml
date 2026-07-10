@@ -48,6 +48,8 @@ jobs:
           model: opencode-go/minimax-m3
           variant: thinking
           prompt: /review-pr
+          review-only: true
+          use-github-token: true
   opencode-bot:
     if: >
       (

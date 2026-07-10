@@ -5,6 +5,10 @@ agent: general
 
 # Comprehensive PR Review
 
+## Strict read-only boundary
+
+This is a strictly read-only repository review. Never edit, create, delete, format, or generate repository files. Do not run repository QA, skills, or commands that may write; do not use `--fix`, `--write`, safe-fix modes, or equivalents. Never run `git add`, `commit`, `push`, `reset`, `checkout`, `switch`, `merge`, `rebase`, or any command whose mutation behavior is uncertain. In `review-only: true`, OpenCode also denies edit and shell tools; use only read-only inspection tools and return findings for the GitHub integration to publish.
+
 Perform a comprehensive pull request review by orchestrating specialized review subagents in parallel. Each subagent returns only noteworthy findings in a normalized format. You then deduplicate and filter across agents, validate each finding against the PR diff, and submit a single GitHub pull request review with inline comments for every finding that has a valid diff anchor.
 
 When a structured GitHub review is submitted successfully, that review is the PR review summary; capture the submitted review ID and update that same review with the final status/run link (step 7). Never call `gh pr comment` or the issue comment API yourself to post a status comment. You may still return a short final assistant message after a successful submission — `opencode github run` posts it as a separate top-level completion comment, authored the same way the review was (see the token/identity section below), so at most one additional top-level comment appears alongside the review and its inline comments. Do not treat "exactly one top-level comment" as a requirement; a review plus an optional completion comment is the expected result.
