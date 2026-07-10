@@ -112,8 +112,10 @@ frontmatter() {
 }
 
 @test "review state verification detects an untracked file" {
-  local repo before_head before_status
-  grep -Fq "review_status=\"\$(git status --porcelain=v1 --untracked-files=all)\"" "${action_yml}"
+  local repo review_state_lib before_state expected_source
+  review_state_lib="${repo_root}/.opencode/scripts/review-state.sh"
+  expected_source="source \"\${ACTION_PATH}/.opencode/scripts/review-state.sh\""
+  grep -Fq "${expected_source}" "${action_yml}"
   grep -Fq 'Repository state changed during /review-pr' "${action_yml}"
   repo="${BATS_TEST_TMPDIR}/repo"
   git init -q "${repo}"
@@ -123,16 +125,12 @@ frontmatter() {
   git -C "${repo}" add tracked
   git -C "${repo}" commit -qm initial
 
-  before_head="$(git -C "${repo}" rev-parse HEAD)"
-  before_status="$(git -C "${repo}" status --porcelain=v1 --untracked-files=all)"
+  # shellcheck source=/dev/null
+  before_state="$(cd "${repo}" && source "${review_state_lib}" && opencode_review_state_snapshot)"
   touch "${repo}/generated"
 
-  run bash -c '
-    repo="$1"; before_head="$2"; before_status="$3"
-    [[ "$(git -C "$repo" rev-parse HEAD)" == "$before_head" ]]
-    && [[ "$(git -C "$repo" status --porcelain=v1 --untracked-files=all)" == "$before_status" ]]
-  ' _ "${repo}" "${before_head}" "${before_status}"
-  [ "${status}" -ne 0 ]
+  run bash -c 'cd "$1" && source "$2" && opencode_review_state_changed "$3"' _ "${repo}" "${review_state_lib}" "${before_state}"
+  [ "${status}" -eq 0 ]
 }
 
 opencode_jsonc_json() {

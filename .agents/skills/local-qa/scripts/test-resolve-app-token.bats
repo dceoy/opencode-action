@@ -7,8 +7,7 @@
 # fail-fast behavior with no verified token; no fallback to
 # GH_TOKEN/GITHUB_TOKEN for structured PR review submission; and, for
 # use-github-token: true, that opencode_prepare_gh_token never overwrites
-# the caller's explicit workflow token with an unverified candidate while a
-# verified opencode-agent[bot] candidate still takes precedence over it.
+# the caller's explicit workflow token is never replaced by any candidate.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -436,7 +435,7 @@ STUB
   [[ "${output}" != *'ghs_checkout_tok'* ]]
 }
 
-@test "a verified opencode-agent[bot] candidate still takes precedence over the explicit workflow token when use-github-token=true" {
+@test "use-github-token=true does not inspect or replace the explicit workflow token with a verified candidate" {
   local repo stub
   repo="$(mk_repo)"
   git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_real_tok)"
@@ -454,7 +453,7 @@ STUB
   "
 
   [ "${status}" -eq 0 ]
-  [[ "${output}" == *'rc=0 gh=ghs_real_tok gt=ghs_real_tok'* ]]
+  [[ "${output}" == *'rc=0 gh=workflow_tok gt=workflow_tok'* ]]
 }
 
 @test "fails when every candidate is tried and none verifies" {

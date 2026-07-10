@@ -124,14 +124,14 @@ When the default OpenCode GitHub App flow is used (`use-github-token: false`), `
 
 **If no App token can be verified as `opencode-agent[bot]` while `use-github-token` is `false`, `/review-pr` fails the run instead of submitting the review.** It never silently falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, or to an unverified candidate, for a structured review submission, because either could make the review appear under the wrong identity instead of `opencode-agent[bot]`.
 
-If the workflow explicitly opts into `use-github-token: true` and no candidate App token verifies, this is intentional: `/review-pr` falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, and direct review submissions are expected to appear as `github-actions[bot]` in that case. A verified `opencode-agent[bot]` candidate still takes precedence over that fallback when one is found — see the exact precedence rules below.
+When the workflow explicitly opts into `use-github-token: true`, `/review-pr` uses the caller's `GH_TOKEN`/`GITHUB_TOKEN` exclusively for reads and review submissions. It does not inspect, verify, or export any App-token candidate, so a runner's Git configuration cannot replace the selected read-scoped workflow token. Direct review submissions are expected to appear as `github-actions[bot]` in this mode.
 
-**Exact credential precedence for every structured review write, regardless of `use-github-token`:**
+**Exact credential precedence for every structured review write:**
 
-1. Every resolved candidate App token is tried in order; the first one that verifies as `opencode-agent[bot]` always wins, is exported, and is used for that write. This applies even when `use-github-token: true`, so a real App token still takes precedence over the explicit workflow token when one is available and verifies.
-2. Only when **no** candidate verifies does `use-github-token` decide the outcome: `true` falls back to the caller's original `GH_TOKEN`/`GITHUB_TOKEN`, unmodified; `false` fails the run.
+1. With `use-github-token: true`, the caller-provided `GH_TOKEN`/`GITHUB_TOKEN` is used unchanged; no Git-config App-token candidate is considered.
+2. With `use-github-token: false`, every resolved candidate App token is tried in order and the first that verifies as `opencode-agent[bot]` is exported. If none verifies, the run fails rather than falling back to another credential.
 
-That fallback is safe because the best-effort read helper (`opencode_prepare_gh_token`, used for `gh pr view`/`gh pr diff`) is a no-op whenever `use-github-token: true` — it never exports an unverified git-config candidate over the caller's own token, so there is nothing to overwrite the explicit workflow token with before the write gate runs.
+The exclusive-token behavior is safe because the best-effort read helper (`opencode_prepare_gh_token`, used for `gh pr view`/`gh pr diff`) is a no-op whenever `use-github-token: true` — it never exports an unverified git-config candidate over the caller's own token.
 
 Workflows that invoke `/review-pr` must provide:
 

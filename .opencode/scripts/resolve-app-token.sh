@@ -231,9 +231,11 @@ opencode_verify_app_token_identity() {
 # $2: "<owner>/<repo>", required to verify a candidate token.
 # $3: pull request number, required to verify a candidate token.
 #
-# - Every candidate App token (opencode_resolve_app_token_candidates) is
-#   tried in order until one verifies as opencode-agent[bot]: export it and
-#   succeed, regardless of use-github-token. A workflow can have both a
+# - use-github-token=true: succeed without inspecting candidates, preserving
+#   the caller's GH_TOKEN/GITHUB_TOKEN as the exclusive credential boundary.
+# - use-github-token!=true: every candidate App token
+#   (opencode_resolve_app_token_candidates) is tried in order until one
+#   verifies as opencode-agent[bot], then exported. A workflow can have both a
 #   checkout-persisted credential at the highest-priority key and a real
 #   OpenCode App token from a lower-priority source, so an unverified
 #   earlier candidate must not stop the search.
@@ -252,6 +254,8 @@ opencode_require_app_token_for_review() {
   local use_github_token="${1:-false}" repo="${2:-}" pr_number="${3:-}"
   local token tried=0
 
+  [[ "${use_github_token}" == "true" ]] && return 0
+
   while IFS= read -r token; do
     [[ -n "${token}" ]] || continue
     tried=$((tried + 1))
@@ -266,10 +270,6 @@ opencode_require_app_token_for_review() {
     echo "::warning::Found ${tried} candidate OpenCode App token(s) in git credential configuration, but none verified as ${OPENCODE_REVIEW_BOT_LOGIN}; ignoring them instead of risking a review authored by the wrong identity." >&2
   else
     echo "::warning::No OpenCode App token candidates found in git credential configuration (checked local, urlmatch, and includeIf/global extraheader sources)." >&2
-  fi
-
-  if [[ "${use_github_token}" == "true" ]]; then
-    return 0
   fi
 
   echo "::error::Unable to resolve and verify an OpenCode GitHub App token that authors GitHub API writes as ${OPENCODE_REVIEW_BOT_LOGIN} (checked local, urlmatch, and includeIf/global extraheader sources, then verified with a pending-review identity probe). Refusing to submit the PR review with a fallback GH_TOKEN/GITHUB_TOKEN because that would make the review appear under the wrong identity instead of ${OPENCODE_REVIEW_BOT_LOGIN}. Set use-github-token: true to explicitly allow that fallback." >&2

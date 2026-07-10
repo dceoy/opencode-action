@@ -121,8 +121,10 @@ runs:
         review_head=""
         review_status=""
         if [[ "${PROMPT}" == /review-pr* ]]; then
+          # shellcheck source=/dev/null
+          source "${ACTION_PATH}/.opencode/scripts/review-state.sh"
           review_head="$(git rev-parse HEAD)"
-          review_status="$(git status --porcelain=v1 --untracked-files=all)"
+          review_status="$(opencode_review_state_snapshot)"
         fi
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
@@ -142,7 +144,7 @@ runs:
         review_state_changed=false
         if [[ -n "${review_head}" ]] && {
           [[ "$(git rev-parse HEAD)" != "${review_head}" ]]
-          || [[ "$(git status --porcelain=v1 --untracked-files=all)" != "${review_status}" ]]
+          || opencode_review_state_changed "${review_status}"
         }; then
           review_state_changed=true
           echo "::error::Repository state changed during /review-pr; this is a regression detector, not a sandbox." >&2
