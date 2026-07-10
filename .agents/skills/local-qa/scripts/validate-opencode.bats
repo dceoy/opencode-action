@@ -8,10 +8,19 @@ setup() {
   agents_dir="${repo_root}/.opencode/agents"
   review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
+  action_yml="${repo_root}/action.yml"
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
   non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
+}
+
+@test "review-only setup supports a disabled toolkit and narrowly permits review commands" {
+  grep -Fq "if [[ -d \"\${HOME}/.config/opencode\" ]]; then" "${action_yml}"
+  grep -Fq '"*": "deny",' "${action_yml}"
+  grep -Fq '"gh pr view *": "allow",' "${action_yml}"
+  grep -Fq '"gh api *": "allow",' "${action_yml}"
+  grep -Fq "\"\$HOME/.config/opencode/scripts/resolve-app-token.sh\": \"allow\"" "${action_yml}"
 }
 
 agent_files() {

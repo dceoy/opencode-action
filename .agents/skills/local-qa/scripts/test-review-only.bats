@@ -20,6 +20,7 @@ setup() {
   guard="${BATS_TEST_TMPDIR}/guard"; opencode_review_only_make_git_guard "$guard"; printf 'changed\n' >>"$repo/base"
   run env PATH="$guard:$PATH" git -C "$repo" commit -am blocked; [ "$status" -ne 0 ]
   run env PATH="$guard:$PATH" git -C "$repo" push; [ "$status" -ne 0 ]
+  run env PATH="$guard:$PATH" git -c user.name=blocked -C "$repo" commit -am blocked; [ "$status" -ne 0 ]
 }
 
 @test "only literal boolean inputs are accepted" {

@@ -150,8 +150,34 @@ runs:
           review_snapshot="$(opencode_review_only_snapshot)"
           review_config_home="$(mktemp -d)"
           mkdir -p "${review_config_home}/opencode"
-          cp -R "${HOME}/.config/opencode/." "${review_config_home}/opencode/"
-          printf '%s\n' '{' '  "$schema": "https://opencode.ai/config.json",' '  "permission": { "edit": "deny", "bash": "deny", "external_directory": "deny" }' '}' >"${review_config_home}/opencode/opencode.jsonc"
+          if [[ -d "${HOME}/.config/opencode" ]]; then
+            cp -R "${HOME}/.config/opencode/." "${review_config_home}/opencode/"
+          fi
+          printf '%s\n' \
+            '{' \
+            '  "$schema": "https://opencode.ai/config.json",' \
+            '  "permission": {' \
+            '    "edit": "deny",' \
+            '    "bash": {' \
+            '      "*": "deny",' \
+            '      "source $HOME/.config/opencode/scripts/resolve-app-token.sh*": "allow",' \
+            '      "git config *": "allow",' \
+            '      "git diff*": "allow",' \
+            '      "git status*": "allow",' \
+            '      "gh pr view *": "allow",' \
+            '      "gh pr diff *": "allow",' \
+            '      "gh api *": "allow",' \
+            '      "jq *": "allow",' \
+            '      "mktemp *": "allow",' \
+            '      "chmod *": "allow",' \
+            '      "rm -f *": "allow"' \
+            '    },' \
+            '    "external_directory": {' \
+            '      "*": "deny",' \
+            '      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow"' \
+            '    }' \
+            '  }' \
+            '}' >"${review_config_home}/opencode/opencode.jsonc"
           git_guard="$(mktemp -d)"
           opencode_review_only_make_git_guard "${git_guard}"
           export XDG_CONFIG_HOME="${review_config_home}"

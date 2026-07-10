@@ -7,7 +7,7 @@ agent: general
 
 ## Strict read-only boundary
 
-This is a strictly read-only repository review. Never edit, create, delete, format, or generate repository files. Do not run repository QA, skills, or commands that may write; do not use `--fix`, `--write`, safe-fix modes, or equivalents. Never run `git add`, `commit`, `push`, `reset`, `checkout`, `switch`, `merge`, `rebase`, or any command whose mutation behavior is uncertain. In `review-only: true`, OpenCode also denies edit and shell tools; use only read-only inspection tools and return findings for the GitHub integration to publish.
+This is a strictly read-only repository review. Never edit, create, delete, format, or generate repository files. Do not run repository QA, skills, or commands that may write; do not use `--fix`, `--write`, safe-fix modes, or equivalents. Never run `git add`, `commit`, `push`, `reset`, `checkout`, `switch`, `merge`, `rebase`, or any command whose mutation behavior is uncertain. In `review-only: true`, OpenCode denies edits and shell commands by default, allowing only the narrowly scoped `git`, `gh`, `jq`, and temporary-payload commands required below; use those commands only for this read-only repository review and its GitHub review submission.
 
 Perform a comprehensive pull request review by orchestrating specialized review subagents in parallel. Each subagent returns only noteworthy findings in a normalized format. You then deduplicate and filter across agents, validate each finding against the PR diff, and submit a single GitHub pull request review with inline comments for every finding that has a valid diff anchor.
 

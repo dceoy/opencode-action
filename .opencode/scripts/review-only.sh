@@ -48,7 +48,7 @@ opencode_review_only_make_git_guard() {
 args=("\$@")
 index=0
 while [[ "\${args[index]:-}" == -* ]]; do
-  if [[ "\${args[index]}" == -C || "\${args[index]}" == --git-dir || "\${args[index]}" == --work-tree ]]; then
+  if [[ "\${args[index]}" == -C || "\${args[index]}" == -c || "\${args[index]}" == --git-dir || "\${args[index]}" == --work-tree ]]; then
     ((index += 2))
   else
     ((index += 1))
