@@ -7,7 +7,7 @@ permission:
   read: allow
   glob: allow
   grep: allow
-  lsp: allow
+  lsp: deny
   edit: deny
   bash: deny
   task: deny

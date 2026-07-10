@@ -48,6 +48,7 @@ jobs:
           model: opencode-go/minimax-m3
           variant: thinking
           prompt: /review-pr
+          review-only: true
   opencode-bot:
     if: >
       (

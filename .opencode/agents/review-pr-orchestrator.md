@@ -5,6 +5,7 @@ mode: primary
 color: info
 permission:
   edit: deny
+  lsp: deny
   bash:
     "*": deny
     "git status --short": allow

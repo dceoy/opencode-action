@@ -173,6 +173,7 @@ opencode_jsonc_json() {
   fm="$(frontmatter "${review_orchestrator}")"
   grep -qE '^mode: primary$' <<<"${fm}"
   grep -qE '^  edit: deny$' <<<"${fm}"
+  grep -qE '^  lsp: deny$' <<<"${fm}"
   grep -qE '^  skill: deny$' <<<"${fm}"
   grep -qF '    "*": deny' <<<"${fm}"
 }
@@ -185,7 +186,7 @@ opencode_jsonc_json() {
     grep -qE '^  read: allow$' <<<"${fm}"
     grep -qE '^  glob: allow$' <<<"${fm}"
     grep -qE '^  grep: allow$' <<<"${fm}"
-    grep -qE '^  lsp: allow$' <<<"${fm}"
+    grep -qE '^  lsp: deny$' <<<"${fm}"
     grep -qE '^  edit: deny$' <<<"${fm}"
     grep -qE '^  bash: deny$' <<<"${fm}"
     grep -qE '^  task: deny$' <<<"${fm}"
@@ -214,7 +215,7 @@ opencode_jsonc_json() {
   fi
 }
 
-@test "the Run OpenCode step disables project config whenever the bundled toolkit is enabled" {
+@test "the Run OpenCode step disables project config only for the dedicated review-only entrypoint" {
   local steps run_step_env
 
   steps="$(yq -o=json '.runs.steps' "${action_yml}")"
@@ -226,6 +227,42 @@ opencode_jsonc_json() {
   }
   [[ "${run_step_env}" == *"inputs.enable-toolkit == 'true'"* ]] || {
     echo "OPENCODE_DISABLE_PROJECT_CONFIG is not conditioned on inputs.enable-toolkit (got: '${run_step_env}')"
+    return 1
+  }
+  [[ "${run_step_env}" == *"inputs.review-only == 'true'"* ]] || {
+    echo "OPENCODE_DISABLE_PROJECT_CONFIG is not conditioned on inputs.review-only, so it would also disable project config (and AGENTS.md) for mutation-capable workflows (got: '${run_step_env}')"
+    return 1
+  }
+}
+
+@test "action.yml declares a review-only input defaulting to false" {
+  local inputs review_only_default
+
+  inputs="$(yq -o=json '.inputs' "${action_yml}")"
+  review_only_default="$(jq -r '."review-only".default // empty' <<<"${inputs}")"
+
+  [ "${review_only_default}" = "false" ] || {
+    echo "action.yml's review-only input does not default to 'false' (got: '${review_only_default}')"
+    return 1
+  }
+}
+
+@test "the Copy bundled OpenCode config step installs into a fresh directory instead of merging with stale content" {
+  local steps copy_step_run
+
+  steps="$(yq -o=json '.runs.steps' "${action_yml}")"
+  copy_step_run="$(jq -r '.[] | select(.name == "Copy bundled OpenCode config") | .run // empty' <<<"${steps}")"
+
+  [ -n "${copy_step_run}" ] || {
+    echo "action.yml has no \"Copy bundled OpenCode config\" step"
+    return 1
+  }
+  if grep -qF -- '-rn ' <<<"${copy_step_run}"; then
+    echo "Copy bundled OpenCode config step still uses a no-clobber copy that can preserve stale/pre-existing files: ${copy_step_run}"
+    return 1
+  fi
+  grep -qF "rm -rf \"\${HOME}/.config/opencode\"" <<<"${copy_step_run}" || {
+    echo "Copy bundled OpenCode config step does not remove pre-existing ~/.config/opencode content before installing"
     return 1
   }
 }
