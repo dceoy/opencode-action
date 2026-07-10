@@ -12,6 +12,12 @@ setup() {
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
   non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
+  review_orchestrator="${agents_dir}/review-pr-orchestrator.md"
+  review_agents=(
+    code-reviewer code-quality-reviewer performance-reviewer security-code-reviewer
+    test-coverage-reviewer pr-test-analyzer documentation-accuracy-reviewer
+    comment-analyzer silent-failure-hunter type-design-analyzer
+  )
 }
 
 agent_files() {
@@ -94,7 +100,7 @@ opencode_jsonc_json() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
 }
 
-@test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
+@test "review-pr preserves the resolver path opencode.jsonc allow-lists under external_directory" {
   local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
 
   resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
@@ -127,4 +133,56 @@ opencode_jsonc_json() {
     echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
     return 1
   }
+}
+
+@test "review-pr uses the dedicated fail-closed review orchestrator" {
+  local fm
+  grep -qx 'agent: review-pr-orchestrator' "${review_pr_doc}"
+  if grep -qE '^agent: (general|build)$' "${review_pr_doc}"; then
+    echo "review-pr must not use general or build"
+    return 1
+  fi
+  [ -f "${review_orchestrator}" ]
+  fm="$(frontmatter "${review_orchestrator}")"
+  grep -qE '^mode: primary$' <<<"${fm}"
+  grep -qE '^  edit: deny$' <<<"${fm}"
+  grep -qE '^  skill: deny$' <<<"${fm}"
+  grep -qF '    "*": deny' <<<"${fm}"
+}
+
+@test "every review-pr reviewer has explicit read-only permissions and invariant" {
+  local agent fm path
+  for agent in "${review_agents[@]}"; do
+    path="${agents_dir}/${agent}.md"
+    fm="$(frontmatter "${path}")"
+    grep -qE '^  read: allow$' <<<"${fm}"
+    grep -qE '^  glob: allow$' <<<"${fm}"
+    grep -qE '^  grep: allow$' <<<"${fm}"
+    grep -qE '^  lsp: allow$' <<<"${fm}"
+    grep -qE '^  edit: deny$' <<<"${fm}"
+    grep -qE '^  bash: deny$' <<<"${fm}"
+    grep -qE '^  task: deny$' <<<"${fm}"
+    grep -qE '^  skill: deny$' <<<"${fm}"
+    grep -qE '^  webfetch: deny$' <<<"${fm}"
+    grep -qE '^  websearch: deny$' <<<"${fm}"
+    grep -qF 'This is a strictly read-only repository review. Analyze and report only.' "${path}"
+  done
+}
+
+@test "review-pr cannot dispatch code-simplifier and has no broad command allow rules" {
+  local fm
+  if grep -qE "→[[:space:]]*\`code-simplifier\`" "${review_pr_doc}"; then
+    echo "review-pr must not route to code-simplifier"
+    return 1
+  fi
+  grep -qF '/review-pr simplify` is unavailable' "${review_pr_doc}"
+  fm="$(frontmatter "${review_orchestrator}")"
+  if grep -qE '"(git|gh|bash|uv|npm|npx) *": allow' <<<"${fm}"; then
+    echo "review orchestrator has a broad command allow rule"
+    return 1
+  fi
+  if grep -qE 'gh api|git (add|commit|push|reset|restore|checkout|switch|clean|stash|merge|rebase|cherry-pick|apply|am)' "${review_pr_doc}"; then
+    echo "review-pr documents an unsafe command"
+    return 1
+  fi
 }
