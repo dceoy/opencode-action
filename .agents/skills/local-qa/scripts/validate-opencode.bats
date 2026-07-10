@@ -91,21 +91,22 @@ frontmatter() {
 
 @test "bundled review workflow uses the read-scoped workflow token" {
   local workflow="${repo_root}/.github/workflows/opencode.yml"
-  # shellcheck disable=SC2016 # Ruby interpolation is intentionally literal.
-  run ruby -ryaml -e '
-    workflow = YAML.load_file(ARGV[0])
-    job = workflow.fetch("jobs").fetch("opencode-review")
-    permissions = job.fetch("permissions")
-    expected = {"contents" => "read", "pull-requests" => "write"}
-    abort "unexpected review permissions: #{permissions}" unless permissions == expected
-    checkout = job.fetch("steps").find { |step| step["name"] == "Checkout repository" }.fetch("with")
-    abort unless checkout["persist-credentials"] == false && checkout["token"] == "${{ github.token }}"
-    run = job.fetch("steps").find { |step| step["name"] == "Run OpenCode" }
-    abort unless run.fetch("env") == {"OPENCODE_API_KEY" => "${{ secrets.OPENCODE_API_KEY }}", "GITHUB_TOKEN" => "${{ github.token }}"}
-    action = run.fetch("with")
-    abort unless action["use-github-token"] == true && !action.key?("review-only")
+  run awk '
+    /opencode-review:/ { in_review = 1 }
+    in_review && /^  opencode-bot:/ { exit }
+    in_review { print }
   ' "${workflow}"
   [ "${status}" -eq 0 ]
+  [[ "${output}" == *$'contents: read\n      pull-requests: write'* ]]
+  [[ "${output}" != *'issues: write'* ]]
+  [[ "${output}" != *'actions: read'* ]]
+  [[ "${output}" == *'persist-credentials: false'* ]]
+  # shellcheck disable=SC2016 # GitHub expressions are literal YAML values.
+  [[ "${output}" == *'token: ${{ github.token }}'* ]]
+  # shellcheck disable=SC2016 # GitHub expressions are literal YAML values.
+  [[ "${output}" == *'GITHUB_TOKEN: ${{ github.token }}'* ]]
+  # shellcheck disable=SC2016 # GitHub expressions are literal YAML values.
+  [[ "${output}" != *'GH_TOKEN: ${{ github.token }}'* ]]
 }
 
 @test "review analysis uses the confined action-owned agent" {

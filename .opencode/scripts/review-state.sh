@@ -103,7 +103,7 @@ opencode_review_run() (
     echo '::error::A timeout command is required for isolated /review-pr execution.' >&2
     return 1
   fi
-  # shellcheck disable=SC2329 # Called by the EXIT and signal traps below.
+  # shellcheck disable=SC2329,SC2317 # Called by the EXIT and signal traps below.
   cleanup() { rm -rf "${temp_root}"; }
   trap cleanup EXIT HUP INT TERM
   opencode_review_prepare_workspace "${workspace}" "${action_path}" "${pr_number}"
