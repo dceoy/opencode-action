@@ -9,7 +9,7 @@ This is a strictly read-only repository review. Analyze and report only. Do not 
 
 The worktree guard is defense in depth and never authorizes mutations. Do not run a command merely because it is called a check, lint, test, or scan: it is permitted only when explicitly allow-listed and demonstrably non-mutating. In particular, never run repository-wide QA scripts, formatters, auto-fixing linters, generators, dependency installers, or anything that can create caches, reports, snapshots, lockfiles, coverage output, scan output, or configuration exports in the checkout.
 
-The constrained submission helper, not the agent, sources `opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"`. That exact external path remains the sole allow-listed exception to the default external-directory denial.
+Every helper this command invokes — the worktree guard, the read-only `gh` wrapper, the constrained submission helper, and the App-token resolver they source — lives only at its `${HOME}/.config/opencode/scripts/` path, installed there by the action before the reviewed repository is ever checked out. Never invoke any of them by a repository-relative path such as `.opencode/scripts/...`: the checkout under review is untrusted input, and a repository-relative path would let a malicious PR that edits or adds a same-named file substitute its own script for the trusted one. These exact external paths are the sole allow-listed exceptions to the default external-directory denial.
 
 **Requested review aspects (optional):** "$ARGUMENTS"
 
@@ -20,16 +20,16 @@ If `$ARGUMENTS` contains `simplify`, stop immediately and say: `/review-pr simpl
 Before any analysis, invoke exactly:
 
 ```bash
-bash .opencode/scripts/review-pr-worktree-guard.sh snapshot
+bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" snapshot
 ```
 
 Keep its output as `WORKTREE_SNAPSHOT`. If it fails, stop unsuccessfully.
 
-Determine `PR_NUMBER` from `.pull_request.number` or `.issue.number` in `GITHUB_EVENT_PATH`; otherwise accept only `GITHUB_REF` matching `refs/pull/<positive number>/merge`. In PR mode, obtain metadata with:
+Determine `PR_NUMBER` from `.pull_request.number` or `.issue.number` in `GITHUB_EVENT_PATH`; otherwise accept only `GITHUB_REF` matching `refs/pull/<positive number>/merge`. In PR mode, obtain metadata through the read-only `gh` wrapper, which best-effort prepares a candidate App token from `resolve-app-token.sh` before calling `gh` so the default `use-github-token: false` path does not fall back to a shallow local diff:
 
 ```bash
-gh pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
-gh pr diff "$PR_NUMBER"
+bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
+bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff "$PR_NUMBER"
 ```
 
 If that metadata request fails, use local mode: `git status --short`, `git diff --name-only HEAD`, and `git diff --no-ext-diff`. Do not infer a PR from the current branch.
@@ -64,7 +64,7 @@ Launch only the explicitly permitted reviewer agents. For each, supply the captu
 Do not let a reviewer post to GitHub. After every reviewer completes, verify the invariant:
 
 ```bash
-bash .opencode/scripts/review-pr-worktree-guard.sh verify "$WORKTREE_SNAPSHOT"
+bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify "$WORKTREE_SNAPSHOT"
 ```
 
 On failure, do not submit a review and terminate unsuccessfully.
@@ -84,10 +84,10 @@ When there are summary-only findings, the body begins `OpenCode PR Review: <N> i
 Immediately before every GitHub write, verify the invariant. The only allowed payload and GitHub-write helpers are:
 
 ```bash
-bash .opencode/scripts/review-pr-submit.sh build-initial "$HEAD_OID" "$REVIEW_BODY" "$COMMENTS_JSON"
-bash .opencode/scripts/review-pr-submit.sh build-update "$UPDATED_REVIEW_BODY"
-bash .opencode/scripts/review-pr-submit.sh submit-initial "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_PAYLOAD"
-bash .opencode/scripts/review-pr-submit.sh update "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_ID" "$REVIEW_UPDATE_PAYLOAD"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial "$HEAD_OID" "$REVIEW_BODY" "$COMMENTS_JSON"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update "$UPDATED_REVIEW_BODY"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_PAYLOAD"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_ID" "$REVIEW_UPDATE_PAYLOAD"
 ```
 
 The helper validates the owner/repository name, positive PR and review IDs, temporary payload location and schema, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.

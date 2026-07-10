@@ -42,7 +42,7 @@ inputs:
     default: latest
   enable-toolkit:
     required: false
-    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
+    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved. Also disables loading project-level .opencode/ config from the checked-out repository, so a pull request cannot shadow the bundled toolkit's trusted agents, commands, or permissions with its own.
     default: 'true'
   timeout-minutes:
     required: false
@@ -116,6 +116,7 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        OPENCODE_DISABLE_PROJECT_CONFIG: ${{ inputs.enable-toolkit == 'true' && '1' || '' }}
       run: |
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT

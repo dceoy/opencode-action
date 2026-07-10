@@ -10,14 +10,14 @@ permission:
     "git status --short": allow
     "git diff --name-only HEAD": allow
     "git diff --no-ext-diff": allow
-    "gh pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url": allow
-    "gh pr diff *": allow
-    "bash .opencode/scripts/review-pr-worktree-guard.sh snapshot": allow
-    "bash .opencode/scripts/review-pr-worktree-guard.sh verify *": allow
-    "bash .opencode/scripts/review-pr-submit.sh build-initial *": allow
-    "bash .opencode/scripts/review-pr-submit.sh build-update *": allow
-    "bash .opencode/scripts/review-pr-submit.sh submit-initial *": allow
-    "bash .opencode/scripts/review-pr-submit.sh update *": allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" snapshot': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update *': allow
   skill: deny
   task:
     "*": deny

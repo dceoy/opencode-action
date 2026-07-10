@@ -8,6 +8,7 @@ setup() {
   agents_dir="${repo_root}/.opencode/agents"
   review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
+  action_yml="${repo_root}/action.yml"
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
@@ -100,15 +101,10 @@ opencode_jsonc_json() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
 }
 
-@test "review-pr preserves the resolver path opencode.jsonc allow-lists under external_directory" {
-  local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
+@test "opencode.jsonc allow-lists every review-pr script under external_directory" {
+  local default_action allow_patterns pattern expanded script scripts matched
 
-  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
-  [ -n "${resolver_suffix}" ] || {
-    echo "review-pr.md does not set opencode_app_token_lib to a \${HOME}-relative path"
-    return 1
-  }
-  resolver_path="${HOME}/${resolver_suffix}"
+  scripts=(resolve-app-token.sh review-pr-worktree-guard.sh review-pr-submit.sh review-pr-gh.sh)
 
   default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
   [ "${default_action}" = "deny" ] || {
@@ -122,15 +118,46 @@ opencode_jsonc_json() {
     return 1
   }
 
-  for pattern in "${allow_patterns[@]}"; do
-    expanded="${pattern/#\$HOME/${HOME}}"
-    expanded="${expanded/#~/${HOME}}"
-    # shellcheck disable=SC2053
-    [[ "${resolver_path}" == ${expanded} ]] && matched=1
+  for script in "${scripts[@]}"; do
+    matched=0
+    for pattern in "${allow_patterns[@]}"; do
+      expanded="${pattern/#\$HOME/${HOME}}"
+      expanded="${expanded/#~/${HOME}}"
+      # shellcheck disable=SC2053
+      [[ "${HOME}/.config/opencode/scripts/${script}" == ${expanded} ]] && matched=1
+    done
+    [ "${matched}" -eq 1 ] || {
+      echo "no external_directory allow pattern (${allow_patterns[*]}) matches ${HOME}/.config/opencode/scripts/${script}"
+      return 1
+    }
+  done
+}
+
+@test "review-pr.md and its orchestrator never invoke a review-pr script by a repository-relative path" {
+  local script scripts=(review-pr-worktree-guard.sh review-pr-submit.sh review-pr-gh.sh)
+  local found=()
+
+  for script in "${scripts[@]}"; do
+    grep -qE "bash \.opencode/scripts/${script//./\\.}" "${review_pr_doc}" "${review_orchestrator}" && found+=("${script}")
   done
 
-  [ "${matched}" -eq 1 ] || {
-    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+  [ "${#found[@]}" -eq 0 ] || {
+    printf 'repository-relative invocation of trust-sensitive script(s): %s\n' "${found[@]}"
+    return 1
+  }
+}
+
+@test "review-pr.md invokes every review-pr script only via its \$HOME-anchored path" {
+  local script scripts=(review-pr-worktree-guard.sh review-pr-submit.sh review-pr-gh.sh)
+  local missing=()
+
+  for script in "${scripts[@]}"; do
+    grep -qF "\"\$HOME/.config/opencode/scripts/${script}\"" "${review_pr_doc}" || missing+=("${script}")
+  done
+
+  [ "${#missing[@]}" -eq 0 ] || {
+    # shellcheck disable=SC2016
+    printf 'review-pr.md never invokes %s via its $HOME-anchored path\n' "${missing[@]}"
     return 1
   }
 }
@@ -185,4 +212,20 @@ opencode_jsonc_json() {
     echo "review-pr documents an unsafe command"
     return 1
   fi
+}
+
+@test "the Run OpenCode step disables project config whenever the bundled toolkit is enabled" {
+  local steps run_step_env
+
+  steps="$(yq -o=json '.runs.steps' "${action_yml}")"
+  run_step_env="$(jq -r '.[] | select(.name == "Run OpenCode") | .env.OPENCODE_DISABLE_PROJECT_CONFIG // empty' <<<"${steps}")"
+
+  [ -n "${run_step_env}" ] || {
+    echo "action.yml's \"Run OpenCode\" step does not set OPENCODE_DISABLE_PROJECT_CONFIG"
+    return 1
+  }
+  [[ "${run_step_env}" == *"inputs.enable-toolkit == 'true'"* ]] || {
+    echo "OPENCODE_DISABLE_PROJECT_CONFIG is not conditioned on inputs.enable-toolkit (got: '${run_step_env}')"
+    return 1
+  }
 }
