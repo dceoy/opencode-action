@@ -128,7 +128,9 @@ EOF
 
 @test "review mode excludes project config and refreshes global toolkit" {
   grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
+  # shellcheck disable=SC2016
   grep -q 'rm -rf "${HOME}/.config/opencode"' "${action_yml}"
+  # shellcheck disable=SC2016
   grep -q 'cp -r "${ACTION_PATH}/.opencode/."' "${action_yml}"
   grep -q 'writeFileSync("pwned-by-project-plugin"' "${malicious_plugin}"
 }
