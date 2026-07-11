@@ -16,6 +16,7 @@ load_token_lib() {
 }
 
 trusted_context() {
+  local repo pr_number head_sha event_path event_pr current_head
   [[ -s "${context_file}" ]] || return 1
   repo="$(jq -r '.repository' "${context_file}")"
   pr_number="$(jq -r '.pr_number' "${context_file}")"
@@ -24,10 +25,9 @@ trusted_context() {
   [[ "${repo}" == "${GITHUB_REPOSITORY:-}" && -f "${event_path}" ]] || return 1
   event_pr="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
   [[ "${event_pr}" == "${pr_number}" ]] || return 1
-  load_token_lib
-  opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
   current_head="$(gh pr view "${pr_number}" --json headRefOid --jq .headRefOid)"
-  [[ "${current_head}" == "${head_sha}" ]]
+  [[ "${current_head}" == "${head_sha}" ]] || return 1
+  printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
 }
 
 operation="${1:-}"
@@ -39,7 +39,10 @@ case "${operation}" in
     (umask 077; mkdir -p "${state_dir}"; : >"${context_file}"; : >"${initial_payload}"; : >"${update_payload}")
     ;;
   submit-initial)
-    trusted_context || fail "Pinned PR context is unavailable or the PR head changed."
+    load_token_lib
+    opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
+    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
+    IFS=$'\t' read -r repo pr_number head_sha <<<"${context}"
     jq -e 'keys == ["body", "comments"] and (.body | type == "string" and length > 0) and (.comments | type == "array" and length > 0)' "${initial_payload}" >/dev/null ||
       fail "Invalid initial review payload."
     request="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
@@ -53,7 +56,10 @@ case "${operation}" in
     printf '%s\n' "${response}"
     ;;
   update)
-    trusted_context || fail "Pinned PR context is unavailable or the PR head changed."
+    load_token_lib
+    opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
+    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
+    IFS=$'\t' read -r repo pr_number head_sha <<<"${context}"
     jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" >/dev/null ||
       fail "Invalid review update payload."
     [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
