@@ -13,29 +13,45 @@
 # run them.
 OPENCODE_REVIEW_MIN_VERSION="1.1.29"
 
-# Fail closed unless $1 is a plain x.y.z release version at or above
+# Fail closed unless $1 is a canonical x.y.z release version at or above
 # OPENCODE_REVIEW_MIN_VERSION. Anything unparseable (empty, "latest" left
 # unresolved, branch names, pre-release suffixes) is rejected because
 # OPENCODE_DISABLE_PROJECT_CONFIG support cannot be proven for it.
 opencode_review_enforce_version_floor() {
   local version="${1:-}"
-  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  local version_major version_minor version_patch
+  local minimum_major minimum_minor minimum_patch
+
+  if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
     echo "::error::Review-only mode requires a plain x.y.z OpenCode release version to prove OPENCODE_DISABLE_PROJECT_CONFIG support; got '${version}'." >&2
     return 1
   fi
-  if [[ "$(printf '%s\n' "${OPENCODE_REVIEW_MIN_VERSION}" "${version}" | sort -V | head -n1)" != "${OPENCODE_REVIEW_MIN_VERSION}" ]]; then
+
+  IFS=. read -r version_major version_minor version_patch <<<"${version}"
+  IFS=. read -r minimum_major minimum_minor minimum_patch <<<"${OPENCODE_REVIEW_MIN_VERSION}"
+  if ((
+    version_major < minimum_major ||
+      (version_major == minimum_major && version_minor < minimum_minor) ||
+      (version_major == minimum_major && version_minor == minimum_minor && version_patch < minimum_patch)
+  )); then
     echo "::error::Review-only mode requires OpenCode >= ${OPENCODE_REVIEW_MIN_VERSION}, the first release that supports OPENCODE_DISABLE_PROJECT_CONFIG; resolved version ${version} would load the reviewed project's OpenCode config." >&2
     return 1
   fi
 }
 
-# Unset the caller-controlled OpenCode config sources that upstream still
-# honors even when OPENCODE_DISABLE_PROJECT_CONFIG is set, so a workflow
-# (or a step that ran before this action) cannot inject configuration into
-# a review-only run.
+# Unset every caller-controlled source that can redirect or override OpenCode
+# configuration even when OPENCODE_DISABLE_PROJECT_CONFIG is set. This keeps
+# review-only runs on the freshly installed toolkit under $HOME/.config and
+# prevents direct permission overrides.
 opencode_review_strip_config_env() {
   local var
-  for var in OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT; do
+  for var in \
+    OPENCODE_CONFIG \
+    OPENCODE_CONFIG_DIR \
+    OPENCODE_CONFIG_CONTENT \
+    OPENCODE_PERMISSION \
+    OPENCODE_TEST_HOME \
+    XDG_CONFIG_HOME; do
     if [[ -n "${!var:-}" ]]; then
       echo "::warning::Ignoring caller-provided ${var} in review-only mode." >&2
     fi
