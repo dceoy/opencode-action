@@ -1,31 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  // GitHub Actions runs are non-interactive: nobody can answer an "ask"
-  // permission prompt (the built-in default for external_directory), so a
-  // tool call that tries to read outside the checked-out repository (for
-  // example inspecting /opt/pipx/logs/* after a failed tool install) hangs
-  // until the action's timeout-minutes kills the run. /review-pr never
-  // needs to read outside the repository it is reviewing, so deny instead
-  // of ask by default: the agent gets an immediate, non-interactive denial
-  // it can adapt to rather than a silent hang.
-  //
-  // Narrow exceptions: /review-pr invokes its worktree guard, read-only gh
-  // wrapper, and constrained submission helper (see
-  // .opencode/commands/review-pr.md), plus the bundled App-token resolver
-  // those two source, all from "${HOME}/.config/opencode/scripts/", which
-  // the install step copies outside the checked-out repository into
-  // ~/.config/opencode. Every one of these four scripts must be invoked
-  // only by this external, action-installed path — never by a
-  // repository-relative path — because the checkout under review is
-  // untrusted and could otherwise ship a same-named script of its own.
-  // Rules are evaluated in order with the last match winning, so the
-  // catch-all deny stays first and these script paths are allow-listed
-  // after it; every other external path remains denied.
   "permission": {
     "external_directory": {
       "*": "deny",
       "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow",
-      "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh": "allow",
       "$HOME/.config/opencode/scripts/review-pr-submit.sh": "allow",
       "$HOME/.config/opencode/scripts/review-pr-gh.sh": "allow"
     }
