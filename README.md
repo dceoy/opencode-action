@@ -140,7 +140,6 @@ The bundled toolkit combines Claude Code Action-style core reviewers with `pr-re
 | `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
 | `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
 | `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
-| `/review-pr simplify`             | `code-simplifier` — refinement only, does not return a review                                                                                                                                                                                                                                                           |
 
 #### Core reviewers (Claude Code Action-compatible)
 
