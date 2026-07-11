@@ -14,6 +14,9 @@ permission:
   grep: allow
   bash:
     "*": deny
+    "git status --short": allow
+    "git diff --name-only HEAD": allow
+    "git diff --no-ext-diff": allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff *': allow
