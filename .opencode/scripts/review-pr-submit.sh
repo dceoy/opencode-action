@@ -59,7 +59,7 @@ case "${operation}" in
     load_token_lib
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
     context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
-    IFS=$'\t' read -r repo pr_number head_sha <<<"${context}"
+    IFS=$'\t' read -r repo pr_number _ <<<"${context}"
     jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" >/dev/null ||
       fail "Invalid review update payload."
     [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
