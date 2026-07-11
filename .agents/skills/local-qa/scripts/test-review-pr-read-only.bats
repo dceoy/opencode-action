@@ -136,7 +136,61 @@ EOF
   grep -q 'rm -rf "${HOME}/.config/opencode"' "${action_yml}"
   # shellcheck disable=SC2016
   grep -q 'cp -r "${ACTION_PATH}/.opencode/."' "${action_yml}"
+  grep -q "inputs.enable-toolkit == 'true' || steps.review_mode.outputs.enabled == 'true'" "${action_yml}"
   grep -q 'writeFileSync("pwned-by-project-plugin"' "${malicious_plugin}"
+}
+
+@test "review dispatch expands the trusted command and forces its orchestrator" {
+  guard="${repo_root}/.opencode/scripts/review-mode-guard.sh"
+
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_review_prepare_dispatch "$2" "/review-pr security" ""
+    [[ "${OPENCODE_CONFIG_CONTENT}" == "{\"default_agent\":\"review-pr-orchestrator\"}" ]]
+    [[ "${PROMPT}" == *"# Strictly Read-Only PR Review"* ]]
+    [[ "${PROMPT}" == *"Requested review aspects: security"* ]]
+    [[ "${PROMPT}" != *"\$ARGUMENTS"* ]]
+  ' _ "${guard}" "${repo_root}"
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "review dispatch extracts aspects from an issue comment" {
+  guard="${repo_root}/.opencode/scripts/review-mode-guard.sh"
+
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_review_prepare_dispatch "$2" "" "/oc /review-pr tests"
+    [[ "${PROMPT}" == *"Requested review aspects: tests"* ]]
+  ' _ "${guard}" "${repo_root}"
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "review-only success requires structured submission evidence" {
+  guard="${repo_root}/.opencode/scripts/review-mode-guard.sh"
+  state_dir="${fake_home}/.config/opencode/review-state"
+  mkdir -p "${state_dir}"
+
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -c 'source "$1"; opencode_review_require_submission' _ "${guard}"
+  [ "${status}" -ne 0 ]
+
+  printf '%s' '555' >"${state_dir}/review_id"
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -c 'source "$1"; opencode_review_require_submission' _ "${guard}"
+  [ "${status}" -eq 0 ]
+
+  rm "${state_dir}/review_id"
+  printf '%s' 'No noteworthy issues found.' >"${state_dir}/no-findings"
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -c 'source "$1"; opencode_review_require_submission' _ "${guard}"
+  [ "${status}" -eq 0 ]
+
+  # shellcheck disable=SC2016
+  grep -q '"$HOME/.config/opencode/review-state/no-findings": allow' "${orchestrator}"
 }
 
 @test "initial submission revalidates the PR head immediately before the POST" {
@@ -266,6 +320,8 @@ EOF
   grep -q 'opencode_review_enforce_version_floor' "${action_yml}"
   grep -q 'opencode_review_strip_config_env' "${action_yml}"
   grep -q 'opencode_review_isolate_data_dir' "${action_yml}"
+  grep -q 'opencode_review_prepare_dispatch' "${action_yml}"
+  grep -q 'opencode_review_require_submission' "${action_yml}"
   # shellcheck disable=SC2016
   grep -q 'REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}' "${action_yml}"
 }

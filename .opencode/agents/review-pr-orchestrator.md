@@ -14,6 +14,7 @@ permission:
     "*": deny
     "$HOME/.config/opencode/review-state/initial.json": allow
     "$HOME/.config/opencode/review-state/update.json": allow
+    "$HOME/.config/opencode/review-state/no-findings": allow
   glob: allow
   grep: allow
   bash:
@@ -42,4 +43,4 @@ permission:
     code-simplifier: allow
 ---
 
-Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
+Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the fixed review-state payloads and no-findings marker, and the approved reviewer agents.

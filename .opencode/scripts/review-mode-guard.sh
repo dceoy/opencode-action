@@ -84,3 +84,58 @@ opencode_review_isolate_data_dir() {
   chmod 700 "${data_dir}"
   export XDG_DATA_HOME="${data_dir}"
 }
+
+# The GitHub handler sends PROMPT through the ordinary prompt API and omits the
+# agent field, so slash commands and command frontmatter are not applied there.
+# Expand the trusted command text ourselves and select its constrained agent
+# through trusted inline config after caller-provided config has been removed.
+opencode_review_prepare_dispatch() {
+  local action_path="${1:-}" prompt="${2:-}" event_comment="${3:-}"
+  local arguments="" command_file command_text
+
+  if [[ "${prompt}" =~ ^/review-pr([[:space:]]+(.*))?$ ]]; then
+    arguments="${BASH_REMATCH[2]:-}"
+  elif [[ "${event_comment}" =~ /review-pr([[:space:]]+(.*))?$ ]]; then
+    arguments="${BASH_REMATCH[2]:-}"
+  fi
+
+  command_file="${action_path}/.opencode/commands/review-pr.md"
+  [[ -f "${command_file}" ]] || {
+    echo "::error::Trusted review command is unavailable." >&2
+    return 1
+  }
+  command_text="$(<"${command_file}")"
+  command_text="${command_text//\$ARGUMENTS/}"
+  if [[ -n "${arguments}" ]]; then
+    command_text+=$'\n\nRequested review aspects: '
+    command_text+="${arguments}"
+  fi
+
+  export OPENCODE_CONFIG_CONTENT='{"default_agent":"review-pr-orchestrator"}'
+  export PROMPT="${command_text}"
+}
+
+# A successful process exit is insufficient in review-only mode: the GitHub
+# handler can post an ordinary issue comment even when structured submission
+# never happened. Require the constrained helper's review ID or the command's
+# explicit no-findings marker.
+opencode_review_require_submission() {
+  local state_dir="${HOME}/.config/opencode/review-state"
+  local review_id="" no_findings=""
+
+  if [[ -f "${state_dir}/review_id" ]]; then
+    review_id="$(<"${state_dir}/review_id")"
+  fi
+  if [[ "${review_id}" =~ ^[1-9][0-9]*$ ]]; then
+    return 0
+  fi
+  if [[ -f "${state_dir}/no-findings" ]]; then
+    no_findings="$(<"${state_dir}/no-findings")"
+  fi
+  if [[ "${no_findings}" == "No noteworthy issues found." ]]; then
+    return 0
+  fi
+
+  echo "::error::Review-only mode completed without a structured review ID or trusted no-findings marker." >&2
+  return 1
+}

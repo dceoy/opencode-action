@@ -42,7 +42,7 @@ inputs:
     default: latest
   enable-toolkit:
     required: false
-    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
+    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved. Review-only mode always installs a fresh copy.
     default: 'true'
   timeout-minutes:
     required: false
@@ -117,7 +117,7 @@ runs:
         source "${ACTION_PATH}/.opencode/scripts/review-mode-guard.sh"
         opencode_review_enforce_version_floor "${OPENCODE_VERSION}"
     - name: Copy bundled OpenCode config
-      if: inputs.enable-toolkit == 'true'
+      if: inputs.enable-toolkit == 'true' || steps.review_mode.outputs.enabled == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -151,6 +151,7 @@ runs:
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         ACTION_PATH: ${{ github.action_path }}
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
+        EVENT_COMMENT: ${{ github.event.comment.body }}
         OPENCODE_DISABLE_PROJECT_CONFIG: ${{ steps.review_mode.outputs.enabled == 'true' && '1' || '' }}
       run: |
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
@@ -158,6 +159,7 @@ runs:
           source "${ACTION_PATH}/.opencode/scripts/review-mode-guard.sh"
           opencode_review_strip_config_env
           opencode_review_isolate_data_dir
+          opencode_review_prepare_dispatch "${ACTION_PATH}" "${PROMPT}" "${EVENT_COMMENT}"
         fi
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
@@ -183,4 +185,8 @@ runs:
             echo "::error::OpenCode failed with exit code ${opencode_status} for model '${MODEL:-unknown}'."
           fi
           exit "${opencode_status}"
+        fi
+
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          opencode_review_require_submission
         fi

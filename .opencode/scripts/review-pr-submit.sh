@@ -7,6 +7,7 @@ context_file="${state_dir}/context.json"
 initial_payload="${state_dir}/initial.json"
 update_payload="${state_dir}/update.json"
 review_id_file="${state_dir}/review_id"
+no_findings_file="${state_dir}/no-findings"
 
 load_token_lib() {
   local opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
@@ -49,7 +50,7 @@ operation="${1:-}"
 case "${operation}" in
   prepare)
     rm -rf "${state_dir}"
-    (umask 077; mkdir -p "${state_dir}"; : >"${context_file}"; : >"${initial_payload}"; : >"${update_payload}")
+    (umask 077; mkdir -p "${state_dir}"; : >"${context_file}"; : >"${initial_payload}"; : >"${update_payload}"; : >"${no_findings_file}")
     ;;
   submit-initial)
     load_token_lib

@@ -9,7 +9,7 @@ This is a strictly read-only repository review. Analyze and report only. Do not 
 
 Do not run repository-wide QA scripts, formatters, auto-fixing linters, generators, dependency installers, or anything that can create caches, reports, snapshots, lockfiles, coverage output, scan output, or configuration exports in the checkout.
 
-Every helper this command invokes — the read-only `gh` wrapper, the constrained submission helper, and the App-token resolver they source — lives only at its `${HOME}/.config/opencode/scripts/` path, installed there by the action before the reviewed repository is ever checked out. Never invoke any of them by a repository-relative path such as `.opencode/scripts/...`: the checkout under review is untrusted input, and a repository-relative path would let a malicious PR that edits or adds a same-named file substitute its own script for the trusted one. These helper paths and the two fixed review-state JSON files are the sole allow-listed external paths. The helpers use `opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"` for authentication.
+Every helper this command invokes — the read-only `gh` wrapper, the constrained submission helper, and the App-token resolver they source — lives only at its `${HOME}/.config/opencode/scripts/` path, installed there by the action before the reviewed repository is ever checked out. Never invoke any of them by a repository-relative path such as `.opencode/scripts/...`: the checkout under review is untrusted input, and a repository-relative path would let a malicious PR that edits or adds a same-named file substitute its own script for the trusted one. These helper paths, the fixed review-state JSON files, and the no-findings marker are the sole allow-listed external paths. The helpers use `opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"` for authentication.
 
 **Requested review aspects (optional):** "$ARGUMENTS"
 
@@ -60,9 +60,9 @@ Do not let a reviewer post to GitHub.
 
 Drop praise, nitpicks, style-only feedback, findings outside the changed-file list, and duplicates. Keep the most specific actionable finding for each root cause. Classify every remaining finding as inline when its file and head-side changed line can be anchored in the captured diff; adjust only to a nearby relevant changed line. Put genuine but unanchorable findings in `summary_only` with a short reason.
 
-If there are no findings, return exactly `No noteworthy issues found.` Do not post an empty review.
+If there are no findings, use the edit tool to write exactly `No noteworthy issues found.` to `$HOME/.config/opencode/review-state/no-findings`, then return that exact text. Do not post an empty review.
 
-For findings, the single `prepare` operation in section 1 has already created the empty payload files and pinned context. Do not run it again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
+For findings, the single `prepare` operation in section 1 has already created the empty payload files, the empty no-findings marker, and pinned context. Do not run it again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
 
 Every finding with a valid diff anchor must be included in the `comments` array and submitted as an inline review comment. Never return anchorable findings only as top-level assistant text. If structured submission fails, fail the run instead of emitting the findings as a top-level completion comment.
 

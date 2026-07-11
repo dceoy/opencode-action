@@ -8,7 +8,8 @@
       "$HOME/.config/opencode/scripts/review-pr-gh.sh": "allow",
       "$HOME/.config/opencode/review-state/initial.json": "allow",
       "$HOME/.config/opencode/review-state/update.json": "allow",
-      "$HOME/.config/opencode/review-state/context.json": "allow"
+      "$HOME/.config/opencode/review-state/context.json": "allow",
+      "$HOME/.config/opencode/review-state/no-findings": "allow"
     }
   }
 }
