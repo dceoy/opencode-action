@@ -9,17 +9,25 @@
   // of ask by default: the agent gets an immediate, non-interactive denial
   // it can adapt to rather than a silent hang.
   //
-  // One narrow exception: /review-pr sources the bundled App-token
-  // resolver from "${HOME}/.config/opencode/scripts/resolve-app-token.sh"
-  // (see .opencode/commands/review-pr.md), which the install step copies
-  // outside the checked-out repository into ~/.config/opencode. Rules are
-  // evaluated in order with the last match winning, so the catch-all deny
-  // stays first and this single script path is allow-listed after it;
-  // every other external path remains denied.
+  // Narrow exceptions: /review-pr invokes its worktree guard, read-only gh
+  // wrapper, and constrained submission helper (see
+  // .opencode/commands/review-pr.md), plus the bundled App-token resolver
+  // those two source, all from "${HOME}/.config/opencode/scripts/", which
+  // the install step copies outside the checked-out repository into
+  // ~/.config/opencode. Every one of these four scripts must be invoked
+  // only by this external, action-installed path — never by a
+  // repository-relative path — because the checkout under review is
+  // untrusted and could otherwise ship a same-named script of its own.
+  // Rules are evaluated in order with the last match winning, so the
+  // catch-all deny stays first and these script paths are allow-listed
+  // after it; every other external path remains denied.
   "permission": {
     "external_directory": {
       "*": "deny",
-      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow"
+      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow",
+      "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh": "allow",
+      "$HOME/.config/opencode/scripts/review-pr-submit.sh": "allow",
+      "$HOME/.config/opencode/scripts/review-pr-gh.sh": "allow"
     }
   }
 }
