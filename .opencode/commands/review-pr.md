@@ -62,7 +62,9 @@ Drop praise, nitpicks, style-only feedback, findings outside the changed-file li
 
 If there are no findings, return exactly `No noteworthy issues found.` Do not post an empty review.
 
-For findings, first run the fixed `prepare` operation. Then use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
+For findings, the single `prepare` operation in section 1 has already created the empty payload files and pinned context. Do not run it again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
+
+Every finding with a valid diff anchor must be included in the `comments` array and submitted as an inline review comment. Never return anchorable findings only as top-level assistant text. If structured submission fails, fail the run instead of emitting the findings as a top-level completion comment.
 
 When there are summary-only findings, the body begins `OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).` and lists them. Otherwise it begins `OpenCode PR Review: <N> inline finding(s).` Never use issue comments or `gh pr comment`.
 
@@ -79,6 +81,6 @@ After the single `prepare` in section 1, write the initial payload only to `$HOM
 
 You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the head commit from the same context, and updates only the review ID it recorded when the initial submission succeeded in this run. It validates the trusted event context, temporary payload, target commit, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
 
-Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, retry once only after converting the identified invalid anchors to summary-only; never lose a finding. If no inline anchors remain, return the concise markdown fallback instead of submitting an empty comments array.
+After successful inline submission, do not repeat findings in the final assistant output. Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, retry once only after converting the identified invalid anchors to summary-only; never lose a finding. If no inline anchors remain, return the concise markdown fallback instead of submitting an empty comments array.
 
 Do not clean, reset, restore, stash, commit, or push anything.
