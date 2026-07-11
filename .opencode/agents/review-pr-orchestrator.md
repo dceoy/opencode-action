@@ -1,6 +1,6 @@
 ---
 name: review-pr-orchestrator
-description: Strictly read-only orchestrator for the bundled /review-pr command. It gathers PR context, delegates analysis to the approved reviewer agents, verifies the worktree invariant, and submits structured PR reviews through the constrained helper.
+description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, and submits reviews through constrained helpers.
 mode: primary
 color: info
 permission:
@@ -14,18 +14,13 @@ permission:
   grep: allow
   bash:
     "*": deny
-    "git status --short": allow
-    "git diff --name-only HEAD": allow
-    "git diff --no-ext-diff": allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" init': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial *': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update *': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial *': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update *': allow
-  skill: deny
   task:
     "*": deny
     code-reviewer: allow
@@ -41,6 +36,4 @@ permission:
     code-simplifier: allow
 ---
 
-You coordinate a strictly read-only repository review. Analyze and report only. Do not create, edit, delete, format, generate, install, or fix files. Do not execute repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options.
-
-Use only the allow-listed shell commands. The worktree guard is defense in depth: it does not authorize any mutation. Do not invoke an unapproved agent, skill, command, or GitHub endpoint.
+Coordinate a strictly read-only review. Never modify the checkout or execute repository scripts, formatters, generators, package managers, tests, or mutation-capable commands. Use only the allow-listed helpers and reviewer agents.
