@@ -46,7 +46,7 @@ inputs:
     default: 'true'
   review-only:
     required: false
-    description: Set true only for a dedicated review-only workflow entrypoint whose prompt always invokes /review-pr. Requires enable-toolkit true and agent to be the default ('build') or 'review-pr-orchestrator', and requires prompt to explicitly invoke /review-pr; the run fails fast otherwise. Combined with enable-toolkit, this also disables loading project-level .opencode/ config and AGENTS.md from the checked-out repository, so a pull request cannot shadow the bundled toolkit's trusted agents, commands, or permissions with its own, and installs the toolkit into a freshly wiped ~/.config/opencode/ so no pre-existing global config can shadow it either. Leave false for mutation-capable workflows (for example /oc ...), which need the repository's own .opencode/ config and AGENTS.md to keep working. review-only does not, by itself, disable OpenCode's own automatic branch commit/push in opencode github run; see README for the current limitation.
+    description: Set true only for a dedicated review-only workflow entrypoint whose prompt always invokes /review-pr. Requires enable-toolkit true and agent to be the default ('build') or 'review-pr-orchestrator', and requires prompt to explicitly invoke /review-pr; the run fails fast otherwise. Combined with enable-toolkit, this also disables loading project-level .opencode/ config and AGENTS.md from the checked-out repository, so a pull request cannot shadow the bundled toolkit's trusted agents, commands, or permissions with its own, and installs the toolkit into a freshly wiped ~/.config/opencode/ so no pre-existing global config can shadow it either. Leave false for mutation-capable workflows (for example /oc ...), which need the repository's own .opencode/ config and AGENTS.md to keep working. In review-only mode the action runs plain 'opencode run' (never 'opencode github run'), so OpenCode's own automatic branch commit/push never executes; it also fails the job before OpenCode starts if the checkout is not pristine, and the review's repository, PR number, and target commit are all derived from the trusted GitHub Actions event context rather than any model-supplied value.
     default: 'false'
   timeout-minutes:
     required: false
@@ -138,6 +138,16 @@ runs:
           cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
           echo "Installed the bundled OpenCode config into ~/.config/opencode/, preserving pre-existing files (not review-only, so no destructive reset of persisted global config)"
         fi
+    - name: Enforce pristine checkout for review-only
+      if: inputs.review-only == 'true'
+      shell: bash -euo pipefail {0}
+      run: |
+        # Fail the whole job before OpenCode starts if the checkout is not
+        # pristine. review-only's read-only boundary assumes a clean tree; a
+        # pre-existing modification (for example persisted on a self-hosted
+        # runner) would otherwise be attributed to nothing and could be acted
+        # on by the CLI. The guard only inspects — it never mutates the tree.
+        bash "${HOME}/.config/opencode/scripts/review-pr-worktree-guard.sh" precheck
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
@@ -151,6 +161,7 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        REVIEW_ONLY: ${{ inputs.review-only }}
         OPENCODE_DISABLE_PROJECT_CONFIG: ${{ inputs.enable-toolkit == 'true' && inputs.review-only == 'true' && '1' || '' }}
       run: |
         output_file="$(mktemp)"
@@ -163,8 +174,24 @@ runs:
         else
           echo "::warning::No timeout command found (timeout/gtimeout); running OpenCode without an enforced timeout."
         fi
+        # `opencode github run` is the GitHub integration entrypoint: after the
+        # agent returns, it can commit and push a branch on the CLI's own
+        # initiative. That auto-commit/push is incompatible with a review-only
+        # run over an untrusted PR, and the CLI exposes no flag to suppress it.
+        # For review-only we therefore invoke plain `opencode run`, which has no
+        # branch-management behavior at all — it only runs the agent over the
+        # prompt (which invokes /review-pr) and returns. Mutation-capable
+        # workflows (review-only: false) keep using `opencode github run`
+        # unchanged.
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          opencode_cmd=(opencode run --model "${MODEL}")
+          [[ -n "${AGENT}" ]] && opencode_cmd+=(--agent "${AGENT}")
+          opencode_cmd+=(-- "${PROMPT}")
+        else
+          opencode_cmd=(opencode github run)
+        fi
         set +e
-        "${timeout_cmd[@]}" opencode github run 2>&1 | tee "${output_file}"
+        "${timeout_cmd[@]}" "${opencode_cmd[@]}" 2>&1 | tee "${output_file}"
         opencode_status="${PIPESTATUS[0]}"
         set -e
 

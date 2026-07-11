@@ -20,10 +20,10 @@ If `$ARGUMENTS` contains `simplify`, stop immediately and say: `/review-pr simpl
 Before any analysis, invoke exactly:
 
 ```bash
-bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" snapshot
+bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" init
 ```
 
-Keep its output as `WORKTREE_SNAPSHOT`. If it fails, stop unsuccessfully.
+This records, in a protected per-run state directory outside the checkout, an initial snapshot of the pristine worktree bound to this run's repository, PR number, head commit, and run identifiers, all read from the trusted GitHub Actions context. If it fails, stop unsuccessfully. You do not pass its output anywhere: every later `verify` and the submission helper recompute the same state-directory path from the trusted context themselves.
 
 Determine `PR_NUMBER` from `.pull_request.number` or `.issue.number` in `GITHUB_EVENT_PATH`; otherwise accept only `GITHUB_REF` matching `refs/pull/<positive number>/merge`. In PR mode, obtain metadata through the read-only `gh` wrapper, which best-effort prepares a candidate App token from `resolve-app-token.sh` before calling `gh` so the default `use-github-token: false` path does not fall back to a shallow local diff:
 
@@ -64,7 +64,7 @@ Launch only the explicitly permitted reviewer agents. For each, supply the captu
 Do not let a reviewer post to GitHub. After every reviewer completes, verify the invariant:
 
 ```bash
-bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify "$WORKTREE_SNAPSHOT"
+bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify
 ```
 
 On failure, do not submit a review and terminate unsuccessfully.
@@ -75,7 +75,7 @@ Drop praise, nitpicks, style-only feedback, findings outside the changed-file li
 
 If there are no findings, verify the invariant once more and return exactly `No noteworthy issues found.` Do not post an empty review.
 
-For findings, build temporary payloads outside the checkout only with the constrained helper. The initial payload must contain a nonempty `commit_id`, `event: "COMMENT"`, a nonempty body, and a nonempty inline `comments` array. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
+For findings, build temporary payloads outside the checkout only with the constrained helper. The helper fills in `commit_id` from the trusted head commit itself, so you never pass it; the initial payload it builds always contains that `commit_id`, `event: "COMMENT"`, a nonempty body, and a nonempty inline `comments` array. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
 
 When there are summary-only findings, the body begins `OpenCode PR Review: <N> inline finding(s), <M> summary-only finding(s).` and lists them. Otherwise it begins `OpenCode PR Review: <N> inline finding(s).` Never use issue comments or `gh pr comment`.
 
@@ -84,14 +84,14 @@ When there are summary-only findings, the body begins `OpenCode PR Review: <N> i
 Immediately before every GitHub write, verify the invariant. The only allowed payload and GitHub-write helpers are:
 
 ```bash
-bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial "$HEAD_OID" "$REVIEW_BODY" "$COMMENTS_JSON"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial "$REVIEW_BODY" "$COMMENTS_JSON"
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update "$UPDATED_REVIEW_BODY"
-bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_PAYLOAD"
-bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update "$GITHUB_REPOSITORY" "$PR_NUMBER" "$REVIEW_ID" "$REVIEW_UPDATE_PAYLOAD"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial "$REVIEW_PAYLOAD"
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update "$REVIEW_UPDATE_PAYLOAD"
 ```
 
-The helper validates the owner/repository name, positive PR and review IDs, temporary payload location and schema, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
+You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the head commit from the same context, and updates only the review ID it recorded when the initial submission succeeded in this run. Before it acquires any write-capable credential, it re-verifies the worktree invariant and the per-run state binding authoritatively, then validates the temporary payload location and schema, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
 
-Capture the returned review ID. Update that same review with final status and the run URL when available. If GitHub rejects inline anchors, retry once only after converting the identified invalid anchors to summary-only; never lose a finding. If no inline anchors remain, return the concise markdown fallback instead of submitting an empty comments array.
+Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, retry once only after converting the identified invalid anchors to summary-only; never lose a finding. If no inline anchors remain, return the concise markdown fallback instead of submitting an empty comments array.
 
 Verify the invariant immediately before successful return. On any guard failure, print no success output and return unsuccessfully. Do not clean, reset, restore, stash, commit, or push anything.

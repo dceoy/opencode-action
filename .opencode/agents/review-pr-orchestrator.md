@@ -13,8 +13,8 @@ permission:
     "git diff --no-ext-diff": allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" snapshot': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" init': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" verify': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial *': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update *': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial *': allow

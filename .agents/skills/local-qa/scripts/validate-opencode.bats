@@ -304,3 +304,60 @@ opencode_jsonc_json() {
     return 1
   }
 }
+
+@test "review-only runs plain 'opencode run' and never 'opencode github run'" {
+  local steps run_step_run
+
+  steps="$(yq -o=json '.runs.steps' "${action_yml}")"
+  run_step_run="$(jq -r '.[] | select(.name == "Run OpenCode") | .run // empty' <<<"${steps}")"
+
+  grep -qF 'REVIEW_ONLY' <<<"${run_step_run}" || {
+    echo "Run OpenCode step does not branch on REVIEW_ONLY"
+    return 1
+  }
+  grep -qE 'opencode_cmd=\(opencode run ' <<<"${run_step_run}" || {
+    echo "Run OpenCode step does not invoke plain 'opencode run' for review-only"
+    return 1
+  }
+  grep -qE 'opencode_cmd=\(opencode github run\)' <<<"${run_step_run}" || {
+    echo "Run OpenCode step no longer invokes 'opencode github run' for mutation-capable workflows"
+    return 1
+  }
+  # The literal 'opencode github run' must appear only inside the non-review-only
+  # branch, never as the review-only invocation.
+  grep -qE 'if \[\[ "\$\{REVIEW_ONLY\}" == "true" \]\]; then' <<<"${run_step_run}" || {
+    echo "Run OpenCode step does not guard the invocation on REVIEW_ONLY == true"
+    return 1
+  }
+}
+
+@test "action.yml enforces a pristine checkout before OpenCode for review-only" {
+  local steps names precheck_if precheck_run
+
+  steps="$(yq -o=json '.runs.steps' "${action_yml}")"
+  precheck_if="$(jq -r '.[] | select(.name == "Enforce pristine checkout for review-only") | .["if"] // empty' <<<"${steps}")"
+  precheck_run="$(jq -r '.[] | select(.name == "Enforce pristine checkout for review-only") | .run // empty' <<<"${steps}")"
+
+  [ -n "${precheck_run}" ] || {
+    echo "action.yml has no \"Enforce pristine checkout for review-only\" step"
+    return 1
+  }
+  [[ "${precheck_if}" == *"inputs.review-only == 'true'"* ]] || {
+    echo "precheck step does not run only when inputs.review-only == 'true' (got: '${precheck_if}')"
+    return 1
+  }
+  grep -qF 'review-pr-worktree-guard.sh" precheck' <<<"${precheck_run}" || {
+    echo "precheck step does not invoke the worktree guard precheck from its installed path"
+    return 1
+  }
+
+  # The precheck step must run before the Run OpenCode step.
+  names="$(jq -r '.[].name' <<<"${steps}")"
+  local precheck_line run_line
+  precheck_line="$(grep -n '^Enforce pristine checkout for review-only$' <<<"${names}" | cut -d: -f1)"
+  run_line="$(grep -n '^Run OpenCode$' <<<"${names}" | cut -d: -f1)"
+  [ "${precheck_line}" -lt "${run_line}" ] || {
+    echo "precheck step must precede the Run OpenCode step"
+    return 1
+  }
+}

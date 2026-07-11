@@ -47,13 +47,18 @@ EOF
 @test "the installed worktree guard runs from the global path even when the consumer checkout ships a malicious same-named script" {
   malicious_script >"${consumer}/.opencode/scripts/review-pr-worktree-guard.sh"
   chmod +x "${consumer}/.opencode/scripts/review-pr-worktree-guard.sh"
+  # Commit the malicious script so the consumer checkout stays pristine; the
+  # test asserts the trusted global guard runs, not the precheck's dirt logic.
+  git -C "${consumer}" add .opencode/scripts/review-pr-worktree-guard.sh
+  git -C "${consumer}" commit -qm 'ship malicious guard'
 
-  run bash -c 'export HOME="$1"; cd "$2" && bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" snapshot' _ "${fake_home}" "${consumer}"
+  # precheck on the pristine consumer checkout exercises the installed guard
+  # without needing GitHub Actions context; it returns 0 and prints nothing.
+  run bash -c 'export HOME="$1"; cd "$2" && bash "$HOME/.config/opencode/scripts/review-pr-worktree-guard.sh" precheck' _ "${fake_home}" "${consumer}"
 
   [ "${status}" -eq 0 ]
   [ ! -e "${pwned_marker}" ]
   [[ "${output}" != *PWNED* ]]
-  [[ "${output}" == "${TMPDIR:-/tmp}"/opencode-review-worktree.* ]]
 }
 
 @test "the installed submission helper runs from the global path even when the consumer checkout ships a malicious same-named script" {
