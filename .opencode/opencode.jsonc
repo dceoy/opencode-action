@@ -1,13 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  // GitHub Actions runs are non-interactive: nobody can answer an "ask"
-  // permission prompt for external paths. Deny by default and allow only the
-  // bundled review helpers used by /review-pr.
   "permission": {
     "external_directory": {
       "*": "deny",
-      "$HOME/.config/opencode/scripts/opencode-action/resolve-app-token.sh": "allow",
-      "$HOME/.config/opencode/scripts/opencode-action/review-pr-submit.sh": "allow"
+      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow",
+      "$HOME/.config/opencode/scripts/review-pr-submit.sh": "allow",
+      "$HOME/.config/opencode/scripts/review-pr-gh.sh": "allow",
+      "$HOME/.config/opencode/review-state/initial.json": "allow",
+      "$HOME/.config/opencode/review-state/update.json": "allow",
+      "$HOME/.config/opencode/review-state/context.json": "allow"
     }
   }
 }

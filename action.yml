@@ -94,21 +94,61 @@ runs:
       shell: bash -euo pipefail {0}
       run: >  # zizmor: ignore[github-env] fixed path, not attacker-controlled
         echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
+    - name: Detect review-only mode
+      id: review_mode
+      shell: bash -euo pipefail {0}
+      env:
+        PROMPT: ${{ inputs.prompt }}
+        EVENT_COMMENT: ${{ github.event.comment.body }}
+        ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
+      run: |
+        review_only=false
+        if [[ "${PROMPT}" =~ ^/review-pr([[:space:]].*)?$ || "${EVENT_COMMENT}" =~ (^|[[:space:]])/review-pr([[:space:]]|$) ]]; then
+          review_only=true
+        fi
+        if [[ "${review_only}" == "true" ]]; then
+          [[ "${ENABLE_TOOLKIT}" == "true" ]] || {
+            echo "::error::Review-only mode requires enable-toolkit: true."
+            exit 1
+          }
+          version="${OPENCODE_VERSION#v}"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]] || {
+            echo "::error::Review-only mode requires a semantic OpenCode version at or above 1.2.14 (got '${OPENCODE_VERSION}')."
+            exit 1
+          }
+          if [[ "$(printf '%s\n' "1.2.14" "${version}" | sort -V | head -n 1)" != "1.2.14" ]]; then
+            echo "::error::Review-only mode requires OpenCode 1.2.14 or newer (got '${OPENCODE_VERSION}')."
+            exit 1
+          fi
+        fi
+        echo "enabled=${review_only}" >> "${GITHUB_OUTPUT}"
     - name: Copy bundled OpenCode config
       if: inputs.enable-toolkit == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
+        REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
       run: |
-        mkdir -p "${HOME}/.config/opencode"
-        cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
-        helper_dir="${HOME}/.config/opencode/scripts/opencode-action"
-        rm -rf "${helper_dir}"
-        mkdir -p "${helper_dir}"
-        cp -f "${ACTION_PATH}/.opencode/scripts/resolve-app-token.sh" \
-          "${ACTION_PATH}/.opencode/scripts/review-pr-submit.sh" \
-          "${helper_dir}/"
-        echo "Copied bundled OpenCode config into ~/.config/opencode/"
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          rm -rf "${HOME}/.config/opencode"
+          mkdir -p "${HOME}/.config/opencode"
+          cp -r "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
+          if [[ -d "${HOME}/.opencode" ]]; then
+            find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
+          fi
+          echo "Installed fresh review-only OpenCode config"
+        else
+          mkdir -p "${HOME}/.config/opencode"
+          cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
+          helper_dir="${HOME}/.config/opencode/scripts/opencode-action"
+          rm -rf "${helper_dir}"
+          mkdir -p "${helper_dir}"
+          cp -f "${ACTION_PATH}/.opencode/scripts/resolve-app-token.sh" \
+            "${ACTION_PATH}/.opencode/scripts/review-pr-submit.sh" \
+            "${helper_dir}/"
+          echo "Copied bundled OpenCode config into ~/.config/opencode/"
+        fi
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
@@ -124,18 +164,29 @@ runs:
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         ACTION_PATH: ${{ github.action_path }}
         ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
+        REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
+        OPENCODE_DISABLE_PROJECT_CONFIG: ${{ steps.review_mode.outputs.enabled == 'true' && '1' || '' }}
       run: |
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          # Composite steps inherit caller env. Remove every explicit config
+          # override before constructing the action's trusted inline config.
+          unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT
+        fi
         # `opencode github run` sends PROMPT verbatim and does not forward the
         # action's agent input. Resolve Markdown slash commands and apply the
         # effective primary agent through the final inline config layer.
         # shellcheck source=scripts/expand-command.sh
         source "${ACTION_PATH}/scripts/expand-command.sh"
         opencode_effective_prompt "${PROMPT}" "${MENTIONS}" "${GITHUB_EVENT_PATH:-}"
-        command_dirs=(
-          "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
-          "${HOME}/.config/opencode/commands"
-        )
-        if [[ "${ENABLE_TOOLKIT}" == "true" ]]; then
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          command_dirs=("${ACTION_PATH}/.opencode/commands")
+        else
+          command_dirs=(
+            "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
+            "${HOME}/.config/opencode/commands"
+          )
+        fi
+        if [[ "${ENABLE_TOOLKIT}" == "true" && "${REVIEW_ONLY}" != "true" ]]; then
           command_dirs+=("${ACTION_PATH}/.opencode/commands")
         fi
         opencode_resolve_prompt_and_agent \

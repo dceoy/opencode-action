@@ -52,14 +52,14 @@ Then comment `/opencode` or `/oc` on an issue, pull request, or pull request rev
 | Input              | Required | Default                   | Description                                                                                                                                                    |
 | ------------------ | -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `model`            | Yes      |                           | Model to use, in `provider/model` format.                                                                                                                      |
-| `agent`            | No       | `build`                   | OpenCode primary agent applied as `default_agent`; a slash command's frontmatter agent takes precedence.                                                      |
+| `agent`            | No       | `build`                   | OpenCode primary agent to use. Falls back to `default_agent` from config or `build` if not found.                                                              |
 | `share`            | No       | `false`                   | Whether to share the OpenCode session.                                                                                                                         |
-| `prompt`           | No       |                           | Custom prompt. A leading Markdown slash command is expanded before `opencode github run`.                                                                      |
+| `prompt`           | No       |                           | Custom prompt to override the default prompt.                                                                                                                  |
 | `use-github-token` | No       | `false`                   | Use `GITHUB_TOKEN` directly instead of OpenCode App token exchange.                                                                                            |
 | `mentions`         | No       | `/opencode,/oc`           | Comma-separated trigger phrases, matched case-insensitively.                                                                                                   |
 | `variant`          | No       |                           | Provider-specific model variant for reasoning effort, such as `high`, `max`, or `minimal`.                                                                     |
 | `oidc-base-url`    | No       | `https://api.opencode.ai` | Base URL for OIDC token exchange. Override only for a custom GitHub App installation.                                                                          |
-| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.3`; `latest` resolves the latest upstream release.                                                                  |
+| `version`          | No       | `latest`                  | OpenCode version to install, such as `v1.2.14`; `latest` resolves the latest upstream release. `/review-pr` requires version 1.2.14 or newer.                  |
 | `enable-toolkit`   | No       | `true`                    | Install the action's bundled `.opencode/` agents, commands, and skills into `~/.config/opencode` (global config) before running. Existing files are preserved. |
 | `timeout-minutes`  | No       | `60`                      | Maximum minutes to let `opencode github run` execute before it is killed (uses `timeout`/`gtimeout` when available; otherwise runs without enforced timeout).  |
 
@@ -81,41 +81,38 @@ Set the API key required by the selected model provider, for example:
 
 When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workflow enough permissions for the requested work.
 
-## Slash-command dispatch
-
-`opencode github run` currently sends the prompt verbatim and does not forward the action's `agent` input. The action therefore expands a leading Markdown command before invoking OpenCode and applies the effective agent as `default_agent`.
-
-Command lookup uses this precedence:
-
-1. the checked-out repository's `.opencode/commands/`;
-2. the user's installed `~/.config/opencode/commands/`;
-3. the action's bundled commands as a fallback when `enable-toolkit: true`.
-
-A command's frontmatter `agent:` overrides the action input only when it selects a primary agent. `$ARGUMENTS` is expanded literally. Commands using `model:`, `subtask:`, positional placeholders, shell template blocks, or config-defined command entries are rejected or left to native OpenCode handling rather than partially emulated.
-
 ## Pull Request Reviews
 
-The bundled `/review-pr` command pins the PR head SHA before analyzing the diff and refuses to publish a conclusion if the head moves. Structured inline reviews are submitted through a helper that:
+The bundled `/review-pr` command submits a GitHub pull request review through `gh api`. It uses inline review comments for every finding that can be safely anchored to the PR diff, and includes only unanchorable findings in the review body as summary-only fallback items when at least one inline comment is submitted. If no finding can be anchored inline, `/review-pr` returns a top-level markdown fallback instead. When there are no summary-only findings, the review body is a single line (`OpenCode PR Review: <N> inline finding(s).`) with no empty "Summary-only findings" section.
 
-- derives the repository and PR number from the GitHub Actions context;
-- accepts only `commit_id`, `body`, and a non-empty comments array with line-based anchors;
-- injects `event: COMMENT`;
-- verifies the review-author token;
-- rechecks the live PR head immediately before the review POST.
+A successful structured review run produces one GitHub review summary (with its inline comments), which `/review-pr` updates in place with the run link. `/review-pr` never calls `gh pr comment` or the issue comment API itself. It may still return a short final assistant message after submitting the review; `opencode github run` posts that as a separate top-level completion comment, so a run can produce the review plus at most one additional completion comment — not necessarily exactly one top-level artifact.
 
-The command does not retarget findings to a newer commit and does not update the submitted review body after posting.
+The bundled toolkit ships an `external_directory` permission in `.opencode/opencode.jsonc` (copied into `~/.config/opencode/` with the rest of the toolkit) that denies by default, so a stray attempt to read outside the checked-out repository, such as inspecting `/opt/pipx/logs/*` after a failed tool install, is denied immediately instead of blocking on the default "ask" prompt, which nothing can answer in a non-interactive GitHub Actions run and would otherwise hang until `timeout-minutes` kills it. The one narrow exception is `~/.config/opencode/scripts/resolve-app-token.sh` itself: `/review-pr` sources that bundled script from outside the checked-out repository to resolve the OpenCode App token, so it is individually allow-listed ahead of the catch-all deny rule; no other external path is permitted.
 
 ### Review author and the OpenCode App token
 
-When the default OpenCode GitHub App flow is used (`use-github-token: false`), `/review-pr` resolves candidate App tokens from git credential configuration and verifies the author identity with a throwaway pending review before the structured write. If none verifies as `opencode-agent[bot]`, the review fails instead of silently using another identity. With `use-github-token: true`, the workflow token is an explicit fallback.
+When the default OpenCode GitHub App flow is used (`use-github-token: false`), `/review-pr` resolves every _candidate_ App token from git credential configuration (checking the local `http.https://github.com/.extraheader` key, `git config --get-urlmatch`, and `--get-regexp`/`--show-origin --get-regexp` across all config scopes to also cover includeIf/global-style credential files, matching only keys whose URL host is exactly `github.com`). None of these candidates is trusted on format alone: an `actions/checkout`-persisted `GITHUB_TOKEN` credential or a PAT can be written to the exact same git-config key in the exact same `x-access-token:<token>` basic-auth shape as the real OpenCode App token, and a workflow can legitimately have both that checkout-persisted credential at the highest-priority key and a real OpenCode App token from a lower-priority source. So before any structured review write, `/review-pr` tries each candidate in order, verifying it by creating a throwaway pending PR review with it, checking the `user.login` on the response, and immediately deleting that pending review regardless of the outcome. The search stops at, and exports, the first candidate that verifies as `opencode-agent[bot]`; an earlier unverified candidate does not stop it from trying later ones. Every structured review submission, review-body update, and anchor-validation retry re-resolves and re-verifies immediately beforehand.
+
+**Limitation:** GitHub does not expose a read-only "whoami" endpoint for GitHub App installation tokens — `GET /user` requires user-to-server auth and returns 403 for every installation token alike, so it cannot distinguish the OpenCode App token from the workflow's own `GITHUB_TOKEN` or a PAT-backed credential. The pending-review probe above is the safest available alternative: a pending review is never visible to anyone but its own author until submitted, so a failed or mismatched check never publishes anything to the PR, but creating and deleting the probe are still real API writes, not a true read-only check.
+
+**If no App token can be verified as `opencode-agent[bot]` while `use-github-token` is `false`, `/review-pr` fails the run instead of submitting the review.** It never silently falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, or to an unverified candidate, for a structured review submission, because either could make the review appear under the wrong identity instead of `opencode-agent[bot]`.
+
+If the workflow explicitly opts into `use-github-token: true` and no candidate App token verifies, this is intentional: `/review-pr` falls back to the workflow's `GH_TOKEN`/`GITHUB_TOKEN`, and direct review submissions are expected to appear as `github-actions[bot]` in that case. A verified `opencode-agent[bot]` candidate still takes precedence over that fallback when one is found — see the exact precedence rules below.
+
+**Exact credential precedence for every structured review write, regardless of `use-github-token`:**
+
+1. Every resolved candidate App token is tried in order; the first one that verifies as `opencode-agent[bot]` always wins, is exported, and is used for that write. This applies even when `use-github-token: true`, so a real App token still takes precedence over the explicit workflow token when one is available and verifies.
+2. Only when **no** candidate verifies does `use-github-token` decide the outcome: `true` falls back to the caller's original `GH_TOKEN`/`GITHUB_TOKEN`, unmodified; `false` fails the run.
+
+That fallback is safe because the best-effort read helper (`opencode_prepare_gh_token`, used for `gh pr view`/`gh pr diff`) is a no-op whenever `use-github-token: true` — it never exports an unverified git-config candidate over the caller's own token, so there is nothing to overwrite the explicit workflow token with before the write gate runs.
 
 Workflows that invoke `/review-pr` must provide:
 
-- `pull-requests: write` permission;
-- `GH_TOKEN` or `GITHUB_TOKEN` for GitHub reads and the explicit workflow-token fallback;
-- a valid model-provider API key.
+- `pull-requests: write` permission
+- `GH_TOKEN: ${{ github.token }}` or `GITHUB_TOKEN: ${{ github.token }}` for `gh pr diff`, `gh pr view`, and `gh api` review submission when using `use-github-token: true`; with the default App-token flow, `/review-pr` requires an App token that verifies as `opencode-agent[bot]` for `gh api` review submission and fails fast if none is available
+- A valid API key for the selected model provider with available credits or quota
 
-Example:
+Example OpenCode step:
 
 ```yaml
 - name: Run OpenCode review
@@ -129,9 +126,11 @@ Example:
 
 ### Review commands
 
+The bundled toolkit combines Claude Code Action-style core reviewers with `pr-review-toolkit` specialty agents. Use `/review-pr` with any of the following aspect keywords:
+
 | Command                           | What runs                                                                                                                                                                                                                                                                                                               |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/review-pr` or `/review-pr all`  | Core reviewers plus applicable specialty agents; excludes `code-simplifier`.                                                                                                                                                                                                                                          |
+| `/review-pr` or `/review-pr all`  | Core reviewers (`code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, `code-reviewer`) plus specialty agents (`pr-test-analyzer`, `silent-failure-hunter`, `comment-analyzer`, `type-design-analyzer`) when triggered by diff content |
 | `/review-pr security performance` | `security-code-reviewer`, `performance-reviewer`                                                                                                                                                                                                                                                                        |
 | `/review-pr tests docs`           | `test-coverage-reviewer`, `pr-test-analyzer`, `documentation-accuracy-reviewer`                                                                                                                                                                                                                                         |
 | `/review-pr code`                 | `code-reviewer`, `code-quality-reviewer`                                                                                                                                                                                                                                                                                |
@@ -141,9 +140,25 @@ Example:
 | `/review-pr errors`               | `silent-failure-hunter`                                                                                                                                                                                                                                                                                                 |
 | `/review-pr comments`             | `comment-analyzer`                                                                                                                                                                                                                                                                                                      |
 | `/review-pr types`                | `type-design-analyzer`                                                                                                                                                                                                                                                                                                  |
-| `/review-pr simplify`             | `code-simplifier` — returns behavior-preserving simplification proposals as review suggestions; never edits files.                                                                                                                                                                                                      |
+| `/review-pr simplify`             | `code-simplifier` — read-only, behavior-preserving simplification proposals; never modifies files                                                                                                                                                                                                                       |
 
-Findings are normalized, deduplicated, and validated against the pinned diff. Diff-anchorable findings are posted as inline review comments. Material findings without safe anchors remain in the review body or are returned as a top-level fallback when no inline comment can be submitted.
+#### Core reviewers (Claude Code Action-compatible)
+
+- **`code-quality-reviewer`** — general quality, maintainability, edge cases, robustness, type safety
+- **`test-coverage-reviewer`** — missing critical test scenarios, brittle tests, error coverage gaps
+- **`documentation-accuracy-reviewer`** — README, API docs, docstrings, examples vs. implementation
+
+#### Specialty reviewers (pr-review-toolkit style)
+
+- **`code-reviewer`** — project-guideline compliance (AGENTS.md), bugs, and quality
+- **`performance-reviewer`** — algorithmic complexity, N+1, resource leaks
+- **`security-code-reviewer`** — trust boundaries, injection, secrets, auth/authz
+- **`pr-test-analyzer`** — behavioral test coverage and critical coverage gaps
+- **`silent-failure-hunter`** — silent failures, broad catch blocks, fallback logic
+- **`comment-analyzer`** — comment accuracy, completeness, and comment rot
+- **`type-design-analyzer`** — type invariants, encapsulation, and design quality
+
+Findings are normalized, deduplicated across agents, and validated against the PR diff before being posted. Diff-anchorable findings are submitted as GitHub inline review comments. When inline comments are submitted, findings that cannot be safely anchored remain in the GitHub review body with an explicit fallback reason. When no inline anchors are available, the command returns a top-level fallback response instead.
 
 ## Examples
 
