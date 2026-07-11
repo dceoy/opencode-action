@@ -2,70 +2,66 @@
 set -euo pipefail
 
 fail() { echo "::error::$*" >&2; exit 1; }
+state_dir="${HOME}/.config/opencode/review-state"
+initial_payload="${state_dir}/initial.json"
+update_payload="${state_dir}/update.json"
+review_id_file="${state_dir}/review_id"
+
+load_token_lib() {
+  local token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
+  [[ -f "${token_lib}" ]] || fail "OpenCode App token resolver is unavailable."
+  # shellcheck source=/dev/null
+  source "${token_lib}"
+}
 
 trusted_context() {
   repo="${GITHUB_REPOSITORY:-}"
   event_path="${GITHUB_EVENT_PATH:-}"
   [[ "${repo}" =~ ^[^/]+/[^/]+$ && -f "${event_path}" ]] || return 1
   pr_number="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
+  [[ "${pr_number}" =~ ^[1-9][0-9]*$ ]] || return 1
   head_sha="$(jq -r '.pull_request.head.sha // empty' "${event_path}")"
-  [[ "${pr_number}" =~ ^[1-9][0-9]*$ && "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]]
-}
-
-state_file() {
-  local root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-  [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[0-9]+$ ]] || return 1
-  printf '%s/opencode-review-id.%s.%s' "${root}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}"
-}
-
-load_token() {
-  local token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
-  [[ -f "${token_lib}" ]] || fail "OpenCode App token resolver is unavailable."
-  source "${token_lib}"
-  opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
+  if [[ ! "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
+    load_token_lib
+    opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
+    head_sha="$(gh pr view "${pr_number}" --json headRefOid --jq .headRefOid)"
+  fi
+  [[ "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]]
 }
 
 operation="${1:-}"
+[[ "$#" -eq 1 ]] || fail "Review helper operations take no arguments."
+
 case "${operation}" in
-  build-initial)
-    [[ "$#" -eq 3 ]] || fail "Invalid initial payload arguments."
-    trusted_context || fail "Trusted pull request context is unavailable."
-    payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
-    chmod 600 "${payload}"
-    jq -n --arg commit_id "${head_sha}" --arg body "$2" --argjson comments "$3" \
-      '{commit_id: $commit_id, event: "COMMENT", body: $body, comments: $comments}' >"${payload}"
-    jq -e '.body != "" and (.comments | type == "array" and length > 0)' "${payload}" >/dev/null ||
-      fail "Invalid initial review payload."
-    printf '%s\n' "${payload}"
-    ;;
-  build-update)
-    [[ "$#" -eq 2 && -n "$2" ]] || fail "Invalid update payload arguments."
-    payload="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review-update.XXXXXX.json")"
-    chmod 600 "${payload}"
-    jq -n --arg body "$2" '{body: $body}' >"${payload}"
-    printf '%s\n' "${payload}"
+  prepare)
+    rm -rf "${state_dir}"
+    (umask 077; mkdir -p "${state_dir}"; : >"${initial_payload}"; : >"${update_payload}")
     ;;
   submit-initial)
-    [[ "$#" -eq 2 && -f "$2" ]] || fail "Invalid initial submission arguments."
     trusted_context || fail "Trusted pull request context is unavailable."
-    [[ "$(jq -r '.commit_id' "$2")" == "${head_sha}" ]] || fail "Payload head SHA mismatch."
-    load_token
-    response="$(gh api --method POST "repos/${repo}/pulls/${pr_number}/reviews" --input "$2")"
+    jq -e 'keys == ["body", "comments"] and (.body | type == "string" and length > 0) and (.comments | type == "array" and length > 0)' "${initial_payload}" >/dev/null ||
+      fail "Invalid initial review payload."
+    request="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
+    trap 'rm -f "${request}"' EXIT
+    jq --arg commit_id "${head_sha}" '. + {commit_id: $commit_id, event: "COMMENT"}' "${initial_payload}" >"${request}"
+    load_token_lib
+    opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
+    response="$(gh api --method POST "repos/${repo}/pulls/${pr_number}/reviews" --input "${request}")"
     review_id="$(jq -r '.id // empty' <<<"${response}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Review ID was not returned."
-    file="$(state_file)" || fail "Workflow run context is unavailable."
-    (umask 077; printf '%s' "${review_id}" >"${file}")
+    printf '%s' "${review_id}" >"${review_id_file}"
     printf '%s\n' "${response}"
     ;;
   update)
-    [[ "$#" -eq 2 && -f "$2" ]] || fail "Invalid update arguments."
     trusted_context || fail "Trusted pull request context is unavailable."
-    file="$(state_file)" || fail "Workflow run context is unavailable."
-    [[ -f "${file}" ]] || fail "This run has no recorded review ID."
-    review_id="$(cat "${file}")"
+    jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" >/dev/null ||
+      fail "Invalid review update payload."
+    [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
+    review_id="$(cat "${review_id_file}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Recorded review ID is invalid."
-    load_token
-    gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "$2"
+    load_token_lib
+    opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
+    gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}"
     ;;
   *) fail "Unsupported review submission operation." ;;
 esac
