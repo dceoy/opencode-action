@@ -1,30 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-case "${1:-}" in
+fail() { echo "::error::$*" >&2; exit 1; }
+
+load_read_token() {
+  local token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
+  if [[ -f "${token_lib}" ]]; then
+    # shellcheck source=/dev/null
+    source "${token_lib}"
+    opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
+  fi
+}
+
+pr_number() {
+  local event_path="${GITHUB_EVENT_PATH:-}" number
+  [[ -f "${event_path}" ]] || return 1
+  number="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
+  [[ "${number}" =~ ^[1-9][0-9]*$ ]] || return 1
+  printf '%s' "${number}"
+}
+
+operation="${1:-}"
+[[ "$#" -eq 1 ]] || fail "Review helper operations take no arguments."
+number="$(pr_number)" || fail "Trusted pull request number is unavailable."
+load_read_token
+
+case "${operation}" in
   context)
-    [[ "$#" -eq 1 ]]
     repo="${GITHUB_REPOSITORY:-}"
+    [[ "${repo}" =~ ^[^/]+/[^/]+$ ]] || fail "Trusted repository is unavailable."
     event_path="${GITHUB_EVENT_PATH:-}"
-    [[ "${repo}" =~ ^[^/]+/[^/]+$ && -f "${event_path}" ]]
-    jq -e -n \
-      --arg repository "${repo}" \
-      --arg pr_number "$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")" \
-      --arg head_sha "$(jq -r '.pull_request.head.sha // empty' "${event_path}")" \
-      '($pr_number | test("^[1-9][0-9]*$")) and ($head_sha | test("^[0-9a-fA-F]{7,64}$")) |
-       {repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}'
-    ;;
-  pr)
-    shift
-    token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
-    if [[ -f "${token_lib}" ]]; then
-      source "${token_lib}"
-      opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
+    head_sha="$(jq -r '.pull_request.head.sha // empty' "${event_path}")"
+    if [[ ! "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]]; then
+      head_sha="$(gh pr view "${number}" --json headRefOid --jq .headRefOid)"
     fi
-    exec gh pr "$@"
+    [[ "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]] || fail "Trusted PR head SHA is unavailable."
+    jq -n --arg repository "${repo}" --arg pr_number "${number}" --arg head_sha "${head_sha}"       '{repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}'
     ;;
-  *)
-    echo "::error::Unsupported review-pr GitHub read operation." >&2
-    exit 2
+  metadata)
+    exec gh pr view "${number}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
     ;;
+  diff)
+    exec gh pr diff "${number}"
+    ;;
+  *) fail "Unsupported review-pr GitHub read operation." ;;
 esac
