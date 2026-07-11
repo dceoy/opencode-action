@@ -23,14 +23,16 @@ event_pr_number() {
 }
 
 read_context() {
+  local pinned_repo pinned_number pinned_head current_head
   [[ -s "${context_file}" ]] || fail "Pinned review context is unavailable."
-  repo="$(jq -r '.repository' "${context_file}")"
-  number="$(jq -r '.pr_number' "${context_file}")"
-  head_sha="$(jq -r '.head_sha' "${context_file}")"
-  [[ "${repo}" == "${GITHUB_REPOSITORY:-}" ]] || fail "Pinned repository no longer matches the event."
-  [[ "${number}" == "$(event_pr_number)" ]] || fail "Pinned PR number no longer matches the event."
-  current_head="$(gh pr view "${number}" --json headRefOid --jq .headRefOid)"
-  [[ "${current_head}" == "${head_sha}" ]] || fail "PR head changed after review context was pinned."
+  pinned_repo="$(jq -r '.repository' "${context_file}")"
+  pinned_number="$(jq -r '.pr_number' "${context_file}")"
+  pinned_head="$(jq -r '.head_sha' "${context_file}")"
+  [[ "${pinned_repo}" == "${GITHUB_REPOSITORY:-}" ]] || fail "Pinned repository no longer matches the event."
+  [[ "${pinned_number}" == "$(event_pr_number)" ]] || fail "Pinned PR number no longer matches the event."
+  current_head="$(gh pr view "${pinned_number}" --json headRefOid --jq .headRefOid)"
+  [[ "${current_head}" == "${pinned_head}" ]] || fail "PR head changed after review context was pinned."
+  printf '%s\t%s\t%s\n' "${pinned_repo}" "${pinned_number}" "${pinned_head}"
 }
 
 operation="${1:-}"
@@ -55,11 +57,11 @@ case "${operation}" in
     cat "${context_file}"
     ;;
   metadata)
-    read_context
+    IFS=$'\t' read -r _ number _ < <(read_context)
     exec gh pr view "${number}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
     ;;
   diff)
-    read_context
+    IFS=$'\t' read -r _ number _ < <(read_context)
     exec gh pr diff "${number}"
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
