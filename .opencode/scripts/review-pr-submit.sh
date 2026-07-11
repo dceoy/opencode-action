@@ -30,6 +30,19 @@ trusted_context() {
   printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
 }
 
+# Revalidate the live PR head against the pinned SHA immediately before a
+# review write. trusted_context already checks the head, but the token
+# identity verification that runs between that check and the actual
+# POST/PUT makes network calls and takes time, so the head is re-read here
+# to close that TOCTOU window as tightly as the GitHub API allows.
+verify_head_unmoved() {
+  local pr_number="${1:-}" head_sha="${2:-}" current_head
+  current_head="$(gh pr view "${pr_number}" --json headRefOid --jq .headRefOid)" ||
+    fail "Unable to revalidate the PR head immediately before review submission."
+  [[ "${current_head}" == "${head_sha}" ]] ||
+    fail "PR head changed immediately before review submission."
+}
+
 operation="${1:-}"
 [[ "$#" -eq 1 ]] || fail "Review helper operations take no arguments."
 
@@ -49,6 +62,7 @@ case "${operation}" in
     trap 'rm -f "${request}"' EXIT
     jq --arg commit_id "${head_sha}" '. + {commit_id: $commit_id, event: "COMMENT"}' "${initial_payload}" >"${request}"
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
+    verify_head_unmoved "${pr_number}" "${head_sha}"
     response="$(gh api --method POST "repos/${repo}/pulls/${pr_number}/reviews" --input "${request}")"
     review_id="$(jq -r '.id // empty' <<<"${response}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Review ID was not returned."
@@ -59,13 +73,14 @@ case "${operation}" in
     load_token_lib
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
     context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
-    IFS=$'\t' read -r repo pr_number _ <<<"${context}"
+    IFS=$'\t' read -r repo pr_number head_sha <<<"${context}"
     jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" >/dev/null ||
       fail "Invalid review update payload."
     [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
     review_id="$(cat "${review_id_file}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Recorded review ID is invalid."
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
+    verify_head_unmoved "${pr_number}" "${head_sha}"
     gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}"
     ;;
   *) fail "Unsupported review submission operation." ;;

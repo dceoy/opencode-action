@@ -106,6 +106,16 @@ runs:
           review_only=true
         fi
         echo "enabled=${review_only}" >> "${GITHUB_OUTPUT}"
+    - name: Enforce review-only OpenCode version floor
+      if: steps.review_mode.outputs.enabled == 'true'
+      shell: bash -euo pipefail {0}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
+      run: |
+        # shellcheck source=.opencode/scripts/review-mode-guard.sh
+        source "${ACTION_PATH}/.opencode/scripts/review-mode-guard.sh"
+        opencode_review_enforce_version_floor "${OPENCODE_VERSION}"
     - name: Copy bundled OpenCode config
       if: inputs.enable-toolkit == 'true'
       shell: bash -euo pipefail {0}
@@ -139,8 +149,15 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        ACTION_PATH: ${{ github.action_path }}
+        REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
         OPENCODE_DISABLE_PROJECT_CONFIG: ${{ steps.review_mode.outputs.enabled == 'true' && '1' || '' }}
       run: |
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          # shellcheck source=.opencode/scripts/review-mode-guard.sh
+          source "${ACTION_PATH}/.opencode/scripts/review-mode-guard.sh"
+          opencode_review_strip_config_env
+        fi
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
         timeout_cmd=()
