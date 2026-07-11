@@ -232,6 +232,20 @@ EOF
   [[ "${output}" == *"Ignoring caller-provided OPENCODE_CONFIG_CONTENT in review-only mode"* ]]
 }
 
+@test "review mode guard strips caller-controlled XDG_DATA_HOME" {
+  guard="${repo_root}/.opencode/scripts/review-mode-guard.sh"
+
+  run bash -euo pipefail -c '
+    source "$1"
+    export XDG_DATA_HOME=/tmp/evil-data
+    opencode_review_strip_config_env
+    [[ -z "${XDG_DATA_HOME+x}" ]]
+  ' _ "${guard}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"Ignoring caller-provided XDG_DATA_HOME in review-only mode"* ]]
+}
+
 @test "review mode guard enforces the OpenCode version floor and fails closed" {
   guard="${repo_root}/.opencode/scripts/review-mode-guard.sh"
 
@@ -251,6 +265,7 @@ EOF
   grep -q 'review-mode-guard.sh' "${action_yml}"
   grep -q 'opencode_review_enforce_version_floor' "${action_yml}"
   grep -q 'opencode_review_strip_config_env' "${action_yml}"
+  grep -q 'opencode_review_isolate_data_dir' "${action_yml}"
   # shellcheck disable=SC2016
   grep -q 'REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}' "${action_yml}"
 }

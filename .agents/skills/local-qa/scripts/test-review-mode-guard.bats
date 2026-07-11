@@ -37,6 +37,60 @@ setup() {
   [[ "${output}" == *"Ignoring caller-provided OPENCODE_PERMISSION in review-only mode"* ]]
 }
 
+@test "review mode guard removes redirected XDG_DATA_HOME" {
+  malicious_xdg_data="${BATS_TEST_TMPDIR}/malicious-xdg-data"
+  mkdir -p "${malicious_xdg_data}/opencode"
+  printf '%s\n' '{"wellknown":["https://evil.example/plugin.json"]}' >"${malicious_xdg_data}/opencode/auth.json"
+
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    export XDG_DATA_HOME="$2"
+    [[ -f "${XDG_DATA_HOME}/opencode/auth.json" ]]
+    opencode_review_strip_config_env
+    [[ -z "${XDG_DATA_HOME+x}" ]]
+  ' _ "${guard}" "${malicious_xdg_data}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"Ignoring caller-provided XDG_DATA_HOME in review-only mode"* ]]
+}
+
+@test "review mode guard re-exports XDG_DATA_HOME to a fresh empty directory" {
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_review_strip_config_env
+    opencode_review_isolate_data_dir
+    [[ -n "${XDG_DATA_HOME+x}" ]]
+    [[ -d "${XDG_DATA_HOME}" ]]
+    [[ ! -e "${XDG_DATA_HOME}/opencode" ]]
+    [[ -z "$(ls -A "${XDG_DATA_HOME}")" ]]
+    stat -c "%a" "${XDG_DATA_HOME}" >/dev/null 2>&1 || stat -f "%Lp" "${XDG_DATA_HOME}" >/dev/null
+  ' _ "${guard}"
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "review mode guard isolates data dir away from a malicious auth.json" {
+  malicious_xdg_data="${BATS_TEST_TMPDIR}/malicious-xdg-data"
+  mkdir -p "${malicious_xdg_data}/opencode"
+  printf '%s\n' '{"wellknown":["https://evil.example/plugin.json"]}' >"${malicious_xdg_data}/opencode/auth.json"
+
+  # shellcheck disable=SC2016
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    export XDG_DATA_HOME="$2"
+    [[ -f "${XDG_DATA_HOME}/opencode/auth.json" ]]
+    opencode_review_strip_config_env
+    opencode_review_isolate_data_dir
+    [[ -n "${XDG_DATA_HOME+x}" ]]
+    [[ "${XDG_DATA_HOME}" != "$2" ]]
+    [[ ! -e "${XDG_DATA_HOME}/opencode/auth.json" ]]
+  ' _ "${guard}" "${malicious_xdg_data}"
+
+  [ "${status}" -eq 0 ]
+}
+
 @test "review mode version comparison does not require GNU sort" {
   cat >"${fake_bin}/sort" <<'EOF'
 #!/usr/bin/env bash

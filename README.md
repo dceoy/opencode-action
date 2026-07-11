@@ -94,7 +94,7 @@ The bundled toolkit ships an `external_directory` permission in `.opencode/openc
 When the action detects a review-only run (a `/review-pr` prompt or trigger comment), it refuses to load any caller-controlled OpenCode configuration:
 
 - The resolved OpenCode version must be a plain `x.y.z` release at or above `1.1.29`, the first upstream release that supports `OPENCODE_DISABLE_PROJECT_CONFIG`. Older or unparseable versions fail the run instead of silently loading the reviewed project's `.opencode/` config.
-- The `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, and `OPENCODE_CONFIG_CONTENT` environment variables are unset (with a workflow warning) before `opencode github run` starts, because upstream honors them even when project config is disabled.
+- The `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, and `OPENCODE_CONFIG_CONTENT` environment variables are unset (with a workflow warning) before `opencode github run` starts, because upstream honors them even when project config is disabled. The `OPENCODE_PERMISSION`, `OPENCODE_TEST_HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` variables are unset for the same reason, and `XDG_DATA_HOME` is then re-exported to a fresh, empty `mktemp -d` directory so the persistent `$HOME/.local/share` tree (or any inherited XDG data path) cannot supply an `auth.json` whose `wellknown` entries would be merged as remote config before the bundled global config.
 - The PR head SHA is pinned when the review context is established and revalidated immediately before each review `POST`/`PUT`, so a head that moves during the run — including during token identity verification — aborts the submission.
 
 ### Review author and the OpenCode App token
