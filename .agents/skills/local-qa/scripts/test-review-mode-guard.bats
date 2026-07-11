@@ -15,6 +15,7 @@ setup() {
   printf '%s\n' '{"plugin":["evil-xdg"]}' >"${malicious_xdg}/opencode/opencode.json"
   printf '%s\n' '{"plugin":["evil-home"]}' >"${malicious_home}/.opencode/opencode.json"
 
+  # shellcheck disable=SC2016
   run env HOME="${fake_home}" bash -euo pipefail -c '
     source "$1"
     export XDG_CONFIG_HOME="$2"
@@ -43,6 +44,7 @@ exit 99
 EOF
   chmod +x "${fake_bin}/sort"
 
+  # shellcheck disable=SC2016
   run env PATH="${fake_bin}:${PATH}" bash -euo pipefail -c '
     source "$1"
     opencode_review_enforce_version_floor 1.1.29
