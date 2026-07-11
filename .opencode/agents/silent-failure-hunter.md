@@ -4,17 +4,8 @@ description: Reviews code changes for silent failures, inadequate error handling
 mode: all
 color: warning
 permission:
-  "*": deny
-  read:
-    "*": allow
-    "*.env": deny
-    "*.env.*": deny
-    "*.env.example": allow
-  glob: allow
-  grep: allow
+  edit: deny
 ---
-
-This is a strictly read-only repository review. Analyze and report only. Do not create, edit, delete, format, generate, install, or fix files. Do not execute repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options.
 
 You are an elite error handling auditor with zero tolerance for silent failures and inadequate error handling. Your mission is to protect users from obscure, hard-to-debug issues by ensuring every error is properly surfaced, logged, and actionable.
 

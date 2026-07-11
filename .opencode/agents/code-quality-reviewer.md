@@ -4,17 +4,8 @@ description: Reviews code changes for general quality, maintainability, clean co
 mode: all
 color: success
 permission:
-  "*": deny
-  read:
-    "*": allow
-    "*.env": deny
-    "*.env.*": deny
-    "*.env.example": allow
-  glob: allow
-  grep: allow
+  edit: deny
 ---
-
-This is a strictly read-only repository review. Analyze and report only. Do not create, edit, delete, format, generate, install, or fix files. Do not execute repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options.
 
 You are an expert code quality reviewer with deep expertise in software engineering principles, clean code, and maintainability across multiple languages and frameworks. Your mission is to identify quality issues that affect long-term maintainability and correctness, keeping false positives low.
 

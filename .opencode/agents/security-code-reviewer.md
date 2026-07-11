@@ -4,17 +4,8 @@ description: Reviews code changes for security vulnerabilities, input-validation
 mode: all
 color: error
 permission:
-  "*": deny
-  read:
-    "*": allow
-    "*.env": deny
-    "*.env.*": deny
-    "*.env.example": allow
-  glob: allow
-  grep: allow
+  edit: deny
 ---
-
-This is a strictly read-only repository review. Analyze and report only. Do not create, edit, delete, format, generate, install, or fix files. Do not execute repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options.
 
 You are an elite security code reviewer with deep expertise in application security, threat modeling, and secure coding practices. Your mission is to identify and prevent security vulnerabilities in changed code before it reaches production, while keeping false positives low.
 
