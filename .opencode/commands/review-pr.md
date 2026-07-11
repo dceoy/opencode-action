@@ -15,9 +15,9 @@ Every helper this command invokes — the read-only `gh` wrapper, the constraine
 
 ## 1. Establish the trusted context
 
-Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. It returns the repository, PR number, and head SHA derived from the trusted GitHub Actions event. If it fails, use local mode.
+Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare` once, followed by `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. The context is persisted outside the checkout and pins one repository, PR number, and head SHA for the entire review. If either command fails, stop.
 
-The context helper derives the PR number from `.pull_request.number` or `.issue.number`. For `issue_comment`, it fetches and pins the current head SHA through the trusted PR API. In PR mode, obtain metadata and the diff only through these fixed argument-free operations:
+The context helper derives the PR number from `.pull_request.number` or `.issue.number`. For `issue_comment`, it fetches and pins the current head SHA through the trusted PR API. Metadata, diff, submission, and update revalidate that the current head still matches the pinned SHA and fail closed otherwise. Obtain metadata and the diff only through these fixed argument-free operations:
 
 ```bash
 bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" metadata
@@ -71,12 +71,11 @@ When there are summary-only findings, the body begins `OpenCode PR Review: <N> i
 Use only these exact argument-free commands:
 
 ```bash
-bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update
 ```
 
-After `prepare`, write the initial payload only to `$HOME/.config/opencode/review-state/initial.json`. Before `update`, write exactly `{body}` only to `$HOME/.config/opencode/review-state/update.json`. Never add arguments, redirections, pipelines, or process substitutions to helper commands.
+After the single `prepare` in section 1, write the initial payload only to `$HOME/.config/opencode/review-state/initial.json`. Before `update`, write exactly `{body}` only to `$HOME/.config/opencode/review-state/update.json`. Never add arguments, redirections, pipelines, or process substitutions to helper commands.
 
 You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the head commit from the same context, and updates only the review ID it recorded when the initial submission succeeded in this run. It validates the trusted event context, temporary payload, target commit, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
 
