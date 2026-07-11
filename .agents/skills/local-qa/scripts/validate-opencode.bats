@@ -247,22 +247,60 @@ opencode_jsonc_json() {
   }
 }
 
-@test "the Copy bundled OpenCode config step installs into a fresh directory instead of merging with stale content" {
-  local steps copy_step_run
+@test "the Copy bundled OpenCode config step installs into a fresh directory only for review-only" {
+  local steps copy_step_run copy_step_env
 
   steps="$(yq -o=json '.runs.steps' "${action_yml}")"
   copy_step_run="$(jq -r '.[] | select(.name == "Copy bundled OpenCode config") | .run // empty' <<<"${steps}")"
+  copy_step_env="$(jq -r '.[] | select(.name == "Copy bundled OpenCode config") | .env.REVIEW_ONLY // empty' <<<"${steps}")"
 
   [ -n "${copy_step_run}" ] || {
     echo "action.yml has no \"Copy bundled OpenCode config\" step"
     return 1
   }
-  if grep -qF -- '-rn ' <<<"${copy_step_run}"; then
-    echo "Copy bundled OpenCode config step still uses a no-clobber copy that can preserve stale/pre-existing files: ${copy_step_run}"
+  [[ "${copy_step_env}" == *"inputs.review-only"* ]] || {
+    echo "Copy bundled OpenCode config step does not pass inputs.review-only through as REVIEW_ONLY (got: '${copy_step_env}')"
     return 1
-  fi
+  }
+  grep -qF "if [[ \"\${REVIEW_ONLY}\" == \"true\" ]]; then" <<<"${copy_step_run}" || {
+    echo "Copy bundled OpenCode config step does not branch on REVIEW_ONLY"
+    return 1
+  }
   grep -qF "rm -rf \"\${HOME}/.config/opencode\"" <<<"${copy_step_run}" || {
-    echo "Copy bundled OpenCode config step does not remove pre-existing ~/.config/opencode content before installing"
+    echo "Copy bundled OpenCode config step does not remove pre-existing ~/.config/opencode content in the review-only branch"
+    return 1
+  }
+  grep -qF -- '-rn ' <<<"${copy_step_run}" || {
+    echo "Copy bundled OpenCode config step no longer preserves pre-existing content for mutation-capable (non-review-only) workflows"
+    return 1
+  }
+}
+
+@test "review-only fails fast when enable-toolkit, agent, or prompt do not satisfy the read-only entrypoint" {
+  local steps validate_step_run validate_step_if
+
+  steps="$(yq -o=json '.runs.steps' "${action_yml}")"
+  validate_step_run="$(jq -r '.[] | select(.name == "Validate review-only configuration") | .run // empty' <<<"${steps}")"
+  validate_step_if="$(jq -r '.[] | select(.name == "Validate review-only configuration") | .["if"] // empty' <<<"${steps}")"
+
+  [ -n "${validate_step_run}" ] || {
+    echo "action.yml has no \"Validate review-only configuration\" step"
+    return 1
+  }
+  [[ "${validate_step_if}" == *"inputs.review-only == 'true'"* ]] || {
+    echo "Validate review-only configuration step does not run only when inputs.review-only == 'true' (got: '${validate_step_if}')"
+    return 1
+  }
+  grep -qF 'ENABLE_TOOLKIT' <<<"${validate_step_run}" || {
+    echo "Validate review-only configuration step does not reject enable-toolkit != true"
+    return 1
+  }
+  grep -qF 'AGENT' <<<"${validate_step_run}" || {
+    echo "Validate review-only configuration step does not reject an unexpected agent"
+    return 1
+  }
+  grep -qF 'PROMPT' <<<"${validate_step_run}" || {
+    echo "Validate review-only configuration step does not reject a prompt that does not invoke /review-pr"
     return 1
   }
 }
