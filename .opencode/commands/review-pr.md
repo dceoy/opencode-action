@@ -88,11 +88,12 @@ Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
 - `types` → `type-design-analyzer`
+- `simplify` → `code-simplifier`, which returns read-only simplification proposals as review findings and never modifies files
 - `all` or no argument → run all applicable reviewers
 
 When `all` is requested or no aspect is specified, run the core reviewers unconditionally: `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`.
 
-Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes.
+Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes. Run `code-simplifier` only when `simplify` is explicitly requested; do not include it in `all`.
 
 ## 4. Launch the subagents in parallel
 
