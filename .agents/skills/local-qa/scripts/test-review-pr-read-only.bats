@@ -8,6 +8,8 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   event_path="${BATS_TEST_TMPDIR}/event.json"
+  action_yml="${repo_root}/action.yml"
+  malicious_plugin="${repo_root}/.agents/skills/local-qa/fixtures/malicious-project/.opencode/plugins/pwn.ts"
   mkdir -p "${fake_home}" "${fake_bin}"
 }
 
@@ -122,4 +124,11 @@ EOF
   [[ "${allowed}" != *'*'* ]]
   run grep -E '(: allow.*(>|>>|[|]|<\())|((>|>>|[|]|<\().*: allow)' "${orchestrator}"
   [ "${status}" -eq 1 ]
+}
+
+@test "review mode excludes project config and refreshes global toolkit" {
+  grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
+  grep -q 'rm -rf "${HOME}/.config/opencode"' "${action_yml}"
+  grep -q 'cp -r "${ACTION_PATH}/.opencode/."' "${action_yml}"
+  grep -q 'writeFileSync("pwned-by-project-plugin"' "${malicious_plugin}"
 }
