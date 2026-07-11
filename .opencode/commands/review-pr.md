@@ -7,6 +7,8 @@ agent: general
 
 Perform a comprehensive pull request review by orchestrating specialized review subagents in parallel. Each subagent returns only noteworthy findings in a normalized format. You then deduplicate and filter across agents, validate each finding against the PR diff, and submit a single GitHub pull request review with inline comments for every finding that has a valid diff anchor.
 
+This command is review-only. Never create, edit, delete, format, generate, install, or fix repository files. Never run repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options. Shell commands are limited to the read-only repository and PR inspection plus the explicit GitHub review API operations documented below.
+
 When a structured GitHub review is submitted successfully, that review is the PR review summary; capture the submitted review ID and update that same review with the final status/run link (step 7). Never call `gh pr comment` or the issue comment API yourself to post a status comment. You may still return a short final assistant message after a successful submission — `opencode github run` posts it as a separate top-level completion comment, authored the same way the review was (see the token/identity section below), so at most one additional top-level comment appears alongside the review and its inline comments. Do not treat "exactly one top-level comment" as a requirement; a review plus an optional completion comment is the expected result.
 
 **Requested review aspects (optional):** "$ARGUMENTS"
@@ -86,7 +88,7 @@ Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
 - `types` → `type-design-analyzer`
-- `simplify` → run `code-simplifier` as a refinement step only; do not return a review; stop after simplification
+- `simplify` → refuse the request because simplification modifies the worktree; use a mutation-capable command instead
 - `all` or no argument → run all applicable reviewers
 
 When `all` is requested or no aspect is specified, run the core reviewers unconditionally: `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`.
@@ -112,6 +114,7 @@ Instruct every subagent to:
   ```
 
 - If no noteworthy findings exist, return an empty list and a one-line "no issues" note.
+- Analyze with read-only tools only. Do not execute shell commands, repository scripts, formatters, generators, package managers, or tests.
 
 Do not let subagents post comments themselves. The orchestrator validates, deduplicates, and posts the final review.
 
