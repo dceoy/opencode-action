@@ -88,12 +88,11 @@ Parse `$ARGUMENTS` (the requested aspects). Supported aspect keywords:
 - `comments` → `comment-analyzer`
 - `errors` → `silent-failure-hunter`
 - `types` → `type-design-analyzer`
-- `simplify` → refuse the request because simplification modifies the worktree; use a mutation-capable command instead
 - `all` or no argument → run all applicable reviewers
 
 When `all` is requested or no aspect is specified, run the core reviewers unconditionally: `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`.
 
-Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes. Do not include `code-simplifier` in the `all` review set.
+Also run specialty reviewers conditionally: `pr-test-analyzer` for test changes, `silent-failure-hunter` for error-handling/fallback paths, `comment-analyzer` for comments/docstrings, and `type-design-analyzer` for type/schema changes.
 
 ## 4. Launch the subagents in parallel
 
