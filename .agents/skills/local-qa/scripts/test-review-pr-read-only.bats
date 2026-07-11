@@ -40,6 +40,41 @@ EOF
   [ "$(jq -r '.head_sha' <<<"${output}")" = "abcdef0123456789abcdef0123456789abcdef01" ]
 }
 
+@test "issue_comment submission pins the fetched PR head" {
+  submit="${repo_root}/.opencode/scripts/review-pr-submit.sh"
+  mkdir -p "${fake_home}/.config/opencode/scripts"
+  printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
+  cat >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh" <<'EOF'
+opencode_prepare_gh_token() { return 0; }
+opencode_require_app_token_for_review() { return 0; }
+EOF
+  cat >"${fake_bin}/gh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == "pr view 42 --json headRefOid --jq .headRefOid" ]]; then
+  printf '%s\n' 0123456789abcdef0123456789abcdef01234567
+elif [[ "$1" == "api" ]]; then
+  jq -n '{id: 555}'
+else
+  exit 1
+fi
+EOF
+  chmod +x "${fake_bin}/gh"
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" bash "${submit}" prepare
+  [ "${status}" -eq 0 ]
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+
+  run env \
+    HOME="${fake_home}" \
+    PATH="${fake_bin}:${PATH}" \
+    GITHUB_REPOSITORY="octo/repo" \
+    GITHUB_EVENT_PATH="${event_path}" \
+    bash "${submit}" submit-initial
+
+  [ "${status}" -eq 0 ]
+  [ "$(jq -r '.id' <<<"${output}")" = "555" ]
+}
+
 @test "orchestrator allows no wildcard helper command" {
   allowed="$(
     awk '
