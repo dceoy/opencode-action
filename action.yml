@@ -94,19 +94,26 @@ runs:
       shell: bash -euo pipefail {0}
       run: >  # zizmor: ignore[github-env] fixed path, not attacker-controlled
         echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
+    - name: Detect review-only mode
+      id: review_mode
+      shell: bash -euo pipefail {0}
+      env:
+        PROMPT: ${{ inputs.prompt }}
+        EVENT_COMMENT: ${{ github.event.comment.body }}
+      run: |
+        review_only=false
+        if [[ "${PROMPT}" =~ ^/review-pr([[:space:]].*)?$ || "${EVENT_COMMENT}" =~ (^|[[:space:]])/review-pr([[:space:]]|$) ]]; then
+          review_only=true
+        fi
+        echo "enabled=${review_only}" >> "${GITHUB_OUTPUT}"
     - name: Copy bundled OpenCode config
       if: inputs.enable-toolkit == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
-        PROMPT: ${{ inputs.prompt }}
-        EVENT_COMMENT: ${{ github.event.comment.body }}
+        REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
       run: |
-        review_only=false
-        if [[ "${PROMPT}" =~ ^/review-pr([[:space:]].*)?$ || "${EVENT_COMMENT}" == *"/review-pr"* ]]; then
-          review_only=true
-        fi
-        if [[ "${review_only}" == "true" ]]; then
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
           rm -rf "${HOME}/.config/opencode"
           mkdir -p "${HOME}/.config/opencode"
           cp -r "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
@@ -132,7 +139,7 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
-        OPENCODE_DISABLE_PROJECT_CONFIG: ${{ (startsWith(inputs.prompt, '/review-pr') || contains(github.event.comment.body, '/review-pr')) && '1' || '' }}
+        OPENCODE_DISABLE_PROJECT_CONFIG: ${{ steps.review_mode.outputs.enabled == 'true' && '1' || '' }}
       run: |
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
