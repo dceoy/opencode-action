@@ -1,6 +1,6 @@
 ---
 name: review-pr-orchestrator
-description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, and submits reviews through constrained helpers.
+description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, and submits reviews through fixed trusted helpers.
 mode: primary
 color: info
 permission:
@@ -10,6 +10,10 @@ permission:
     "*.env": deny
     "*.env.*": deny
     "*.env.example": allow
+  edit:
+    "*": deny
+    "$HOME/.config/opencode/review-state/initial.json": allow
+    "$HOME/.config/opencode/review-state/update.json": allow
   glob: allow
   grep: allow
   bash:
@@ -18,12 +22,11 @@ permission:
     "git diff --name-only HEAD": allow
     "git diff --no-ext-diff": allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr view * --json number,title,body,baseRefName,headRefName,headRefOid,files,url': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" pr diff *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-initial *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" build-update *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial *': allow
-    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update *': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" metadata': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" diff': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update': allow
   task:
     "*": deny
     code-reviewer: allow
@@ -39,4 +42,4 @@ permission:
     code-simplifier: allow
 ---
 
-Coordinate a strictly read-only review. Never modify the checkout or execute repository scripts, formatters, generators, package managers, tests, or mutation-capable commands. Use only the allow-listed helpers and reviewer agents.
+Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
