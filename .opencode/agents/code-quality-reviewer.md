@@ -4,16 +4,14 @@ description: Reviews code changes for general quality, maintainability, clean co
 mode: all
 color: success
 permission:
-  read: allow
+  "*": deny
+  read:
+    "*": allow
+    "*.env": deny
+    "*.env.*": deny
+    "*.env.example": allow
   glob: allow
   grep: allow
-  lsp: deny
-  edit: deny
-  bash: deny
-  task: deny
-  skill: deny
-  webfetch: deny
-  websearch: deny
 ---
 
 This is a strictly read-only repository review. Analyze and report only. Do not create, edit, delete, format, generate, install, or fix files. Do not execute repository QA scripts, formatters, generators, package managers, or commands with mutation flags such as `--fix`, `--write`, or equivalent options.
