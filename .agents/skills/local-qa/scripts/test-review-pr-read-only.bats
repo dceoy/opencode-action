@@ -127,7 +127,11 @@ EOF
 }
 
 @test "review mode excludes project config and refreshes global toolkit" {
+  # This is a source-level guard. A true malicious-plugin execution test needs
+  # an installed OpenCode runtime and belongs in an end-to-end workflow.
+  grep -q 'Detect review-only mode' "${action_yml}"
   grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
+  ! grep -q "contains(github.event.comment.body, '/review-pr')" "${action_yml}"
   # shellcheck disable=SC2016
   grep -q 'rm -rf "${HOME}/.config/opencode"' "${action_yml}"
   # shellcheck disable=SC2016
