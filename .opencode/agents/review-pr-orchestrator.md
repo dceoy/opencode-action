@@ -20,6 +20,8 @@ permission:
     "*": deny
     "$HOME/.config/opencode/review-state/initial.json": allow
     "$HOME/.config/opencode/review-state/update.json": allow
+    "../*.config/opencode/review-state/initial.json": allow
+    "../*.config/opencode/review-state/update.json": allow
   glob: allow
   grep: allow
   bash:
