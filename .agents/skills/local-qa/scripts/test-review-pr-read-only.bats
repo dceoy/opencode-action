@@ -167,11 +167,15 @@ EOF
   # This is a source-level guard. A true malicious-plugin execution test needs
   # an installed OpenCode runtime and belongs in an end-to-end workflow.
   grep -q 'Detect review-only mode' "${action_yml}"
-  grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
+  grep -q 'export OPENCODE_DISABLE_PROJECT_CONFIG=1' "${action_yml}"
+  run grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
+  [ "${status}" -eq 1 ]
   grep -q 'unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT' "${action_yml}"
   # shellcheck disable=SC2016
   [ "$(grep -c 'export XDG_CONFIG_HOME="${HOME}/.config"' "${action_yml}")" -eq 2 ]
   grep -q 'requires OpenCode 1.2.14 or newer' "${action_yml}"
+  # shellcheck disable=SC2016
+  grep -Fq '[[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${suffix}" ]]' "${action_yml}"
   run grep -q "contains(github.event.comment.body, '/review-pr')" "${action_yml}"
   [ "${status}" -eq 1 ]
   # shellcheck disable=SC2016
