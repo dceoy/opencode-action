@@ -10,7 +10,7 @@ inputs:
     description: Model to use, in provider/model format
   agent:
     required: false
-    description: Agent to use. Must be a primary agent. Falls back to default_agent from config or 'build' if not found.
+    description: Agent to use as the run's default_agent. A slash command's frontmatter agent takes precedence.
     default: build
   share:
     required: false
@@ -18,7 +18,7 @@ inputs:
     default: 'false'
   prompt:
     required: false
-    description: Custom prompt to override the default prompt
+    description: Custom prompt to override the default prompt. Leading Markdown slash commands are expanded before opencode github run.
     default: ''
   use-github-token:
     required: false
@@ -102,6 +102,10 @@ runs:
       run: |
         mkdir -p "${HOME}/.config/opencode"
         cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
+        mkdir -p "${HOME}/.config/opencode/scripts"
+        cp -f "${ACTION_PATH}/.opencode/scripts/resolve-app-token.sh" \
+          "${ACTION_PATH}/.opencode/scripts/review-pr-submit.sh" \
+          "${HOME}/.config/opencode/scripts/"
         echo "Copied bundled OpenCode config into ~/.config/opencode/"
     - name: Run OpenCode
       id: run_opencode
@@ -116,7 +120,38 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        ACTION_PATH: ${{ github.action_path }}
+        ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
       run: |
+        # `opencode github run` sends PROMPT verbatim and does not forward the
+        # action's agent input. Resolve Markdown slash commands and apply the
+        # effective primary agent through the final inline config layer.
+        # shellcheck source=scripts/expand-command.sh
+        source "${ACTION_PATH}/scripts/expand-command.sh"
+        opencode_effective_prompt "${PROMPT}" "${MENTIONS}" "${GITHUB_EVENT_PATH:-}"
+        command_dirs=(
+          "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
+          "${HOME}/.config/opencode/commands"
+        )
+        if [[ "${ENABLE_TOOLKIT}" == "true" ]]; then
+          command_dirs+=("${ACTION_PATH}/.opencode/commands")
+        fi
+        opencode_resolve_prompt_and_agent \
+          "${OPENCODE_EFFECTIVE_PROMPT}" "${AGENT}" "${command_dirs[@]}"
+        export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
+
+        if [[ -n "${OPENCODE_RESOLVED_AGENT}" ]]; then
+          base_config="{}"
+          if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
+            base_config="$(opencode_jsonc_to_json <<< "${OPENCODE_CONFIG_CONTENT}")"
+          fi
+          OPENCODE_CONFIG_CONTENT="$(jq -nc \
+            --arg agent "${OPENCODE_RESOLVED_AGENT}" \
+            --argjson base "${base_config}" \
+            '$base * {default_agent: $agent}')"
+          export OPENCODE_CONFIG_CONTENT
+        fi
+
         output_file="$(mktemp)"
         trap 'rm -f "${output_file}"' EXIT
         timeout_cmd=()

@@ -248,6 +248,34 @@ opencode_verify_app_token_identity() {
 #   GH_TOKEN/GITHUB_TOKEN or an unverified candidate, since either could
 #   make the review appear as github-actions[bot] or another identity
 #   instead of opencode-agent[bot].
+# Guard against submitting a stale review. The PR head SHA is pinned once
+# when the diff is gathered for analysis; immediately before the initial
+# structured review POST this re-fetches the current head SHA and fails,
+# WITHOUT submitting anything, when the head moved. Deliberately no retry:
+# findings were produced against the pinned SHA and must never be re-anchored
+# to or submitted against a newer commit.
+#
+# $1: "<owner>/<repo>"
+# $2: pull request number
+# $3: the pinned head SHA the review findings were produced against
+opencode_assert_pr_head_unchanged() {
+  local repo="${1:-}" pr_number="${2:-}" pinned_sha="${3:-}" current_sha
+
+  [[ -n "${repo}" && -n "${pr_number}" && -n "${pinned_sha}" ]] || {
+    echo "::error::opencode_assert_pr_head_unchanged requires <owner>/<repo>, PR number, and the pinned head SHA." >&2
+    return 1
+  }
+  current_sha="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha' 2>/dev/null)" || {
+    echo "::error::Failed to fetch the current head SHA for ${repo}#${pr_number}; refusing to submit a review that may be stale." >&2
+    return 1
+  }
+  if [[ -z "${current_sha}" || "${current_sha}" != "${pinned_sha}" ]]; then
+    echo "::error::PR ${repo}#${pr_number} head moved from pinned ${pinned_sha} to ${current_sha:-unknown} since the diff was analyzed; refusing to submit a stale review. Re-run the review against the new head." >&2
+    return 1
+  fi
+  return 0
+}
+
 opencode_require_app_token_for_review() {
   local use_github_token="${1:-false}" repo="${2:-}" pr_number="${3:-}"
   local token tried=0
