@@ -64,7 +64,7 @@ opencode_command_template() {
 }
 
 _opencode_assert_supported_command() {
-  local file="${1}" key command_agent agent_file agent_mode
+  local file="${1}" key command_agent agent_file agent_mode template
 
   for key in model subtask; do
     if _opencode_frontmatter_has_key "${file}" "${key}"; then
@@ -72,6 +72,16 @@ _opencode_assert_supported_command() {
       return 1
     fi
   done
+
+  template="$(opencode_command_template "${file}")"
+  if printf '%s\n' "${template}" | grep -Eq '\$[1-9][0-9]*'; then
+    echo "::error::Cannot expand ${file}: positional placeholders are not supported by opencode github run dispatch." >&2
+    return 1
+  fi
+  if printf '%s\n' "${template}" | grep -Eq '!`[^`]*`'; then
+    echo "::error::Cannot expand ${file}: shell template blocks are not supported by opencode github run dispatch." >&2
+    return 1
+  fi
 
   command_agent="$(opencode_command_agent "${file}")"
   [[ -n "${command_agent}" ]] || return 0
