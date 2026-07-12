@@ -102,10 +102,12 @@ runs:
       run: |
         mkdir -p "${HOME}/.config/opencode"
         cp -rn "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
-        mkdir -p "${HOME}/.config/opencode/scripts"
+        helper_dir="${HOME}/.config/opencode/scripts/opencode-action"
+        rm -rf "${helper_dir}"
+        mkdir -p "${helper_dir}"
         cp -f "${ACTION_PATH}/.opencode/scripts/resolve-app-token.sh" \
           "${ACTION_PATH}/.opencode/scripts/review-pr-submit.sh" \
-          "${HOME}/.config/opencode/scripts/"
+          "${helper_dir}/"
         echo "Copied bundled OpenCode config into ~/.config/opencode/"
     - name: Run OpenCode
       id: run_opencode
@@ -138,7 +140,9 @@ runs:
         fi
         opencode_resolve_prompt_and_agent \
           "${OPENCODE_EFFECTIVE_PROMPT}" "${AGENT}" "${command_dirs[@]}"
-        export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
+        if [[ -n "${PROMPT}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
+          export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
+        fi
 
         if [[ -n "${OPENCODE_RESOLVED_AGENT}" ]]; then
           base_config="{}"
