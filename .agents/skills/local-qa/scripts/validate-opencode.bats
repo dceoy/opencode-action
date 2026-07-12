@@ -152,7 +152,7 @@ opencode_jsonc_json() {
   state_dir="${config_home}/.config/opencode/review-state"
   payload="${state_dir}/initial.json"
   unauthorized_path="${config_home}/unauthorized.json"
-  model_config='{"model":"openai/gpt-4o-mini"}'
+  model_config='{"model":"opencode/big-pickle"}'
   mkdir -p "${config_home}/.config/opencode"
   cp -r "${repo_root}/.opencode/." "${config_home}/.config/opencode/"
   mkdir -p "${state_dir}"
@@ -161,7 +161,6 @@ opencode_jsonc_json() {
     XDG_CONFIG_HOME="${config_home}/.config" \
     OPENCODE_DISABLE_PROJECT_CONFIG=1 \
     OPENCODE_CONFIG_CONTENT="${model_config}" \
-    OPENAI_API_KEY=test \
     opencode debug agent review-pr-orchestrator --tool write \
     --params "{filePath:'${payload}',content:'{\"body\":\"test\",\"comments\":[]}' }"
   positive_status="${status}"
@@ -173,7 +172,6 @@ opencode_jsonc_json() {
     XDG_CONFIG_HOME="${config_home}/.config" \
     OPENCODE_DISABLE_PROJECT_CONFIG=1 \
     OPENCODE_CONFIG_CONTENT="${model_config}" \
-    OPENAI_API_KEY=test \
     opencode debug agent review-pr-orchestrator --tool write \
     --params "{filePath:'${unauthorized_path}',content:'denied'}"
   negative_status="${status}"
