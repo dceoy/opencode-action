@@ -52,6 +52,26 @@ EOF_INNER
   [[ "${output}" == *$'\nbuild' ]]
 }
 
+@test "ordinary comments remain on the native event prompt" {
+  event_path="${BATS_TEST_TMPDIR}/event.json"
+  printf '%s\n' '{"comment":{"body":"Please fix retries /oc and keep compatibility"}}' >"${event_path}"
+
+  run bash -euo pipefail -c '
+    source "$1"
+    explicit_prompt=""
+    opencode_effective_prompt "$explicit_prompt" "/opencode,/oc" "$2"
+    opencode_resolve_prompt_and_agent "$OPENCODE_EFFECTIVE_PROMPT" "build" "$3"
+    final_prompt="$explicit_prompt"
+    if [[ -n "$explicit_prompt" || -n "$OPENCODE_RESOLVED_COMMAND_FILE" ]]; then
+      final_prompt="$OPENCODE_RESOLVED_PROMPT"
+    fi
+    printf "%s" "$final_prompt"
+  ' _ "${library}" "${event_path}" "${project_commands}"
+
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
+}
+
 @test "comment mention matching avoids Bash 4 lowercase expansion" {
   run grep -F '${body,,}' "${library}"
   [ "${status}" -ne 0 ]
@@ -97,6 +117,22 @@ EOF_INNER
   ' _ "${library}" "${project_commands}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"frontmatter 'model' is not supported"* ]]
+
+  write_command "${project_commands}" inspect build 'Inspect $1'
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_resolve_prompt_and_agent "/inspect file" "build" "$2"
+  ' _ "${library}" "${project_commands}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"positional placeholders are not supported"* ]]
+
+  write_command "${project_commands}" inspect build 'Inspect !`git status`'
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_resolve_prompt_and_agent "/inspect" "build" "$2"
+  ' _ "${library}" "${project_commands}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"shell template blocks are not supported"* ]]
 }
 
 @test "ordinary prompts preserve the prompt and use the agent input" {
