@@ -5,6 +5,12 @@ mode: primary
 color: info
 permission:
   "*": deny
+  external_directory:
+    "*": deny
+    "$HOME/.config/opencode/scripts/resolve-app-token.sh": allow
+    "$HOME/.config/opencode/scripts/review-pr-submit.sh": allow
+    "$HOME/.config/opencode/scripts/review-pr-gh.sh": allow
+    "$HOME/.config/opencode/review-state/*": allow
   read:
     "*": allow
     "*.env": deny
