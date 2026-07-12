@@ -15,7 +15,7 @@ Every helper this command invokes — the read-only `gh` wrapper, the constraine
 
 ## 1. Establish the trusted context
 
-Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare` once, followed by `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. The context is persisted outside the checkout and pins one repository, PR number, and head SHA for the entire review. If either command fails, stop.
+Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare` once, followed by `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. The context is persisted outside the checkout and pins one repository, PR number, and head SHA for the entire review. If `prepare` fails, stop. If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.
 
 The context helper derives the PR number from `.pull_request.number` or `.issue.number`. For `issue_comment`, it fetches and pins the current head SHA through the trusted PR API. Metadata, diff, submission, and update revalidate that the current head still matches the pinned SHA and fail closed otherwise. Obtain metadata and the diff only through these fixed operations:
 
