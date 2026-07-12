@@ -58,7 +58,7 @@ jq -e '
 ' "${payload}" >/dev/null || \
   fail "Invalid review payload: expected exactly {commit_id, body, comments} with exact line or line-range comment fields."
 
-resolver="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
+resolver="${HOME}/.config/opencode/scripts/opencode-action/resolve-app-token.sh"
 [[ -f "${resolver}" ]] || fail "OpenCode App token resolver not found at ${resolver}."
 # shellcheck source=/dev/null
 source "${resolver}"
