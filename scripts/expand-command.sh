@@ -74,11 +74,11 @@ _opencode_assert_supported_command() {
   done
 
   template="$(opencode_command_template "${file}")"
-  if printf '%s\n' "${template}" | grep -Eq '\$[1-9][0-9]*'; then
+  if [[ "${template}" =~ \$[1-9][0-9]* ]]; then
     echo "::error::Cannot expand ${file}: positional placeholders are not supported by opencode github run dispatch." >&2
     return 1
   fi
-  if printf '%s\n' "${template}" | grep -Eq '!`[^`]*`'; then
+  if [[ "${template}" =~ \!\`[^\`]*\` ]]; then
     echo "::error::Cannot expand ${file}: shell template blocks are not supported by opencode github run dispatch." >&2
     return 1
   fi
