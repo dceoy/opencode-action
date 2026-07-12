@@ -14,7 +14,7 @@ Review the pull request, aggregate high-confidence findings from specialized rev
 Load the bundled token resolver for GitHub reads:
 
 ```bash
-opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
+opencode_app_token_lib="${HOME}/.config/opencode/scripts/opencode-action/resolve-app-token.sh"
 if [[ -f "${opencode_app_token_lib}" ]]; then
   # shellcheck source=/dev/null
   source "${opencode_app_token_lib}"
@@ -136,7 +136,7 @@ If at least one inline finding exists:
 2. Submit it only through:
 
    ```text
-   bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" "$PAYLOAD_FILE"
+   bash "$HOME/.config/opencode/scripts/opencode-action/review-pr-submit.sh" "$PAYLOAD_FILE"
    ```
 
 The helper derives the repository and PR from the GitHub Actions context, validates the payload shape, injects `event: COMMENT`, verifies the review author token, and checks that the live head still equals `commit_id` immediately before the POST.
