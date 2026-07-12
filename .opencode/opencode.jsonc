@@ -6,8 +6,8 @@
   "permission": {
     "external_directory": {
       "*": "deny",
-      "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow",
-      "$HOME/.config/opencode/scripts/review-pr-submit.sh": "allow"
+      "$HOME/.config/opencode/scripts/opencode-action/resolve-app-token.sh": "allow",
+      "$HOME/.config/opencode/scripts/opencode-action/review-pr-submit.sh": "allow"
     }
   }
 }
