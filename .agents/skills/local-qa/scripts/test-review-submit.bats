@@ -9,9 +9,9 @@ setup() {
   event_path="${BATS_TEST_TMPDIR}/event.json"
   payload="${BATS_TEST_TMPDIR}/payload.json"
   gh_log="${BATS_TEST_TMPDIR}/gh.log"
-  mkdir -p "${fake_home}/.config/opencode/scripts" "${fake_bin}"
+  mkdir -p "${fake_home}/.config/opencode/scripts/opencode-action" "${fake_bin}"
   printf '%s\n' '{"pull_request":{"number":42}}' >"${event_path}"
-  cat >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh" <<'EOF_INNER'
+  cat >"${fake_home}/.config/opencode/scripts/opencode-action/resolve-app-token.sh" <<'EOF_INNER'
 opencode_require_app_token_for_review() { return 0; }
 opencode_assert_pr_head_unchanged() {
   [[ "$3" == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]]
