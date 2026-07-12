@@ -108,7 +108,8 @@ runs:
         source "${ACTION_PATH}/scripts/expand-command.sh"
         opencode_effective_prompt "${PROMPT}" "${MENTIONS}" "${GITHUB_EVENT_PATH:-}"
         review_only=false
-        if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/review-pr([[:space:]].*)?$ ]]; then
+        first_line="${OPENCODE_EFFECTIVE_PROMPT%%$'\n'*}"
+        if [[ "${first_line}" =~ ^/review-pr([[:space:]].*)?$ ]]; then
           review_only=true
         fi
         if [[ "${review_only}" == "true" ]]; then
@@ -121,7 +122,9 @@ runs:
             echo "::error::Review-only mode requires a semantic OpenCode version at or above 1.2.14 (got '${OPENCODE_VERSION}')."
             exit 1
           }
-          if [[ "$(printf '%s\n' "1.2.14" "${version}" | sort -V | head -n 1)" != "1.2.14" ]]; then
+          IFS=. read -r major minor patch_and_suffix <<<"${version}"
+          patch="${patch_and_suffix%%[-.]*}"
+          if (( 10#${major} < 1 || (10#${major} == 1 && 10#${minor} < 2) || (10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14) )); then
             echo "::error::Review-only mode requires OpenCode 1.2.14 or newer (got '${OPENCODE_VERSION}')."
             exit 1
           fi
@@ -135,10 +138,12 @@ runs:
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
       run: |
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          export XDG_CONFIG_HOME="${HOME}/.config"
           rm -rf "${HOME}/.config/opencode"
           mkdir -p "${HOME}/.config/opencode"
           cp -r "${ACTION_PATH}/.opencode/." "${HOME}/.config/opencode/"
           if [[ -d "${HOME}/.opencode" ]]; then
+            # Remove inherited plugins, agents, and config that could affect the isolated review run.
             find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
           fi
           echo "Installed fresh review-only OpenCode config"
@@ -172,6 +177,7 @@ runs:
         OPENCODE_DISABLE_PROJECT_CONFIG: ${{ steps.review_mode.outputs.enabled == 'true' && '1' || '' }}
       run: |
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          export XDG_CONFIG_HOME="${HOME}/.config"
           # Composite steps inherit caller env. Remove every explicit config
           # override before constructing the action's trusted inline config.
           unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT

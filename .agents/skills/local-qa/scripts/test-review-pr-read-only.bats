@@ -104,7 +104,7 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
@@ -169,6 +169,8 @@ EOF
   grep -q 'Detect review-only mode' "${action_yml}"
   grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
   grep -q 'unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT' "${action_yml}"
+  # shellcheck disable=SC2016
+  [ "$(grep -c 'export XDG_CONFIG_HOME="${HOME}/.config"' "${action_yml}")" -eq 2 ]
   grep -q 'requires OpenCode 1.2.14 or newer' "${action_yml}"
   run grep -q "contains(github.event.comment.body, '/review-pr')" "${action_yml}"
   [ "${status}" -eq 1 ]

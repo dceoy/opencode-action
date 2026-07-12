@@ -31,7 +31,7 @@ trusted_context() {
 }
 
 operation="${1:-}"
-[[ "$#" -eq 1 ]] || fail "Review helper operations take no arguments."
+[[ "$#" -eq 1 ]] || fail "Review helper operations take exactly one operation name and no additional arguments."
 
 case "${operation}" in
   prepare)
@@ -88,7 +88,8 @@ case "${operation}" in
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Recorded review ID is invalid."
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
     context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
-    gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}"
+    gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}" ||
+      fail "Failed to submit the review update."
     ;;
   *) fail "Unsupported review submission operation." ;;
 esac

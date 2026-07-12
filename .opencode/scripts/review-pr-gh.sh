@@ -36,7 +36,7 @@ read_context() {
 }
 
 operation="${1:-}"
-[[ "$#" -eq 1 ]] || fail "Review helper operations take no arguments."
+[[ "$#" -eq 1 ]] || fail "Review helper operations take exactly one operation name and no additional arguments."
 load_read_token
 
 case "${operation}" in
@@ -63,6 +63,9 @@ case "${operation}" in
   diff)
     IFS=$'\t' read -r repo number _ < <(read_context)
     exec gh pr diff "${number}" --repo "${repo}"
+    ;;
+  validate)
+    read_context >/dev/null
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
 esac
