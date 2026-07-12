@@ -90,6 +90,13 @@ frontmatter() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
 }
 
+@test "review-pr local fallback is limited to a missing trusted PR number" {
+  # shellcheck disable=SC2016
+  grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_doc}"
+  # shellcheck disable=SC2016
+  grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_doc}"
+}
+
 opencode_jsonc_json() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
 }
