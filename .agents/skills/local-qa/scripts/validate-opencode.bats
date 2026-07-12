@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Validate .opencode/ agent frontmatter, review-pr command/skill references,
 # that opencode.jsonc parses, and that its external_directory permission
-# allow-lists the resolver path review-pr.md actually sources.
+# allow-lists the resolver path review-pr.md actually sources and the runtime
+# review-state directory pattern.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -132,6 +133,19 @@ opencode_jsonc_json() {
 
   [ "${matched}" -eq 1 ] || {
     echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+    return 1
+  }
+}
+
+@test "opencode.jsonc allow-lists the runtime review-state directory pattern" {
+  local state_pattern action
+
+  # shellcheck disable=SC2016
+  state_pattern='$HOME/.config/opencode/review-state/*'
+  action="$(opencode_jsonc_json | jq -r --arg pattern "${state_pattern}" '.permission.external_directory[$pattern] // empty')"
+
+  [ "${action}" = "allow" ] || {
+    echo "opencode.jsonc must allow the runtime review-state pattern ${state_pattern} (got: '${action}')"
     return 1
   }
 }
