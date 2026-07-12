@@ -1,18 +1,20 @@
 #!/usr/bin/env bats
 # Validate .opencode/ agent frontmatter, review-pr command/skill references,
 # that opencode.jsonc parses, and that its external_directory permission
-# allow-lists the resolver path review-pr.md actually sources and the runtime
-# review-state directory pattern.
+# allow-lists the resolver path the pr-review skill actually sources and the
+# runtime review-state directory pattern.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
-  review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
+  review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
+  review_pr_doc="${repo_root}/.opencode/skills/pr-review/SKILL.md"
+  orchestrator="${agents_dir}/review-pr-orchestrator.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
   required_keys=(name description mode permission)
-  # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
-  # config inputs rather than agents.
-  non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
+  # Backtick-quoted identifiers in the review-pr command and pr-review skill
+  # that are skills, toolkits, or config inputs rather than agents.
+  non_agents=(pr-feedback-triage pr-review pr-review-toolkit use-github-token)
 }
 
 agent_files() {
@@ -66,11 +68,11 @@ frontmatter() {
   }
 }
 
-@test "every agent referenced in review-pr.md exists under .opencode/agents/" {
+@test "every agent referenced in the review-pr command and pr-review skill exists under .opencode/agents/" {
   local bt pattern refs ref skip na missing=()
   bt=$(printf '\x60')
   pattern="${bt}[a-z][a-z0-9]+(-[a-z0-9]+)+${bt}"
-  mapfile -t refs < <(grep -hoE "${pattern}" "${review_pr_doc}" | tr -d "${bt}" | sort -u)
+  mapfile -t refs < <(grep -hoE "${pattern}" "${review_pr_command}" "${review_pr_doc}" | tr -d "${bt}" | sort -u)
 
   for ref in "${refs[@]}"; do
     skip=0
@@ -91,6 +93,30 @@ frontmatter() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
 }
 
+@test "review-pr command is a thin wrapper that loads the pr-review skill" {
+  local bt
+  bt=$(printf '\x60')
+  grep -Fq "${bt}pr-review${bt} skill" "${review_pr_command}"
+  # shellcheck disable=SC2016
+  grep -Fq '$ARGUMENTS' "${review_pr_command}"
+  # The canonical workflow must not be duplicated in the command.
+  run grep -E 'review-pr-(submit|gh)\.sh|resolve-app-token\.sh|review-state' "${review_pr_command}"
+  [ "${status}" -eq 1 ]
+}
+
+@test "pr-review skill frontmatter declares its name and description" {
+  local fm
+  fm="$(frontmatter "${review_pr_doc}")"
+  grep -qE '^name:[[:space:]]*pr-review$' <<<"${fm}"
+  grep -qE '^description:[[:space:]]*[^[:space:]]' <<<"${fm}"
+}
+
+@test "review-pr orchestrator allows loading the pr-review skill" {
+  local fm
+  fm="$(frontmatter "${orchestrator}")"
+  grep -qE '^[[:space:]]+pr-review:[[:space:]]*allow$' <<<"${fm}"
+}
+
 @test "review-pr local fallback is limited to a missing trusted PR number" {
   # shellcheck disable=SC2016
   grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_doc}"
@@ -102,12 +128,12 @@ opencode_jsonc_json() {
   sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
 }
 
-@test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
+@test "pr-review skill sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
   local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
 
   resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
   [ -n "${resolver_suffix}" ] || {
-    echo "review-pr.md does not set opencode_app_token_lib to a \${HOME}-relative path"
+    echo "the pr-review skill does not set opencode_app_token_lib to a \${HOME}-relative path"
     return 1
   }
   resolver_path="${HOME}/${resolver_suffix}"
@@ -132,7 +158,7 @@ opencode_jsonc_json() {
   done
 
   [ "${matched}" -eq 1 ] || {
-    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that the pr-review skill sources"
     return 1
   }
 }

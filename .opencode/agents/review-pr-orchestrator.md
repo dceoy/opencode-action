@@ -24,6 +24,9 @@ permission:
     "../*.config/opencode/review-state/update.json": allow
   glob: allow
   grep: allow
+  skill:
+    "*": deny
+    pr-review: allow
   bash:
     "*": deny
     "git status --short": allow
@@ -51,4 +54,4 @@ permission:
     code-simplifier: allow
 ---
 
-Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
+Coordinate a strictly read-only review. The canonical workflow is the `pr-review` skill; load it and follow it exactly. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
