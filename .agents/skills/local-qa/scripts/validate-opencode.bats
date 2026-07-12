@@ -137,15 +137,29 @@ opencode_jsonc_json() {
   }
 }
 
-@test "opencode.jsonc allow-lists the runtime review-state directory pattern" {
-  local state_pattern action
+@test "OpenCode permits writing the installed runtime initial review payload" {
+  local config_home state_dir payload output
 
-  # shellcheck disable=SC2016
-  state_pattern='$HOME/.config/opencode/review-state/*'
-  action="$(opencode_jsonc_json | jq -r --arg pattern "${state_pattern}" '.permission.external_directory[$pattern] // empty')"
+  command -v opencode >/dev/null || skip "opencode is required for the runtime permission regression"
 
-  [ "${action}" = "allow" ] || {
-    echo "opencode.jsonc must allow the runtime review-state pattern ${state_pattern} (got: '${action}')"
+  config_home="$(mktemp -d)"
+  state_dir="${config_home}/.config/opencode/review-state"
+  payload="${state_dir}/initial.json"
+  mkdir -p "${state_dir}"
+  cp "${opencode_jsonc}" "${config_home}/.config/opencode/opencode.jsonc"
+
+  run env HOME="${config_home}" \
+    OPENCODE_CONFIG="${config_home}/.config/opencode/opencode.jsonc" \
+    opencode debug agent build --pure --tool write \
+    --params "{filePath:'${payload}',content:'{\"body\":\"test\",\"comments\":[]}'}"
+  rm -rf "${config_home}"
+
+  [ "${status}" -eq 0 ] || {
+    echo "OpenCode denied the runtime payload write: ${output}"
+    return 1
+  }
+  [[ "${output}" == *'Wrote file successfully.'* ]] || {
+    echo "OpenCode did not report a successful runtime payload write: ${output}"
     return 1
   }
 }
