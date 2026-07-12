@@ -30,7 +30,7 @@ prepare_state() {
   printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
   cat >"${fake_bin}/gh" <<'EOF'
 #!/usr/bin/env bash
-[[ "$*" == "pr view 42 --json headRefOid --jq .headRefOid" ]] || exit 1
+[[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]] || exit 1
 printf '%s\n' 0123456789abcdef0123456789abcdef01234567
 EOF
   chmod +x "${fake_bin}/gh"
@@ -59,7 +59,7 @@ EOF
   printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
   cat >"${fake_bin}/gh" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$*" == "pr view 42 --json headRefOid --jq .headRefOid" ]]; then
+if [[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   printf '%s\n' 0123456789abcdef0123456789abcdef01234567
 elif [[ "$1" == "api" ]]; then
   jq -n '{id: 555}'
@@ -86,7 +86,7 @@ EOF
   printf '0' >"${count_file}"
   cat >"${fake_bin}/gh" <<EOF
 #!/usr/bin/env bash
-if [[ "\$*" == "pr view 42 --json headRefOid --jq .headRefOid" ]]; then
+if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   count="\$(cat "${count_file}")"
   if [[ "\$count" == "0" ]]; then
     printf '1' >"${count_file}"
@@ -123,7 +123,7 @@ opencode_require_app_token_for_review() { printf '2' >"${count_file}"; }
 EOF
   cat >"${fake_bin}/gh" <<EOF
 #!/usr/bin/env bash
-if [[ "\$*" == "pr view 42 --json headRefOid --jq .headRefOid" ]]; then
+if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   count="\$(cat "${count_file}")"
   if [[ "\$count" == "2" ]]; then
     printf '%s\\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

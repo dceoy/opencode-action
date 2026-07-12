@@ -25,7 +25,7 @@ trusted_context() {
   [[ "${repo}" == "${GITHUB_REPOSITORY:-}" && -f "${event_path}" ]] || return 1
   event_pr="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
   [[ "${event_pr}" == "${pr_number}" ]] || return 1
-  current_head="$(gh pr view "${pr_number}" --json headRefOid --jq .headRefOid)"
+  current_head="$(gh pr view "${pr_number}" --repo "${repo}" --json headRefOid --jq .headRefOid)"
   [[ "${current_head}" == "${head_sha}" ]] || return 1
   printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
 }

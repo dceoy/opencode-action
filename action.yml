@@ -99,12 +99,16 @@ runs:
       shell: bash -euo pipefail {0}
       env:
         PROMPT: ${{ inputs.prompt }}
-        EVENT_COMMENT: ${{ github.event.comment.body }}
+        MENTIONS: ${{ inputs.mentions }}
         ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
         OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
+        # shellcheck source=scripts/expand-command.sh
+        source "${ACTION_PATH}/scripts/expand-command.sh"
+        opencode_effective_prompt "${PROMPT}" "${MENTIONS}" "${GITHUB_EVENT_PATH:-}"
         review_only=false
-        if [[ "${PROMPT}" =~ ^/review-pr([[:space:]].*)?$ || "${EVENT_COMMENT}" =~ (^|[[:space:]])/review-pr([[:space:]]|$) ]]; then
+        if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/review-pr([[:space:]].*)?$ ]]; then
           review_only=true
         fi
         if [[ "${review_only}" == "true" ]]; then
