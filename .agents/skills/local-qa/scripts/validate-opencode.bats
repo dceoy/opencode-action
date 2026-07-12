@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Validate .opencode/ agent frontmatter, review-pr command/skill references,
 # that opencode.jsonc parses, and that its external_directory permission
-# allow-lists the resolver path review-pr.md actually sources.
+# allow-lists the resolver path review-pr.md actually sources and the runtime
+# review-state directory pattern.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -132,6 +133,71 @@ opencode_jsonc_json() {
 
   [ "${matched}" -eq 1 ] || {
     echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+    return 1
+  }
+}
+
+@test "OpenCode permits only the orchestrator's installed runtime review payloads" {
+  local config_home state_dir payload unauthorized_path
+  local positive_status positive_output positive_exists
+  local negative_status negative_output negative_exists
+  local model_config
+
+  command -v opencode >/dev/null || {
+    echo "opencode is required for the runtime permission regression"
+    return 1
+  }
+
+  config_home="$(mktemp -d)"
+  state_dir="${config_home}/.config/opencode/review-state"
+  payload="${state_dir}/initial.json"
+  unauthorized_path="${config_home}/unauthorized.json"
+  model_config='{"model":"opencode/big-pickle"}'
+  mkdir -p "${config_home}/.config/opencode"
+  cp -r "${repo_root}/.opencode/." "${config_home}/.config/opencode/"
+  mkdir -p "${state_dir}"
+
+  run env HOME="${config_home}" \
+    XDG_CONFIG_HOME="${config_home}/.config" \
+    OPENCODE_DISABLE_PROJECT_CONFIG=1 \
+    OPENCODE_CONFIG_CONTENT="${model_config}" \
+    opencode debug agent review-pr-orchestrator --tool write \
+    --params "{filePath:'${payload}',content:'{\"body\":\"test\",\"comments\":[]}' }"
+  positive_status="${status}"
+  positive_output="${output}"
+  positive_exists=false
+  [ -f "${payload}" ] && positive_exists=true
+
+  run env HOME="${config_home}" \
+    XDG_CONFIG_HOME="${config_home}/.config" \
+    OPENCODE_DISABLE_PROJECT_CONFIG=1 \
+    OPENCODE_CONFIG_CONTENT="${model_config}" \
+    opencode debug agent review-pr-orchestrator --tool write \
+    --params "{filePath:'${unauthorized_path}',content:'denied'}"
+  negative_status="${status}"
+  negative_output="${output}"
+  negative_exists=false
+  [ -f "${unauthorized_path}" ] && negative_exists=true
+  rm -rf "${config_home}"
+
+  [ "${positive_status}" -eq 0 ] || {
+    echo "OpenCode denied the orchestrator runtime payload write: ${positive_output}"
+    return 1
+  }
+  [ "${positive_exists}" = true ] || {
+    echo "OpenCode reported success without creating the runtime payload: ${positive_output}"
+    return 1
+  }
+  [[ "${positive_output}" == *'Wrote file successfully.'* ]] || {
+    echo "OpenCode did not report a successful runtime payload write: ${positive_output}"
+    return 1
+  }
+  [ "${negative_status}" -ne 0 ] || {
+    echo "OpenCode allowed an unrelated external write: ${negative_output}"
+    return 1
+  }
+  [ "${negative_exists}" = false ] || {
+    echo "OpenCode created an unrelated external file despite the deny boundary: ${negative_output}"
     return 1
   }
 }

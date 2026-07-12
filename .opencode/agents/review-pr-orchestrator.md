@@ -5,6 +5,12 @@ mode: primary
 color: info
 permission:
   "*": deny
+  external_directory:
+    "*": deny
+    "$HOME/.config/opencode/scripts/resolve-app-token.sh": allow
+    "$HOME/.config/opencode/scripts/review-pr-submit.sh": allow
+    "$HOME/.config/opencode/scripts/review-pr-gh.sh": allow
+    "$HOME/.config/opencode/review-state/*": allow
   read:
     "*": allow
     "*.env": deny
@@ -14,6 +20,8 @@ permission:
     "*": deny
     "$HOME/.config/opencode/review-state/initial.json": allow
     "$HOME/.config/opencode/review-state/update.json": allow
+    "../*.config/opencode/review-state/initial.json": allow
+    "../*.config/opencode/review-state/update.json": allow
   glob: allow
   grep: allow
   bash:

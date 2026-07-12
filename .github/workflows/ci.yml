@@ -52,6 +52,9 @@ jobs:
     uses: dceoy/gh-actions-for-devops/.github/workflows/bats-test.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
+      setup-run: |
+        curl -fsSL https://opencode.ai/install | bash -s -- --version 1.2.14
+        echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
   github-codeql-analysis:
     if: >
       github.event_name == 'push'
