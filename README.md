@@ -63,31 +63,31 @@ The default setup exchanges the workflow OIDC token for an OpenCode GitHub App t
 
 Set `model` to a `provider/model` value and pass the corresponding API key:
 
-| Provider         | Example model                | Secret                     |
-| ---------------- | ---------------------------- | -------------------------- |
-| OpenCode         | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`         |
-| OpenRouter       | `openrouter/openrouter/free` | `OPENROUTER_API_KEY`       |
-| Anthropic        | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`        |
-| OpenAI           | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`           |
-| Sakura AI Engine | Provider-specific            | `SAKURA_AI_ENGINE_API_KEY` |
+| Provider        | Example model                | Secret               |
+| --------------- | ---------------------------- | -------------------- |
+| OpenCode        | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`   |
+| OpenRouter      | `openrouter/openrouter/free` | `OPENROUTER_API_KEY` |
+| Anthropic       | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`  |
+| OpenAI          | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`     |
+| Custom provider | `myprovider/my-model`        | Provider-specific    |
 
-The provider account must have sufficient credits or quota.
+The provider account must have sufficient credits or quota. For providers not built into OpenCode, see [Custom providers](docs/custom-providers.md).
 
 ## Inputs
 
-| Input                  | Default                   | Description                                                   |
-| ---------------------- | ------------------------- | ------------------------------------------------------------- |
-| `model`                | Required                  | Model in `provider/model` format.                             |
-| `agent`                | `build`                   | Primary agent. A slash command can override it.               |
-| `prompt`               | Event comment             | Fixed prompt to use instead of the triggering comment.        |
-| `mentions`             | `/opencode,/oc`           | Comma-separated trigger phrases.                              |
-| `variant`              | -                         | Provider-specific reasoning effort.                           |
-| `share`                | `false`                   | Share the OpenCode session.                                   |
-| `use-github-token`     | `false`                   | Use the workflow token instead of the default App-token flow. |
-| `opencode-version`     | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+.   |
-| `use-bundled-toolkit`  | `true`                    | Use the bundled agents, commands, skills, and configuration.  |
-| `timeout-minutes`      | `60`                      | Stop OpenCode after this many minutes.                        |
-| `oidc-base-url`        | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.       |
+| Input                 | Default                   | Description                                                   |
+| --------------------- | ------------------------- | ------------------------------------------------------------- |
+| `model`               | Required                  | Model in `provider/model` format.                             |
+| `agent`               | `build`                   | Primary agent. A slash command can override it.               |
+| `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.        |
+| `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                              |
+| `variant`             | -                         | Provider-specific reasoning effort.                           |
+| `share`               | `false`                   | Share the OpenCode session.                                   |
+| `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow. |
+| `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+.   |
+| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.  |
+| `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                        |
+| `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.       |
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
