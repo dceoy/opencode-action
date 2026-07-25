@@ -1,6 +1,6 @@
 # opencode-action
 
-Enhanced GitHub Action to run [OpenCode](https://opencode.ai/) GitHub agent
+Run an [OpenCode](https://opencode.ai/) agent from GitHub issue and pull request comments.
 
 [![CI](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml/badge.svg)](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml)
 
@@ -136,3 +136,10 @@ Limit a review to one or more aspects:
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
 Review findings are deduplicated and validated against the pull request diff. Findings that can be anchored are posted inline; any remaining findings are summarized in the review body.
+
+See [Pull request reviews](docs/pull-request-reviews.md) for reviewer selection, submission behavior, permissions, and failure modes.
+
+## Documentation
+
+- [Pull request reviews](docs/pull-request-reviews.md)
+- [Security model](docs/security-model.md)
