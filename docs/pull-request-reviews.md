@@ -2,16 +2,9 @@
 
 The bundled `/review-pr` command runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API.
 
-## Requirements
+## Setup
 
-A review workflow must provide:
-
-- OpenCode 1.2.14 or newer
-- `enable-toolkit: true`
-- `pull-requests: write`
-- an API key for the selected model provider with available credits or quota
-
-When `use-github-token: true`, also pass `GH_TOKEN` or `GITHUB_TOKEN` and grant the workflow token the permissions required for the requested work.
+Review workflows require OpenCode 1.2.14 or newer, `enable-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider.
 
 ```yaml
 permissions:
@@ -29,76 +22,46 @@ steps:
       prompt: /review-pr
 ```
 
+When `use-github-token: true`, pass `GH_TOKEN` or `GITHUB_TOKEN` and grant the workflow token the required permissions.
+
 ## Review aspects
 
-Use one or more aspect keywords after `/review-pr`:
+Use one or more keywords after `/review-pr`:
 
-| Command                           | Reviewers                                                                                       |
-| --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `/review-pr` or `/review-pr all`  | Core reviewers plus specialty reviewers selected for the diff                                  |
-| `/review-pr security performance` | `security-code-reviewer`, `performance-reviewer`                                                 |
-| `/review-pr tests docs`           | `test-coverage-reviewer`, `pr-test-analyzer`, `documentation-accuracy-reviewer`                  |
-| `/review-pr code`                 | `code-reviewer`, `code-quality-reviewer`                                                         |
-| `/review-pr quality`              | `code-quality-reviewer`                                                                         |
-| `/review-pr coverage`             | `test-coverage-reviewer`, `pr-test-analyzer`                                                     |
-| `/review-pr documentation`        | `documentation-accuracy-reviewer`                                                                |
-| `/review-pr errors`               | `silent-failure-hunter`                                                                         |
-| `/review-pr comments`             | `comment-analyzer`                                                                              |
-| `/review-pr types`                | `type-design-analyzer`                                                                          |
-| `/review-pr simplify`             | `code-simplifier`, returning read-only, behavior-preserving simplification suggestions          |
+| Command                           | Focus                                |
+| --------------------------------- | ------------------------------------ |
+| `/review-pr` or `/review-pr all`  | Full review                          |
+| `/review-pr security performance` | Security and performance             |
+| `/review-pr tests docs`           | Test coverage and documentation      |
+| `/review-pr code`                 | Correctness and code quality         |
+| `/review-pr quality`              | Code quality                         |
+| `/review-pr coverage`             | Test coverage                        |
+| `/review-pr documentation`        | Documentation accuracy               |
+| `/review-pr errors`               | Silent failures and error handling   |
+| `/review-pr comments`             | Comment accuracy                     |
+| `/review-pr types`                | Type design                          |
+| `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review always includes the core reviewers:
+A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. The simplifier runs only when explicitly requested.
 
-- `code-quality-reviewer`
-- `performance-reviewer`
-- `test-coverage-reviewer`
-- `documentation-accuracy-reviewer`
-- `security-code-reviewer`
-- `code-reviewer`
+## Finding and submission behavior
 
-Specialty reviewers are added when the changed files make them relevant. `code-simplifier` runs only when `simplify` is explicitly requested.
+The orchestrator receives the pull request metadata, changed-file list, diff, and relevant source context. It then:
 
-## Finding processing
+1. keeps only high-confidence, actionable findings on changed files
+2. removes style-only feedback and duplicates
+3. validates findings against the captured diff
+4. posts anchorable findings as inline review comments
+5. keeps genuine unanchorable findings in the review body
 
-Each reviewer receives the pull request metadata, changed-file list, diff, and relevant source context. Reviewers inspect changed lines and their containing functions and return only high-confidence, actionable findings.
+A successful run creates one structured GitHub review and updates its body with the workflow run link. `/review-pr` does not post through `gh pr comment` or the issue comment API.
 
-The orchestrator then:
+If no finding can be anchored, the command returns a concise Markdown fallback instead of an empty review. Invalid inline anchors are retried once as summary-only findings. Submission failures fail the workflow rather than reposting findings as an unstructured comment.
 
-1. drops praise, nitpicks, style-only feedback, and findings outside changed files
-2. deduplicates findings that share the same root cause
-3. validates each finding against the captured diff
-4. anchors findings to changed lines when possible
-5. keeps genuine but unanchorable findings as summary-only items
+`opencode github run` may separately post the command's final completion message, so a run can produce the structured review plus at most one top-level completion comment.
 
-Inline comments use the finding severity and source agent in the comment body. If no noteworthy findings remain, the command does not submit an empty review.
+## Read-only behavior
 
-## Submission behavior
+Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub. It uses action-installed configuration and trusted helpers, and aborts if the pinned pull request context changes.
 
-A successful structured run creates one GitHub review containing:
-
-- inline comments for findings that can be anchored to the diff
-- a review body containing only summary-only findings, when present
-- a concise count when every finding is inline
-
-The submitted review is updated in place with the workflow run link. The `/review-pr` command does not call `gh pr comment` or GitHub's issue comment API.
-
-`opencode github run` may still post the command's final assistant message as one separate top-level completion comment. A run can therefore produce the structured review and at most one additional completion comment.
-
-If no finding can be anchored, the command returns a concise top-level Markdown fallback instead of submitting an empty structured review. If GitHub rejects an inline anchor, the command retries once after moving the rejected item to the summary-only section.
-
-A structured submission failure fails the workflow. Findings are not repeated as an unstructured top-level comment after a failed submission.
-
-## Read-only guarantees
-
-The review workflow is designed to analyze and report only. It must not:
-
-- edit, create, delete, format, or generate repository files
-- run package managers, installers, generators, formatters, or mutation flags such as `--fix` or `--write`
-- commit, reset, restore, stash, or push changes
-- let reviewer agents post directly to GitHub
-
-The action installs a fresh trusted OpenCode configuration for review-only runs and ignores project-provided OpenCode configuration. Trusted helper scripts are invoked only from the action-installed global configuration, never from repository-relative paths.
-
-The review context pins the repository, pull request number, and head commit before analysis. Metadata, diff retrieval, validation, submission, and review updates fail closed if the pull request head changes.
-
-See [Security model](security-model.md) for external-directory restrictions, credential verification, and token precedence.
+See [Security model](security-model.md) for trust boundaries, token verification, and fail-closed behavior.
