@@ -63,15 +63,15 @@ The default setup exchanges the workflow OIDC token for an OpenCode GitHub App t
 
 Set `model` to a `provider/model` value and pass the corresponding API key:
 
-| Provider              | Example model                | Secret               |
-| --------------------- | ---------------------------- | -------------------- |
-| OpenCode              | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`   |
-| OpenRouter            | `openrouter/openrouter/free` | `OPENROUTER_API_KEY` |
-| Anthropic             | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`  |
-| OpenAI                | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`     |
-| OpenAI-compatible API | `myprovider/my-model`        | Provider-specific    |
+| Provider        | Example model                | Secret               |
+| --------------- | ---------------------------- | -------------------- |
+| OpenCode        | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`   |
+| OpenRouter      | `openrouter/openrouter/free` | `OPENROUTER_API_KEY` |
+| Anthropic       | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`  |
+| OpenAI          | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`     |
+| Custom provider | `myprovider/my-model`        | Provider-specific    |
 
-The provider account must have sufficient credits or quota. For providers not built into OpenCode, see [OpenAI-compatible providers](docs/openai-compatible-providers.md).
+The provider account must have sufficient credits or quota. For providers not built into OpenCode, see [Custom providers](docs/custom-providers.md).
 
 ## Inputs
 

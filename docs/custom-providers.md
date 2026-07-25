@@ -1,6 +1,6 @@
-# OpenAI-compatible providers
+# Custom providers
 
-Use this guide for model providers that expose an OpenAI-compatible API but are not built into OpenCode. Sakura AI Engine is the exception: it ships pre-configured in this action's bundled toolkit (see below), so most users need no `opencode.json` at all.
+Use this guide for model providers that are not built into OpenCode, typically ones exposing an OpenAI-compatible API. Sakura AI Engine is the exception: it ships pre-configured in this action's bundled toolkit (see below), so most users need no `opencode.json` at all.
 
 ## Configure the provider
 
