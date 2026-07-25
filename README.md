@@ -6,11 +6,9 @@ Run an [OpenCode](https://opencode.ai/) agent from GitHub issue and pull request
 
 ## Quick start
 
-### 1. Add a model provider secret
+### 1. Add a provider secret
 
-In your repository, open **Settings → Secrets and variables → Actions**, select **New repository secret**, and add the API key for your provider.
-
-For the example below, create `OPENCODE_API_KEY`.
+In **Settings → Secrets and variables → Actions**, add the API key for your model provider. The example below uses `OPENCODE_API_KEY`.
 
 ### 2. Add the workflow
 
@@ -47,25 +45,23 @@ jobs:
           model: opencode-go/kimi-k3
 ```
 
-### 3. Ask OpenCode for help
-
-Comment on an issue or pull request:
+### 3. Comment on an issue or pull request
 
 ```text
 /opencode explain this issue
 ```
 
-You can also use the shorter `/oc` trigger:
+The shorter `/oc` trigger also works:
 
 ```text
 /oc fix this
 ```
 
-The default setup exchanges the workflow's OIDC token for an OpenCode GitHub App token. This is why the workflow grants `id-token: write`.
+The default setup exchanges the workflow OIDC token for an OpenCode GitHub App token, which requires `id-token: write`.
 
-## Choose a model
+## Models and secrets
 
-Set `model` to a `provider/model` value and pass that provider's API key:
+Set `model` to a `provider/model` value and pass the corresponding API key:
 
 | Provider         | Example model                | Secret                     |
 | ---------------- | ---------------------------- | -------------------------- |
@@ -75,69 +71,33 @@ Set `model` to a `provider/model` value and pass that provider's API key:
 | OpenAI           | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`           |
 | Sakura AI Engine | Provider-specific            | `SAKURA_AI_ENGINE_API_KEY` |
 
-Make sure the account has available credits or quota.
+The provider account must have sufficient credits or quota.
 
-## Common options
-
-Add options under the step's `with:` block:
-
-```yaml
-with:
-  model: openrouter/openrouter/free
-  prompt: /review-pr
-  timeout-minutes: 30
-```
+## Inputs
 
 | Input              | Default                   | Description                                                      |
 | ------------------ | ------------------------- | ---------------------------------------------------------------- |
 | `model`            | Required                  | Model in `provider/model` format.                                |
-| `prompt`           | Event comment             | Use a fixed prompt instead of the triggering comment.            |
+| `agent`            | `build`                   | Primary agent. A slash command can override it.                  |
+| `prompt`           | Event comment             | Fixed prompt to use instead of the triggering comment.           |
 | `mentions`         | `/opencode,/oc`           | Comma-separated trigger phrases.                                 |
-| `agent`            | `build`                   | Primary OpenCode agent. A slash command can override it.         |
-| `variant`          | -                         | Provider-specific reasoning effort, such as `high` or `minimal`. |
+| `variant`          | -                         | Provider-specific reasoning effort.                              |
 | `share`            | `false`                   | Share the OpenCode session.                                      |
-| `use-github-token` | `false`                   | Use `GITHUB_TOKEN` instead of the OpenCode App token flow.       |
-| `version`          | `latest`                  | OpenCode version to install. `/review-pr` needs 1.2.14 or newer. |
-| `enable-toolkit`   | `true`                    | Install the action's bundled agents, commands, and skills.       |
-| `timeout-minutes`  | `60`                      | Stop the OpenCode process after this many minutes.               |
+| `use-github-token` | `false`                   | Use the workflow token instead of the default App-token flow.    |
+| `version`          | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+.      |
+| `enable-toolkit`   | `true`                    | Install the bundled agents, commands, and skills.                |
+| `timeout-minutes`  | `60`                      | Stop OpenCode after this many minutes.                            |
 | `oidc-base-url`    | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.          |
 
-If you set `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
+When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
-The action outputs `opencode-version` (the installed version) and `cache-hit` (whether the binary came from cache).
+Outputs are `opencode-version` and `cache-hit`.
 
 ## Pull request reviews
 
-The bundled `/review-pr` command reviews a pull request and submits findings through GitHub's review API:
+Set `prompt: /review-pr` to run the bundled read-only pull request review workflow. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines.
 
-```yaml
-- name: Run OpenCode review
-  uses: dceoy/opencode-action@419cdd50ed88bd77dd429ebb683e8d18b03ac89a # v0.4.0
-  env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-  with:
-    model: openrouter/openrouter/free
-    prompt: /review-pr
-```
-
-Grant `pull-requests: write`. With the default App-token flow, the review is submitted as `opencode-agent[bot]`; if a valid App token cannot be verified, the run fails instead of posting under the wrong identity. With `use-github-token: true`, it can fall back to `github-actions[bot]`.
-
-Limit a review to one or more aspects:
-
-| Command                           | Focus                                |
-| --------------------------------- | ------------------------------------ |
-| `/review-pr` or `/review-pr all`  | Full review                          |
-| `/review-pr security performance` | Security and performance             |
-| `/review-pr tests docs`           | Test coverage and documentation      |
-| `/review-pr code`                 | Correctness and code quality         |
-| `/review-pr errors`               | Silent failures and error handling   |
-| `/review-pr comments`             | Comment accuracy                     |
-| `/review-pr types`                | Type design                          |
-| `/review-pr simplify`             | Read-only simplification suggestions |
-
-Review findings are deduplicated and validated against the pull request diff. Findings that can be anchored are posted inline; any remaining findings are summarized in the review body.
-
-See [Pull request reviews](docs/pull-request-reviews.md) for reviewer selection, submission behavior, permissions, and failure modes.
+See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, and submission behavior.
 
 ## Documentation
 
