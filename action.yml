@@ -36,13 +36,13 @@ inputs:
     required: false
     description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install.
     default: https://api.opencode.ai
-  version:
+  opencode-version:
     required: false
     description: OpenCode version to install (e.g., v1.2.3)
     default: latest
-  enable-toolkit:
+  use-bundled-toolkit:
     required: false
-    description: Install the action's bundled .opencode/ agents, commands, and skills into ~/.config/opencode (global config) before running. Existing files are preserved.
+    description: Whether to use the action's bundled .opencode/ agents, commands, skills, and supporting configuration.
     default: 'true'
   timeout-minutes:
     required: false
@@ -62,7 +62,7 @@ runs:
       id: version
       shell: bash -euo pipefail {0}
       env:
-        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_VERSION: ${{ inputs.opencode-version }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         if [[ "${INPUT_VERSION}" == "latest" ]]; then
@@ -100,7 +100,7 @@ runs:
       env:
         PROMPT: ${{ inputs.prompt }}
         MENTIONS: ${{ inputs.mentions }}
-        ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
+        USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
@@ -113,8 +113,8 @@ runs:
           review_only=true
         fi
         if [[ "${review_only}" == "true" ]]; then
-          [[ "${ENABLE_TOOLKIT}" == "true" ]] || {
-            echo "::error::Review-only mode requires enable-toolkit: true."
+          [[ "${USE_BUNDLED_TOOLKIT}" == "true" ]] || {
+            echo "::error::Review-only mode requires use-bundled-toolkit: true."
             exit 1
           }
           version="${OPENCODE_VERSION#v}"
@@ -133,7 +133,7 @@ runs:
         fi
         echo "enabled=${review_only}" >> "${GITHUB_OUTPUT}"
     - name: Copy bundled OpenCode config
-      if: inputs.enable-toolkit == 'true'
+      if: inputs.use-bundled-toolkit == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -174,7 +174,7 @@ runs:
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         ACTION_PATH: ${{ github.action_path }}
-        ENABLE_TOOLKIT: ${{ inputs.enable-toolkit }}
+        USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
       run: |
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
@@ -198,7 +198,7 @@ runs:
             "${HOME}/.config/opencode/commands"
           )
         fi
-        if [[ "${ENABLE_TOOLKIT}" == "true" && "${REVIEW_ONLY}" != "true" ]]; then
+        if [[ "${USE_BUNDLED_TOOLKIT}" == "true" && "${REVIEW_ONLY}" != "true" ]]; then
           command_dirs+=("${ACTION_PATH}/.opencode/commands")
         fi
         opencode_resolve_prompt_and_agent \
