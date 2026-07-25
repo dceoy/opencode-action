@@ -78,6 +78,7 @@ Set the API key required by the selected model provider, for example:
 - `OPENROUTER_API_KEY` for OpenRouter models
 - `ANTHROPIC_API_KEY` for Anthropic models
 - `OPENAI_API_KEY` for OpenAI models
+- `SAKURA_AI_ENGINE_API_KEY` for Sakura AI Engine models
 
 When `use-github-token: true`, pass `GITHUB_TOKEN` in `env` and grant the workflow enough permissions for the requested work.
 
