@@ -60,8 +60,40 @@ If no finding can be anchored, the command returns a concise Markdown fallback i
 
 `opencode github run` may separately post the command's final completion message, so a run can produce the structured review plus at most one top-level completion comment.
 
-## Read-only behavior
+## Security
 
-Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub. It uses action-installed configuration and trusted helpers, and aborts if the pinned pull request context changes.
+`opencode-action` treats the repository checkout, project OpenCode configuration, pull request content, and unverified git credentials as untrusted.
 
-See [Security model](security-model.md) for trust boundaries, token verification, and fail-closed behavior.
+### Review isolation
+
+When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration, removes inherited plugins and agents, and resolves the review command only from the action bundle.
+
+External-directory access is denied by default. Only the trusted review helpers and their dedicated state directory under `~/.config/opencode/` are allowed. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
+
+### Trusted pull request context
+
+The helpers derive the repository and pull request number from the GitHub Actions event and pin the pull request head SHA before analysis. The submission helper validates the event context, pinned commit, payload shape, and target endpoint. If the pull request head changes after the diff is captured, the run fails before submitting stale findings.
+
+### Token verification and precedence
+
+The default OIDC flow supplies an OpenCode GitHub App installation token. Credentials discovered through git configuration remain untrusted until their identity is verified.
+
+Before a structured review write, the action creates an empty pending review with each candidate, verifies that its author is `opencode-agent[bot]`, and immediately deletes it. The probe is not published, but it is a real create-and-delete API operation. Tokens and decoded authorization headers are never printed.
+
+Structured writes use this precedence:
+
+1. the first candidate verified as `opencode-agent[bot]`
+2. the caller's existing `GH_TOKEN` or `GITHUB_TOKEN` only when `use-github-token: true`
+3. otherwise, fail without submitting a review
+
+The explicit workflow-token fallback may make reviews appear under `github-actions[bot]` or another identity associated with that token. Unverified candidates may be used for read-only metadata access but never pass the structured-write gate.
+
+### Fail-closed behavior
+
+Review-only mode fails rather than weakening its guarantees when:
+
+- the bundled toolkit is disabled or the OpenCode version is unsupported
+- trusted pull request context cannot be established
+- the pull request head changes
+- no App token verifies and workflow-token fallback was not explicitly enabled
+- review payload validation or structured submission fails
