@@ -10,6 +10,7 @@ Review workflows require OpenCode 1.2.14 or newer, `enable-toolkit: true`, `pull
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 steps:
   - name: Run OpenCode review
     uses: dceoy/opencode-action@419cdd50ed88bd77dd429ebb683e8d18b03ac89a # v0.4.0
