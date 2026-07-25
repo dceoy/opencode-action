@@ -97,9 +97,4 @@ Outputs are `opencode-version` and `cache-hit`.
 
 Set `prompt: /review-pr` to run the bundled read-only pull request review workflow. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines.
 
-See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, and submission behavior.
-
-## Documentation
-
-- [Pull request reviews](docs/pull-request-reviews.md)
-- [Security model](docs/security-model.md)
+See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.
