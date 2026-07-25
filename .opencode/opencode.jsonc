@@ -11,6 +11,15 @@
       "models": {
         "gpt-oss-120b": {
           "name": "gpt-oss-120b"
+        },
+        "preview/gemma-4-31B-it": {
+          "name": "preview/gemma-4-31B-it"
+        },
+        "preview/Kimi-K2.6": {
+          "name": "preview/Kimi-K2.6"
+        },
+        "preview/Qwen3.6-35B-A3B": {
+          "name": "preview/Qwen3.6-35B-A3B"
         }
       }
     }
