@@ -4,7 +4,7 @@ The bundled `/review-pr` command runs a read-only, multi-agent review and submit
 
 ## Setup
 
-Review workflows require OpenCode 1.2.14 or newer, `enable-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider.
+Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider.
 
 ```yaml
 permissions:
