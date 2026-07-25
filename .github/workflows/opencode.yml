@@ -42,11 +42,10 @@ jobs:
       - name: Run OpenCode
         uses: ./
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         with:
-          model: opencode-go/deepseek-v4-flash
-          variant: max
+          model: sakura/gpt-oss-120b
           prompt: /review-pr
   opencode-bot:
     if: >
@@ -84,7 +83,7 @@ jobs:
       - name: Run OpenCode
         uses: ./
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         with:
-          model: openrouter/openrouter/free
+          model: sakura/gpt-oss-120b
