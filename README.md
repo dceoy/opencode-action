@@ -1,6 +1,6 @@
 # opencode-action
 
-Run an [OpenCode](https://opencode.ai/) agent from GitHub issue and pull request comments.
+Enhanced GitHub Action to run [OpenCode](https://opencode.ai/) GitHub agent
 
 [![CI](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml/badge.svg)](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml)
 
@@ -24,13 +24,11 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
-
 permissions:
   contents: write
   issues: write
   pull-requests: write
   id-token: write
-
 jobs:
   opencode:
     if: contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')
@@ -40,14 +38,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-
       - name: Run OpenCode
-        uses: dceoy/opencode-action@v0
+        uses: dceoy/opencode-action@419cdd50ed88bd77dd429ebb683e8d18b03ac89a # v0.4.0
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          model: opencode-go/glm-5.2
+          model: opencode-go/kimi-k3
 ```
 
 ### 3. Ask OpenCode for help
@@ -70,13 +67,13 @@ The default setup exchanges the workflow's OIDC token for an OpenCode GitHub App
 
 Set `model` to a `provider/model` value and pass that provider's API key:
 
-| Provider         | Example model                 | Secret                     |
-| ---------------- | ----------------------------- | -------------------------- |
-| OpenCode         | `opencode-go/glm-5.2`         | `OPENCODE_API_KEY`         |
-| OpenRouter       | `openrouter/openrouter/free`  | `OPENROUTER_API_KEY`       |
-| Anthropic        | `anthropic/claude-sonnet-4-5` | `ANTHROPIC_API_KEY`        |
-| OpenAI           | `openai/gpt-5`                | `OPENAI_API_KEY`           |
-| Sakura AI Engine | Provider-specific             | `SAKURA_AI_ENGINE_API_KEY` |
+| Provider         | Example model                | Secret                     |
+| ---------------- | ---------------------------- | -------------------------- |
+| OpenCode         | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`         |
+| OpenRouter       | `openrouter/openrouter/free` | `OPENROUTER_API_KEY`       |
+| Anthropic        | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`        |
+| OpenAI           | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`           |
+| Sakura AI Engine | Provider-specific            | `SAKURA_AI_ENGINE_API_KEY` |
 
 Make sure the account has available credits or quota.
 
@@ -97,7 +94,7 @@ with:
 | `prompt`           | Event comment             | Use a fixed prompt instead of the triggering comment.            |
 | `mentions`         | `/opencode,/oc`           | Comma-separated trigger phrases.                                 |
 | `agent`            | `build`                   | Primary OpenCode agent. A slash command can override it.         |
-| `variant`          | —                         | Provider-specific reasoning effort, such as `high` or `minimal`. |
+| `variant`          | -                         | Provider-specific reasoning effort, such as `high` or `minimal`. |
 | `share`            | `false`                   | Share the OpenCode session.                                      |
 | `use-github-token` | `false`                   | Use `GITHUB_TOKEN` instead of the OpenCode App token flow.       |
 | `version`          | `latest`                  | OpenCode version to install. `/review-pr` needs 1.2.14 or newer. |
@@ -115,7 +112,7 @@ The bundled `/review-pr` command reviews a pull request and submits findings thr
 
 ```yaml
 - name: Run OpenCode review
-  uses: dceoy/opencode-action@v0
+  uses: dceoy/opencode-action@419cdd50ed88bd77dd429ebb683e8d18b03ac89a # v0.4.0
   env:
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -139,11 +136,3 @@ Limit a review to one or more aspects:
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
 Review findings are deduplicated and validated against the pull request diff. Findings that can be anchored are posted inline; any remaining findings are summarized in the review body.
-
-## Version pinning
-
-`dceoy/opencode-action@v0` follows the latest `v0.x.y` release. Pin an exact release tag or full commit SHA when you need stricter supply-chain control:
-
-```yaml
-uses: dceoy/opencode-action@v0.2.4
-```
