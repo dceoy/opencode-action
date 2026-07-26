@@ -3,18 +3,24 @@
 # The function is sourceable for focused tests.
 
 opencode_prepare_config() {
-  local action_path="${1}" review_only="${2:-false}" config_dir helper_dir
+  local action_path="${1}" review_only="${2:-false}" config_dir helper
+  local -a required_helpers=(
+    resolve-app-token.sh
+    review-pr-gh.sh
+    review-pr-submit.sh
+  )
   config_dir="${HOME}/.config/opencode"
 
   if [[ ! -d "${action_path}/.opencode" ]]; then
     echo "::error::Bundled OpenCode config is unavailable at '${action_path}/.opencode'." >&2
     return 1
   fi
-  if [[ ! -f "${action_path}/.opencode/scripts/resolve-app-token.sh" ||
-    ! -f "${action_path}/.opencode/scripts/review-pr-submit.sh" ]]; then
-    echo "::error::Bundled OpenCode helper scripts are unavailable." >&2
-    return 1
-  fi
+  for helper in "${required_helpers[@]}"; do
+    if [[ ! -f "${action_path}/.opencode/scripts/${helper}" ]]; then
+      echo "::error::Bundled OpenCode helper '${helper}' is unavailable." >&2
+      return 1
+    fi
+  done
 
   case "${review_only}" in
     true)
@@ -31,13 +37,9 @@ opencode_prepare_config() {
       ;;
     false)
       mkdir -p "${config_dir}"
+      # OpenCode invokes trusted review helpers only from this installed config;
+      # never execute helpers from the untrusted checkout's .opencode/scripts/.
       cp -rn "${action_path}/.opencode/." "${config_dir}/"
-      helper_dir="${config_dir}/scripts/opencode-action"
-      rm -rf "${helper_dir}"
-      mkdir -p "${helper_dir}"
-      cp -f "${action_path}/.opencode/scripts/resolve-app-token.sh" \
-        "${action_path}/.opencode/scripts/review-pr-submit.sh" \
-        "${helper_dir}/"
       echo "Copied bundled OpenCode config into ~/.config/opencode/"
       ;;
     *)
