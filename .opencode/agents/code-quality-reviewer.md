@@ -82,11 +82,41 @@ Return findings as a normalized list. For each high-confidence finding:
   line: <head-file line number>
   severity: critical | important | suggestion
   source: code-quality-reviewer
-  message: <concise description of the issue and a concrete fix>
+  message: |-
+    <what is wrong and the behavior that demonstrates it>
+
+    <why it matters to users or maintainers>
+
+    <a concrete fix, including a fenced suggestion when it can be applied safely>
 ```
+
+Make each message useful without requiring the reader to reconstruct the issue
+from the diff. Explain the observed behavior or root cause, its practical impact,
+and the concrete resolution in separate short paragraphs. When the supplied
+context is sufficient to produce a complete, behavior-preserving replacement
+for the single commented line, end the message with a GitHub suggested-change
+block containing only the exact replacement:
+
+````markdown
+```suggestion
+replacement code
+```
+````
+
+Do not emit a `suggestion` block for an incomplete sketch, when unchanged
+surrounding lines would have to be included, when the replacement depends on
+unseen code, or when the reported line is not itself a head-side changed
+line: the orchestrator may relocate an unanchorable finding to a nearby
+changed line, and GitHub would then apply the block to that different line
+instead of the one you examined. In those cases, describe the fix precisely
+and use a language-tagged code block only when a non-applicable example
+materially clarifies it.
 
 If no high-confidence issues exist, return an empty list and a one-line note confirming the code quality is good.
 
 ## Tone
 
-Be specific and concrete. Prefer "the loop does not guard against an empty `files` list — add an early return or check before iterating" over "this could be improved." When the code is genuinely well-written, say so briefly. Analyze and report only; do not modify code.
+Be specific, concrete, and explanatory without becoming repetitive. Prefer a
+brief diagnosis, impact, and ready-to-use fix over a compressed sentence such
+as "this could be improved." When the code is genuinely well-written, say so
+briefly. Analyze and report only; do not modify code.

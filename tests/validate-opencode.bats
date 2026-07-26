@@ -100,6 +100,28 @@ frontmatter() {
   grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_doc}"
 }
 
+@test "code-quality findings retain rich actionable Markdown" {
+  local quality_reviewer="${agents_dir}/code-quality-reviewer.md"
+
+  grep -Fq 'message: |-' "${quality_reviewer}"
+  grep -Fq '<what is wrong and the behavior that demonstrates it>' "${quality_reviewer}"
+  grep -Fq 'why it matters to users or maintainers' "${quality_reviewer}"
+  grep -Fq '<a concrete fix, including a fenced suggestion when it can be applied safely>' "${quality_reviewer}"
+  grep -Fq '```suggestion' "${quality_reviewer}"
+  grep -Fq "Preserve each finding message's Markdown" "${review_pr_doc}"
+  grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_doc}"
+  grep -Fq 'message: |-' "${review_pr_doc}"
+  grep -Fq '<actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_doc}"
+}
+
+@test "suggestion blocks are withheld or stripped for relocated anchors" {
+  local quality_reviewer="${agents_dir}/code-quality-reviewer.md"
+
+  grep -Fq 'reported line is not itself a head-side changed' "${quality_reviewer}"
+  # shellcheck disable=SC2016
+  grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_doc}"
+}
+
 opencode_jsonc_json() {
   opencode_jsonc_to_json < "${opencode_jsonc}"
 }
