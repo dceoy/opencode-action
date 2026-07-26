@@ -141,7 +141,7 @@ STUB
   repo="$(mk_repo)"
   git -C "${repo}" config --local http.https://github.com/.extraheader "$(encode_header ghs_local_tok)"
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = "ghs_local_tok" ]
@@ -157,7 +157,7 @@ STUB
   exact="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
   [ -z "${exact}" ]
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = "ghs_urlmatch_tok" ]
@@ -179,7 +179,7 @@ STUB
   local_value="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
   [ -z "${local_value}" ]
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = "ghs_include_tok" ]
@@ -190,9 +190,10 @@ STUB
   repo="$(mk_repo)"
   git -C "${repo}" config --local http.https://notgithub.com/.extraheader "$(encode_header ghs_wrong_host_tok)"
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
-  [ "${status}" -ne 0 ]
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
 }
 
 @test "does not treat a github.com.example.com extraheader as a GitHub host" {
@@ -200,9 +201,10 @@ STUB
   repo="$(mk_repo)"
   git -C "${repo}" config --local http.https://github.com.example.com/.extraheader "$(encode_header ghs_wrong_host_tok)"
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
-  [ "${status}" -ne 0 ]
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
 }
 
 @test "resolves the real github.com token even when a look-alike host extraheader is also present" {
@@ -212,7 +214,7 @@ STUB
   git -C "${repo}" config --local --add http.https://github.com.example.com/.extraheader "$(encode_header ghs_wrong_host_tok_2)"
   git -C "${repo}" config --local --add http.https://github.com/some/path.extraheader "$(encode_header ghs_real_tok)"
 
-  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = "ghs_real_tok" ]
@@ -222,9 +224,10 @@ STUB
   local repo
   repo="$(mk_repo)"
 
-  run bash -c "cd '${repo}' && source '${lib}' && GH_TOKEN=dummy GITHUB_TOKEN=dummy opencode_resolve_app_token"
+  run bash -c "cd '${repo}' && source '${lib}' && GH_TOKEN=dummy GITHUB_TOKEN=dummy opencode_resolve_app_token_candidates"
 
-  [ "${status}" -ne 0 ]
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
 }
 
 @test "fails fast with no App token candidate and explains the identity risk" {
