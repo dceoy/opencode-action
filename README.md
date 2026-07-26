@@ -97,4 +97,6 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its backward-compatible command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees; see [Pull request reviews](docs/pull-request-reviews.md#review-isolation).
 
+The default review starts with only the general code reviewer to bound provider requests. Specialty reviewers are added only when the diff matches their documented concern or an aspect such as `security`, `tests`, `docs`, or `performance` explicitly requests them. Provider request and chunk timeouts and the action's `timeout-minutes` watchdog are safety limits; they do not replace bounded request context or guarantee that a provider gateway or inference request will remain open.
+
 See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.

@@ -6,7 +6,7 @@ Agents can also load `pr-review` directly through OpenCode's native skill tool, 
 
 ## Setup
 
-Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout.
+Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout. Request, chunk, and action timeouts are safety limits, not substitutes for bounding request size, and `chunkTimeout` cannot guarantee that a provider-side gateway or inference timeout will not end a request sooner.
 
 ```yaml
 permissions:
@@ -32,7 +32,7 @@ Use one or more keywords after `/review-pr`:
 
 | Command                           | Focus                                |
 | --------------------------------- | ------------------------------------ |
-| `/review-pr` or `/review-pr all`  | Full review                          |
+| `/review-pr` or `/review-pr all`  | Diff-directed review                 |
 | `/review-pr security performance` | Security and performance             |
 | `/review-pr tests docs`           | Test coverage and documentation      |
 | `/review-pr code`                 | Correctness and code quality         |
@@ -44,11 +44,11 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review runs the core correctness, security, and test-coverage reviewers by default. Code quality, performance, and documentation reviewers run only when explicitly requested via their aspect or when the diff makes that specialty relevant, to limit provider request fan-out. The simplifier runs only when explicitly requested.
+The default and `all` paths start with only the general code reviewer to avoid excessive provider requests. The orchestrator then selects security, test coverage, documentation, or performance reviewers only when changed files and hunks match their documented concerns. Explicit aspects always force their mapped reviewers; for example, `security` forces the security reviewer and `tests` forces both test reviewers. Other specialty reviewers, including the simplifier, run only when explicitly requested.
 
 ## Finding and submission behavior
 
-The orchestrator receives the pull request metadata, changed-file list, diff, and relevant source context. It then:
+The orchestrator retains the full pull request context for anchoring and normalization, but classifies files and hunks before delegation. Each reviewer receives only its relevant diff subset and containing-function context. Reviewer Tasks run sequentially, one at a time. The orchestrator then:
 
 1. keeps only high-confidence, actionable findings on changed files
 2. removes style-only feedback and duplicates

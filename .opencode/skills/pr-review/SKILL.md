@@ -24,11 +24,11 @@ bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" diff
 
 If no PR context can be established, use local mode: `git status --short`, `git diff --name-only HEAD`, and `git diff --no-ext-diff`; do not infer a PR from the current branch. Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.
 
-Capture the full diff, changed-file list, PR title/body, base and head branch names, head SHA, and relevant source context using the read, glob, and grep tools. Pass that complete context to reviewers; they have no shell access and must not need it.
+Capture the full diff, changed-file list, PR title/body, base and head branch names, head SHA, and relevant source context using the read, glob, and grep tools. Retain the full diff locally for anchoring and final normalization. Before launching reviewers, classify changed files and individual diff hunks by concern. For each concern, collect only the changed files, hunks, and containing-function source context needed to review it; exclude unchanged files, unrelated hunks, and unrelated full-file contents.
 
 ## 2. Select and launch reviewers
 
-Supported aspects are:
+Explicit aspects select these reviewers:
 
 - `code`: `code-reviewer`, `code-quality-reviewer`
 - `quality`: `code-quality-reviewer`
@@ -40,9 +40,21 @@ Supported aspects are:
 - `errors`: `silent-failure-hunter`
 - `types`: `type-design-analyzer`
 - `simplify`: `code-simplifier`, returning behavior-preserving simplification proposals as review findings without modifying files
-- `all`, or no aspect: the core reviewers `code-reviewer`, `security-code-reviewer`, and `test-coverage-reviewer`. Run `code-quality-reviewer`, `performance-reviewer`, and `documentation-accuracy-reviewer` only when explicitly requested via their aspect or when the diff makes that specialty necessary, to limit provider request fan-out. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
 
-Launch only the explicitly permitted reviewer agents. For each, supply the captured diff, changed-file list, metadata, and relevant source context. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
+Requested aspects always force their mapped reviewers. For `all`, or when no aspect is supplied, unconditionally select only `code-reviewer`, then add reviewers using this deterministic diff classification:
+
+| Diff trigger                                                                                                                                                            | Conditional reviewer              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Authentication, authorization, permissions, secrets or tokens, shell execution, external input, network boundaries, workflow files, or security-sensitive configuration | `security-code-reviewer`          |
+| Executable behavior changes, tests change, executable source lacks corresponding tests, or coverage risk is material                                                    | `test-coverage-reviewer`          |
+| README or documentation changes, configuration examples, or user-visible interface or behavior changes                                                                  | `documentation-accuracy-reviewer` |
+| Loops, repeated I/O, large-data processing, concurrency, or other performance-sensitive code                                                                            | `performance-reviewer`            |
+
+Do not launch a reviewer merely because it appears in a default reviewer list. For `all` or no aspect, other specialty reviewers are never inferred and run only when explicitly requested. `code-simplifier` runs only for an explicit `simplify` aspect.
+
+Invoke at most one reviewer Task at a time. Wait for that Task to finish before starting another, and never emit multiple reviewer Task calls in one assistant turn.
+
+Build a separate, minimal Task request for every selected reviewer. Include only its relevant files, diff hunks, and containing-function source context, plus only the metadata needed for that specialty. Exclude unchanged files and unrelated hunks. `code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents. Reviewers have no shell access, so each subset must be self-contained. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
 
 ```yaml
 - file: path/to/file
