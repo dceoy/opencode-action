@@ -35,6 +35,21 @@ setup() {
   [ ! -e "${fake_home}/.opencode/plugins" ]
 }
 
+@test "review-only config preparation does not traverse a symlinked home .opencode" {
+  mkdir -p "${fake_home}/.config/opencode" "${BATS_TEST_TMPDIR}/elsewhere"
+  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
+  ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.opencode"
+
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_prepare_config "$2" true
+  ' _ "${prepare_script}" "${fake_action}"
+
+  [ "${status}" -eq 0 ]
+  [ -L "${fake_home}/.opencode" ]
+  [ -f "${BATS_TEST_TMPDIR}/elsewhere/sensitive" ]
+}
+
 @test "normal config preparation preserves config and installs helpers directly" {
   mkdir -p "${fake_home}/.config/opencode/scripts"
   printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"

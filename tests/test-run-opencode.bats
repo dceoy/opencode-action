@@ -131,6 +131,38 @@ EOF
   [ "${status}" -eq 0 ]
 }
 
+@test "normal run configuration falls back to the bundled toolkit's commands" {
+  workspace="${BATS_TEST_TMPDIR}/workspace"
+  mkdir -p "${workspace}" "${fake_action}/.opencode/commands"
+  cat >"${fake_action}/.opencode/commands/inspect.md" <<'EOF'
+---
+description: bundled inspect command
+agent: plan
+---
+
+Bundled inspect: $ARGUMENTS
+EOF
+
+  run env \
+    HOME="${fake_home}" \
+    ACTION_PATH="${fake_action}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    PROMPT="/inspect security" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    REVIEW_ONLY="false" \
+    USE_BUNDLED_TOOLKIT="true" \
+    bash -euo pipefail -c '
+      source "$1"
+      opencode_configure_run
+      [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/inspect.md" ]]
+      [[ "$PROMPT" == *"Bundled inspect: security"* ]]
+      jq -e '\''.default_agent == "plan"'\'' <<<"$OPENCODE_CONFIG_CONTENT"
+    ' _ "${run_script}" "${fake_action}"
+
+  [ "${status}" -eq 0 ]
+}
+
 @test "OpenCode failure classification distinguishes timeout provider and generic errors" {
   output_file="${BATS_TEST_TMPDIR}/output"
 
