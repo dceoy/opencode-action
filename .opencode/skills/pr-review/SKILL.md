@@ -40,7 +40,7 @@ Supported aspects are:
 - `errors`: `silent-failure-hunter`
 - `types`: `type-design-analyzer`
 - `simplify`: `code-simplifier`, returning behavior-preserving simplification proposals as review findings without modifying files
-- `all`, or no aspect: the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`; include specialty reviewers when the supplied diff is relevant. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
+- `all`, or no aspect: the core reviewers `code-reviewer`, `security-code-reviewer`, and `test-coverage-reviewer`. Run `code-quality-reviewer`, `performance-reviewer`, and `documentation-accuracy-reviewer` only when explicitly requested via their aspect or when the diff makes that specialty necessary, to limit provider request fan-out. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
 
 Launch only the explicitly permitted reviewer agents. For each, supply the captured diff, changed-file list, metadata, and relevant source context. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
 
