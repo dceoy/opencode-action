@@ -97,3 +97,4 @@ Review-only mode fails rather than weakening its guarantees when:
 - the pull request head changes
 - no App token verifies and workflow-token fallback was not explicitly enabled
 - review payload validation or structured submission fails
+- the `~/.opencode` state directory is a symlink, since it cannot be safely cleaned before reuse

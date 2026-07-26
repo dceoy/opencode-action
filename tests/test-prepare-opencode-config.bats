@@ -35,7 +35,7 @@ setup() {
   [ ! -e "${fake_home}/.opencode/plugins" ]
 }
 
-@test "review-only config preparation does not traverse a symlinked home .opencode" {
+@test "review-only config preparation fails closed on a symlinked home .opencode" {
   mkdir -p "${fake_home}/.config/opencode" "${BATS_TEST_TMPDIR}/elsewhere"
   printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
   ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.opencode"
@@ -45,7 +45,8 @@ setup() {
     opencode_prepare_config "$2" true
   ' _ "${prepare_script}" "${fake_action}"
 
-  [ "${status}" -eq 0 ]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"::error::"*".opencode' is a symlink"* ]]
   [ -L "${fake_home}/.opencode" ]
   [ -f "${BATS_TEST_TMPDIR}/elsewhere/sensitive" ]
 }

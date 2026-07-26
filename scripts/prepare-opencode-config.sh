@@ -38,15 +38,17 @@ opencode_prepare_config() {
 
   case "${review_only}" in
     true)
+      if [[ -L "${HOME}/.opencode" ]]; then
+        echo "::error::'${HOME}/.opencode' is a symlink; refusing to run review-only isolation without a trustworthy state directory." >&2
+        return 1
+      fi
       export XDG_CONFIG_HOME="${HOME}/.config"
       rm -rf "${config_dir}"
       mkdir -p "${config_dir}"
       cp -r "${action_path}/.opencode/." "${config_dir}/"
-      if [[ -d "${HOME}/.opencode" && ! -L "${HOME}/.opencode" ]]; then
+      if [[ -d "${HOME}/.opencode" ]]; then
         # Remove inherited plugins, agents, and config that could affect the
-        # isolated review run, while retaining the installed binary. Guard
-        # against a symlinked ${HOME}/.opencode so this never traverses or
-        # deletes through a link to an unrelated directory.
+        # isolated review run, while retaining the installed binary.
         find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
       fi
       echo "Installed fresh review-only OpenCode config"
