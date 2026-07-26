@@ -95,6 +95,6 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 ## Pull request reviews
 
-Set `prompt: /review-pr` to run the bundled read-only pull request review workflow. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines.
+Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its backward-compatible command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.

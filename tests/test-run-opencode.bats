@@ -119,7 +119,8 @@ EOF
       source "$1"
       opencode_configure_run
       [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/review-pr.md" ]]
-      [[ "$PROMPT" == *"Strictly Read-Only PR Review"* ]]
+      [[ "$PROMPT" == *"Load and follow the "*" skill."* ]]
+      [[ "$PROMPT" == *"pr-review"* ]]
       [[ "$PROMPT" == *"security"* ]]
       [[ "$PROMPT" != *"MALICIOUS PROJECT REVIEW"* ]]
       jq -e '\''

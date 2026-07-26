@@ -1,6 +1,8 @@
 # Pull request reviews
 
-The bundled `/review-pr` command runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API.
+The bundled `pr-review` skill runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API. The `/review-pr` command remains a thin wrapper that loads the skill and forwards any requested review aspects.
+
+Agents can also load `pr-review` directly through OpenCode's native skill tool when they need to reuse the workflow without invoking the slash command.
 
 ## Setup
 

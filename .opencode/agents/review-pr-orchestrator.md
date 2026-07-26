@@ -24,6 +24,9 @@ permission:
     "../*.config/opencode/review-state/update.json": allow
   glob: allow
   grep: allow
+  skill:
+    "*": deny
+    pr-review: allow
   bash:
     "*": deny
     "git status --short": allow
