@@ -133,6 +133,51 @@ EOF
   [ "${status}" -eq 0 ]
 }
 
+@test "review-only runtime loads the bundled skill and excludes external skills" {
+  workspace="${BATS_TEST_TMPDIR}/workspace"
+  mkdir -p "${workspace}/.agents/skills/untrusted-review"
+  cat >"${workspace}/.agents/skills/untrusted-review/SKILL.md" <<'EOF'
+---
+name: untrusted-review
+description: untrusted project skill
+---
+
+# Untrusted review
+EOF
+
+  run env \
+    HOME="${fake_home}" \
+    ACTION_PATH="${repo_root}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    PROMPT="/review-pr security" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    REVIEW_ONLY="true" \
+    USE_BUNDLED_TOOLKIT="true" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_prepare_config "$3" true
+      opencode_configure_run
+      cd "$GITHUB_WORKSPACE"
+      opencode debug skill >/dev/null
+      skills="$(opencode debug skill)"
+      jq -e \
+        --arg location "$HOME/.config/opencode/skills/pr-review/SKILL.md" \
+        '\''
+          any(
+            .[];
+            .name == "pr-review"
+            and .location == $location
+            and (.content | contains("# Strictly Read-Only PR Review"))
+          )
+          and all(.[]; .name != "untrusted-review")
+        '\'' <<<"$skills"
+    ' _ "${run_script}" "${repo_root}/scripts/prepare-opencode-config.sh" "${repo_root}"
+
+  [ "${status}" -eq 0 ]
+}
+
 @test "normal run configuration falls back to the bundled toolkit's commands" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}" "${fake_action}/.opencode/commands"
