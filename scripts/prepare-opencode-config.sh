@@ -5,6 +5,18 @@
 _opencode_copy_missing_config() {
   local source_dir="${1}" destination_dir="${2}" source relative destination
 
+  # Validate every destination directory before copying anything: a symlinked
+  # destination encountered mid-copy would otherwise get written through
+  # before its own turn in the loop is reached.
+  while IFS= read -r -d '' source; do
+    relative="${source#"${source_dir}/"}"
+    destination="${destination_dir}/${relative}"
+    if [[ -d "${source}" && -L "${destination}" ]]; then
+      echo "::error::'${destination}' is a symlink; refusing to install bundled OpenCode config through it." >&2
+      return 1
+    fi
+  done < <(find "${source_dir}" -mindepth 1 -print0)
+
   while IFS= read -r -d '' source; do
     relative="${source#"${source_dir}/"}"
     destination="${destination_dir}/${relative}"
@@ -35,6 +47,10 @@ opencode_prepare_config() {
       return 1
     fi
   done
+  if [[ -L "${config_dir}" ]]; then
+    echo "::error::'${config_dir}' is a symlink; refusing to write the OpenCode config through it." >&2
+    return 1
+  fi
 
   case "${review_only}" in
     true)
@@ -46,6 +62,10 @@ opencode_prepare_config() {
         echo "::error::'${HOME}/.opencode/bin' is a symlink; refusing to run review-only isolation without a trustworthy state directory." >&2
         return 1
       fi
+      if [[ -L "${HOME}/.config" ]]; then
+        echo "::error::'${HOME}/.config' is a symlink; refusing to run review-only isolation without a trustworthy config directory." >&2
+        return 1
+      fi
       export XDG_CONFIG_HOME="${HOME}/.config"
       rm -rf "${config_dir}"
       mkdir -p "${config_dir}"
@@ -53,8 +73,9 @@ opencode_prepare_config() {
       if [[ -d "${HOME}/.opencode" ]]; then
         # Remove inherited plugins, agents, config, and "bin" so no
         # executable left on PATH (via GITHUB_PATH) survives from prior
-        # runner state; the Cache and Install steps that follow repopulate
-        # "bin" with only the expected OpenCode binary for this job.
+        # runner state; the Install step that follows repopulates "bin"
+        # with only the expected OpenCode binary for this job (Cache is
+        # skipped for review-only runs, see action.yml).
         find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
       fi
       echo "Installed fresh review-only OpenCode config"
@@ -63,7 +84,7 @@ opencode_prepare_config() {
       mkdir -p "${config_dir}"
       # OpenCode invokes trusted review helpers only from this installed config;
       # never execute helpers from the untrusted checkout's .opencode/scripts/.
-      _opencode_copy_missing_config "${action_path}/.opencode" "${config_dir}"
+      _opencode_copy_missing_config "${action_path}/.opencode" "${config_dir}" || return 1
       mkdir -p "${config_dir}/scripts"
       if [[ -L "${config_dir}/scripts" ]]; then
         echo "::error::'${config_dir}/scripts' is a symlink; refusing to install trusted review helpers without a trustworthy destination." >&2

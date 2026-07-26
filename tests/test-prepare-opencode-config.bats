@@ -121,6 +121,38 @@ setup() {
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"::error::"*"scripts' is a symlink"* ]]
   [ -L "${fake_home}/.config/opencode/scripts" ]
+  [ -z "$(ls -A "${BATS_TEST_TMPDIR}/elsewhere")" ]
+}
+
+@test "review-only config preparation fails closed on a symlinked home .config" {
+  mkdir -p "${BATS_TEST_TMPDIR}/elsewhere/opencode"
+  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/opencode/sensitive"
+  ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.config"
+
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_prepare_config "$2" true
+  ' _ "${prepare_script}" "${fake_action}"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"::error::"*".config' is a symlink"* ]]
+  [ -L "${fake_home}/.config" ]
+  [ -f "${BATS_TEST_TMPDIR}/elsewhere/opencode/sensitive" ]
+}
+
+@test "normal config preparation fails closed on a symlinked home .config/opencode" {
+  mkdir -p "${fake_home}/.config" "${BATS_TEST_TMPDIR}/elsewhere"
+  ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.config/opencode"
+
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_prepare_config "$2" false
+  ' _ "${prepare_script}" "${fake_action}"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"::error::"*"opencode' is a symlink"* ]]
+  [ -L "${fake_home}/.config/opencode" ]
+  [ -z "$(ls -A "${BATS_TEST_TMPDIR}/elsewhere")" ]
 }
 
 @test "review-only config preparation fails closed before cleanup when bundle is missing" {
