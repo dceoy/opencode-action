@@ -51,7 +51,7 @@ Launch only the explicitly permitted reviewer agents. For each, supply the captu
   line: <head-file line number>
   severity: critical | important | suggestion
   source: <agent-name>
-  message: <concise issue description and concrete fix>
+  message: <actionable Markdown with the issue, impact, and concrete fix>
 ```
 
 Do not let a reviewer post to GitHub.
@@ -62,7 +62,7 @@ Drop praise, nitpicks, style-only feedback, findings outside the changed-file li
 
 Before returning any top-level text in PR mode, including no-finding and summary-only fallback results, invoke `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" validate`. If validation fails, stop. If there are no findings, then return exactly `No noteworthy issues found.` Do not post an empty review.
 
-For findings, the `prepare` and `context` operations in section 1 have already created the empty payload files and pinned the review context. Do not run them again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Each inline body is `**<severity> · <source>**: <issue and concrete fix>`.
+For findings, the `prepare` and `context` operations in section 1 have already created the empty payload files and pinned the review context. Do not run them again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Preserve each finding message's Markdown, including paragraph breaks and fenced code or `suggestion` blocks. Each inline body is `**<severity> · <source>**`, followed by a blank line and the unmodified finding message.
 
 Every finding with a valid diff anchor must be included in the `comments` array and submitted as an inline review comment. Never return anchorable findings only as top-level assistant text. If structured submission fails, fail the run instead of emitting the findings as a top-level completion comment.
 

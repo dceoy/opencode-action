@@ -100,6 +100,15 @@ frontmatter() {
   grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_doc}"
 }
 
+@test "code-quality findings retain rich actionable Markdown" {
+  local quality_reviewer="${agents_dir}/code-quality-reviewer.md"
+
+  grep -Fq 'why it matters to users or maintainers' "${quality_reviewer}"
+  grep -Fq '```suggestion' "${quality_reviewer}"
+  grep -Fq "Preserve each finding message's Markdown" "${review_pr_doc}"
+  grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_doc}"
+}
+
 opencode_jsonc_json() {
   opencode_jsonc_to_json < "${opencode_jsonc}"
 }
