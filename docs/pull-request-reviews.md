@@ -1,10 +1,12 @@
 # Pull request reviews
 
-The bundled `/review-pr` command runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API.
+The bundled `pr-review` skill runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API. The `/review-pr` command remains a thin wrapper that loads the skill and forwards any requested review aspects.
+
+Agents can also load `pr-review` directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees below: those come from `review-pr-orchestrator`'s `permission` config (denying edit and unrestricted `bash`), which only applies when the command routes to that agent. Loading the skill directly injects the same instructions into whatever agent calls it, and that agent's own permissions still apply, so the read-only behavior is advisory rather than enforced.
 
 ## Setup
 
-Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider.
+Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout. Request, chunk, and action timeouts are safety limits, not substitutes for bounding request size, and `chunkTimeout` cannot guarantee that a provider-side gateway or inference timeout will not end a request sooner.
 
 ```yaml
 permissions:
@@ -42,11 +44,11 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. The simplifier runs only when explicitly requested.
+A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. Explicit aspects always force their mapped reviewers; for example, `security` forces the security reviewer and `tests` forces both test reviewers. The simplifier runs only when explicitly requested.
 
 ## Finding and submission behavior
 
-The orchestrator receives the pull request metadata, changed-file list, diff, and relevant source context. It then:
+The orchestrator retains the full pull request context for anchoring and normalization, but classifies files and hunks before delegation. Each reviewer receives only its relevant diff subset and containing-function context. The orchestrator then:
 
 1. keeps only high-confidence, actionable findings on changed files
 2. removes style-only feedback and duplicates
@@ -66,7 +68,7 @@ If no finding can be anchored, the command returns a concise Markdown fallback i
 
 ### Review isolation
 
-When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration, removes inherited plugins and agents, and resolves the review command only from the action bundle.
+When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration and externally discovered skills, removes inherited plugins and agents, and resolves the review command only from the action bundle.
 
 External-directory access is denied by default. Only the trusted review helpers and their dedicated state directory under `~/.config/opencode/` are allowed. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
 

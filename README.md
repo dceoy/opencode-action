@@ -75,19 +75,19 @@ The provider account must have sufficient credits or quota. For providers not bu
 
 ## Inputs
 
-| Input                 | Default                   | Description                                                   |
-| --------------------- | ------------------------- | ------------------------------------------------------------- |
-| `model`               | Required                  | Model in `provider/model` format.                             |
-| `agent`               | `build`                   | Primary agent. A slash command can override it.               |
-| `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.        |
-| `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                              |
-| `variant`             | -                         | Provider-specific reasoning effort.                           |
-| `share`               | `false`                   | Share the OpenCode session.                                   |
-| `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow. |
-| `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+.   |
-| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.  |
-| `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                        |
-| `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.       |
+| Input                 | Default                   | Description                                                                                                                                                             |
+| --------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`               | Required                  | Model in `provider/model` format.                                                                                                                                       |
+| `agent`               | `build`                   | Primary agent. A slash command can override it.                                                                                                                         |
+| `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.                                                                                                                  |
+| `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                                                                                                                                        |
+| `variant`             | -                         | Provider-specific reasoning effort.                                                                                                                                     |
+| `share`               | `false`                   | Share the OpenCode session.                                                                                                                                             |
+| `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                                           |
+| `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+; the bundled Sakura provider's `chunkTimeout` needs 1.2.25+ (older pins fall back to the request `timeout`). |
+| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                                            |
+| `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                                                  |
+| `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                                                 |
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
@@ -95,6 +95,8 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 ## Pull request reviews
 
-Set `prompt: /review-pr` to run the bundled read-only pull request review workflow. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines.
+Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its backward-compatible command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees; see [Pull request reviews](docs/pull-request-reviews.md#review-isolation).
+
+The default review runs the core quality, performance, coverage, documentation, security, and correctness reviewers; specialty reviewers beyond that set are added only when the diff matches their documented concern or an aspect such as `security`, `tests`, `docs`, or `performance` explicitly requests them. Provider request and chunk timeouts and the action's `timeout-minutes` watchdog are safety limits; they do not replace bounded request context or guarantee that a provider gateway or inference request will remain open.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.

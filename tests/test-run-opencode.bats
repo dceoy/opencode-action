@@ -84,6 +84,7 @@ setup() {
       [[ -z "${OPENCODE_CONFIG+x}" ]]
       [[ -z "${OPENCODE_CONFIG_DIR+x}" ]]
       [[ "$OPENCODE_DISABLE_PROJECT_CONFIG" == 1 ]]
+      [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]
       [[ "$XDG_CONFIG_HOME" == "$HOME/.config" ]]
       jq -e '\''
         .default_agent == "build" and
@@ -119,7 +120,8 @@ EOF
       source "$1"
       opencode_configure_run
       [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/review-pr.md" ]]
-      [[ "$PROMPT" == *"Strictly Read-Only PR Review"* ]]
+      [[ "$PROMPT" == *"Load and follow the "*" skill."* ]]
+      [[ "$PROMPT" == *"pr-review"* ]]
       [[ "$PROMPT" == *"security"* ]]
       [[ "$PROMPT" != *"MALICIOUS PROJECT REVIEW"* ]]
       jq -e '\''
@@ -127,6 +129,51 @@ EOF
         .default_agent != "plan"
       '\'' <<<"$OPENCODE_CONFIG_CONTENT"
     ' _ "${run_script}" "${repo_root}"
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "review-only runtime loads the bundled skill and excludes external skills" {
+  workspace="${BATS_TEST_TMPDIR}/workspace"
+  mkdir -p "${workspace}/.agents/skills/untrusted-review"
+  cat >"${workspace}/.agents/skills/untrusted-review/SKILL.md" <<'EOF'
+---
+name: untrusted-review
+description: untrusted project skill
+---
+
+# Untrusted review
+EOF
+
+  run env \
+    HOME="${fake_home}" \
+    ACTION_PATH="${repo_root}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    PROMPT="/review-pr security" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    REVIEW_ONLY="true" \
+    USE_BUNDLED_TOOLKIT="true" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_prepare_config "$3" true
+      opencode_configure_run
+      cd "$GITHUB_WORKSPACE"
+      opencode debug skill >/dev/null
+      skills="$(opencode debug skill)"
+      jq -e \
+        --arg location "$HOME/.config/opencode/skills/pr-review/SKILL.md" \
+        '\''
+          any(
+            .[];
+            .name == "pr-review"
+            and .location == $location
+            and (.content | contains("# Strictly Read-Only PR Review"))
+          )
+          and all(.[]; .name != "untrusted-review")
+        '\'' <<<"$skills"
+    ' _ "${run_script}" "${repo_root}/scripts/prepare-opencode-config.sh" "${repo_root}"
 
   [ "${status}" -eq 0 ]
 }
@@ -163,10 +210,60 @@ EOF
   [ "${status}" -eq 0 ]
 }
 
-@test "OpenCode failure classification distinguishes timeout provider and generic errors" {
+@test "OpenCode failure classification uses the terminal provider error" {
   output_file="${BATS_TEST_TMPDIR}/output"
 
-  printf '%s\n' 'AI_APICallError: statusCode: 402' >"${output_file}"
+  printf '%s\n' \
+    'AI_APICallError: rate limit exceeded (statusCode: 429)' \
+    'UnknownError: "Request timed out"' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+  [[ "${output}" != *"rate limited"* ]]
+
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 124 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"timed out after 10 minutes"* ]]
+
+  printf '%s\n' 'Error: SSE read timed out' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+
+  printf '%s\n' 'TimeoutError: The operation timed out' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+
+  printf '%s\n' 'AI_APICallError: statusCode: 429' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"rate limited"* ]]
+
+  printf '%s\n' 'AI_APICallError: Insufficient credits (statusCode: 402)' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"billing or quota"* ]]
+
+  printf '%s\n' 'AI_APICallError: provider unavailable' >"${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -175,13 +272,6 @@ EOF
   [[ "${output}" == *"model provider API error"* ]]
 
   printf '%s\n' unrelated >"${output_file}"
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_report_failure 124 "$2" 10 provider/model
-  ' _ "${run_script}" "${output_file}"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" == *"timed out after 10 minutes"* ]]
-
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 17 "$2" 10 provider/model
@@ -224,7 +314,7 @@ EOF
     printf 'unexpected status %s: %s\n' "${status}" "${output}" >&2
   fi
   [ "${status}" -eq 23 ]
-  [[ "${output}" == *"model provider API error"* ]]
+  [[ "${output}" == *"billing or quota"* ]]
   [ "$(cat "${invocation_file}")" = "github run" ]
 }
 

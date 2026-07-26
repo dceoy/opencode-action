@@ -66,7 +66,8 @@ Sakura AI Engine exposes an OpenAI-compatible `/v1/chat/completions` endpoint. A
       "options": {
         "baseURL": "https://api.ai.sakura.ad.jp/v1",
         "apiKey": "{env:SAKURA_AI_ENGINE_API_KEY}",
-        "timeout": 900000
+        "timeout": 900000,
+        "chunkTimeout": 900000
       },
       "models": {
         "gpt-oss-120b": {

@@ -1,18 +1,19 @@
 #!/usr/bin/env bats
-# Validate .opencode/ agent frontmatter, review-pr command/skill references,
-# that opencode.jsonc parses, and that its external_directory permission
-# allow-lists the resolver path review-pr.md actually sources and the runtime
-# review-state directory pattern.
+# Validate .opencode/ agent and skill frontmatter, pr-review references, that
+# opencode.jsonc parses, and that its external_directory permission allow-lists
+# the resolver path the skill actually sources and the runtime review-state
+# directory pattern.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
-  review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
+  review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
+  review_pr_skill="${repo_root}/.opencode/skills/pr-review/SKILL.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
   # shellcheck source=scripts/opencode-action-lib.sh
   source "${repo_root}/scripts/opencode-action-lib.sh"
   required_keys=(name description mode permission)
-  # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
+  # Backtick-quoted identifiers in the pr-review skill that are skills, toolkits, or
   # config inputs rather than agents.
   non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
 }
@@ -68,11 +69,80 @@ frontmatter() {
   }
 }
 
-@test "every agent referenced in review-pr.md exists under .opencode/agents/" {
+@test "pr-review skill has valid frontmatter" {
+  local fm name description
+
+  fm="$(frontmatter "${review_pr_skill}")"
+  name="$(grep -E '^name:' <<<"${fm}" | sed -E 's/^name:[[:space:]]*//')"
+  description="$(grep -E '^description:' <<<"${fm}" | sed -E 's/^description:[[:space:]]*//')"
+
+  [ "${name}" = "pr-review" ]
+  [ -n "${description}" ]
+}
+
+@test "review-pr command is a thin wrapper around the pr-review skill" {
+  local body
+
+  body="$(awk '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { in_frontmatter = 0; next }
+    !in_frontmatter && NF { print }
+  ' "${review_pr_command}")"
+
+  [ "${body}" = $'Load and follow the `pr-review` skill.\nRequested review aspects: "$ARGUMENTS"' ]
+}
+
+@test "review-pr orchestrator may load only the pr-review skill" {
+  local orchestrator="${agents_dir}/review-pr-orchestrator.md"
+
+  grep -Fq '  skill:' "${orchestrator}"
+  grep -Fq '    "*": deny' "${orchestrator}"
+  grep -Fq '    pr-review: allow' "${orchestrator}"
+}
+
+@test "review-pr default selection names the core six reviewers" {
+  local reviewer
+
+  # shellcheck disable=SC2016
+  grep -Fq 'the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`' "${review_pr_skill}"
+  grep -Fq 'include specialty reviewers when the supplied diff is relevant' "${review_pr_skill}"
+
+  for reviewer in \
+    code-quality-reviewer \
+    performance-reviewer \
+    test-coverage-reviewer \
+    documentation-accuracy-reviewer \
+    security-code-reviewer \
+    code-reviewer; do
+    grep -Fq "${reviewer}" "${review_pr_skill}"
+  done
+}
+
+@test "review-pr explicit core aspects force their documented reviewers" {
+  # shellcheck disable=SC2016
+  grep -Fq -- '- `performance`: `performance-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
+  grep -Fq -- '- `security`: `security-code-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
+  grep -Fq -- '- `tests` or `coverage`: `test-coverage-reviewer`, `pr-test-analyzer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
+  grep -Fq -- '- `docs` or `documentation`: `documentation-accuracy-reviewer`' "${review_pr_skill}"
+  grep -Fq 'Requested aspects always force their mapped reviewers.' "${review_pr_skill}"
+}
+
+@test "review-pr sends reviewer-specific context subsets" {
+  grep -Fq 'classify changed files and individual diff hunks by concern' "${review_pr_skill}"
+  grep -Fq 'Build a separate, minimal Task request for every selected reviewer.' "${review_pr_skill}"
+  grep -Fq 'Include only its relevant files, diff hunks, and containing-function source context' "${review_pr_skill}"
+  # shellcheck disable=SC2016
+  grep -Fq '`code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents.' "${review_pr_skill}"
+}
+
+@test "every agent referenced in the pr-review skill exists under .opencode/agents/" {
   local bt pattern refs ref skip na missing=()
   bt=$(printf '\x60')
   pattern="${bt}[a-z][a-z0-9]+(-[a-z0-9]+)+${bt}"
-  mapfile -t refs < <(grep -hoE "${pattern}" "${review_pr_doc}" | tr -d "${bt}" | sort -u)
+  mapfile -t refs < <(grep -hoE "${pattern}" "${review_pr_skill}" | tr -d "${bt}" | sort -u)
 
   for ref in "${refs[@]}"; do
     skip=0
@@ -95,9 +165,9 @@ frontmatter() {
 
 @test "review-pr local fallback is limited to a missing trusted PR number" {
   # shellcheck disable=SC2016
-  grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_doc}"
+  grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_skill}"
   # shellcheck disable=SC2016
-  grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_doc}"
+  grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_skill}"
 }
 
 @test "code-quality findings retain rich actionable Markdown" {
@@ -108,10 +178,10 @@ frontmatter() {
   grep -Fq 'why it matters to users or maintainers' "${quality_reviewer}"
   grep -Fq '<a concrete fix, including a fenced suggestion when it can be applied safely>' "${quality_reviewer}"
   grep -Fq '```suggestion' "${quality_reviewer}"
-  grep -Fq "Preserve each finding message's Markdown" "${review_pr_doc}"
-  grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_doc}"
-  grep -Fq 'message: |-' "${review_pr_doc}"
-  grep -Fq '<actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_doc}"
+  grep -Fq "Preserve each finding message's Markdown" "${review_pr_skill}"
+  grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_skill}"
+  grep -Fq 'message: |-' "${review_pr_skill}"
+  grep -Fq '<actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_skill}"
 }
 
 @test "suggestion blocks are withheld or stripped for relocated anchors" {
@@ -119,19 +189,19 @@ frontmatter() {
 
   grep -Fq 'reported line is not itself a head-side changed' "${quality_reviewer}"
   # shellcheck disable=SC2016
-  grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_doc}"
+  grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_skill}"
 }
 
 opencode_jsonc_json() {
   opencode_jsonc_to_json < "${opencode_jsonc}"
 }
 
-@test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
+@test "pr-review skill sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
   local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
 
-  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_doc}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
+  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_skill}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
   [ -n "${resolver_suffix}" ] || {
-    echo "review-pr.md does not set opencode_app_token_lib to a \${HOME}-relative path"
+    echo "pr-review skill does not set opencode_app_token_lib to a \${HOME}-relative path"
     return 1
   }
   resolver_path="${HOME}/${resolver_suffix}"
@@ -156,7 +226,7 @@ opencode_jsonc_json() {
   done
 
   [ "${matched}" -eq 1 ] || {
-    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that review-pr.md sources"
+    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that the pr-review skill sources"
     return 1
   }
 }
