@@ -32,7 +32,7 @@ Use one or more keywords after `/review-pr`:
 
 | Command                           | Focus                                |
 | --------------------------------- | ------------------------------------ |
-| `/review-pr` or `/review-pr all`  | Diff-directed review                 |
+| `/review-pr` or `/review-pr all`  | Full review                          |
 | `/review-pr security performance` | Security and performance             |
 | `/review-pr tests docs`           | Test coverage and documentation      |
 | `/review-pr code`                 | Correctness and code quality         |
@@ -44,11 +44,11 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-The default and `all` paths start with only the general code reviewer to avoid excessive provider requests. The orchestrator then selects security, test coverage, documentation, or performance reviewers only when changed files and hunks match their documented concerns. Explicit aspects always force their mapped reviewers; for example, `security` forces the security reviewer and `tests` forces both test reviewers. Other specialty reviewers, including the simplifier, run only when explicitly requested.
+A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. Explicit aspects always force their mapped reviewers; for example, `security` forces the security reviewer and `tests` forces both test reviewers. The simplifier runs only when explicitly requested.
 
 ## Finding and submission behavior
 
-The orchestrator retains the full pull request context for anchoring and normalization, but classifies files and hunks before delegation. Each reviewer receives only its relevant diff subset and containing-function context. Reviewer Tasks run sequentially, one at a time. The orchestrator then:
+The orchestrator retains the full pull request context for anchoring and normalization, but classifies files and hunks before delegation. Each reviewer receives only its relevant diff subset and containing-function context. The orchestrator then:
 
 1. keeps only high-confidence, actionable findings on changed files
 2. removes style-only feedback and duplicates

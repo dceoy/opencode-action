@@ -100,30 +100,22 @@ frontmatter() {
   grep -Fq '    pr-review: allow' "${orchestrator}"
 }
 
-@test "review-pr default selection unconditionally names only code-reviewer" {
-  # shellcheck disable=SC2016
-  grep -Fq 'For `all`, or when no aspect is supplied, unconditionally select only `code-reviewer`' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq 'For `all` or no aspect, other specialty reviewers are never inferred and run only when explicitly requested.' "${review_pr_skill}"
-  run grep -Eq 'all.*core reviewers' "${review_pr_skill}"
-  [ "${status}" -ne 0 ]
-}
-
-@test "review-pr specialty selection is conditional and deterministic" {
+@test "review-pr default selection names the core six reviewers" {
   local reviewer
 
+  # shellcheck disable=SC2016
+  grep -Fq 'the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`' "${review_pr_skill}"
+  grep -Fq 'include specialty reviewers when the supplied diff is relevant' "${review_pr_skill}"
+
   for reviewer in \
-    security-code-reviewer \
+    code-quality-reviewer \
+    performance-reviewer \
     test-coverage-reviewer \
     documentation-accuracy-reviewer \
-    performance-reviewer; do
-    grep -Eq "^[|].*[|] \`${reviewer}\`[[:space:]]*[|]$" "${review_pr_skill}"
+    security-code-reviewer \
+    code-reviewer; do
+    grep -Fq "${reviewer}" "${review_pr_skill}"
   done
-
-  grep -Fq 'Authentication, authorization, permissions, secrets or tokens, shell execution, external input, network boundaries, workflow files, or security-sensitive configuration' "${review_pr_skill}"
-  grep -Fq 'Executable behavior changes, tests change, executable source lacks corresponding tests, or coverage risk is material' "${review_pr_skill}"
-  grep -Fq 'README or documentation changes, configuration examples, or user-visible interface or behavior changes' "${review_pr_skill}"
-  grep -Fq 'Loops, repeated I/O, large-data processing, concurrency, or other performance-sensitive code' "${review_pr_skill}"
 }
 
 @test "review-pr explicit core aspects force their documented reviewers" {
@@ -144,12 +136,6 @@ frontmatter() {
   grep -Fq 'Include only its relevant files, diff hunks, and containing-function source context' "${review_pr_skill}"
   # shellcheck disable=SC2016
   grep -Fq '`code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents.' "${review_pr_skill}"
-}
-
-@test "review-pr reviewer Tasks execute one at a time" {
-  grep -Fq 'Invoke at most one reviewer Task at a time.' "${review_pr_skill}"
-  grep -Fq 'Wait for that Task to finish before starting another' "${review_pr_skill}"
-  grep -Fq 'never emit multiple reviewer Task calls in one assistant turn' "${review_pr_skill}"
 }
 
 @test "every agent referenced in the pr-review skill exists under .opencode/agents/" {

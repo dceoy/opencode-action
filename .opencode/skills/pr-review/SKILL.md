@@ -40,19 +40,9 @@ Explicit aspects select these reviewers:
 - `errors`: `silent-failure-hunter`
 - `types`: `type-design-analyzer`
 - `simplify`: `code-simplifier`, returning behavior-preserving simplification proposals as review findings without modifying files
+- `all`, or no aspect: the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`; include specialty reviewers when the supplied diff is relevant. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
 
-Requested aspects always force their mapped reviewers. For `all`, or when no aspect is supplied, unconditionally select only `code-reviewer`, then add reviewers using this deterministic diff classification:
-
-| Diff trigger                                                                                                                                                            | Conditional reviewer              |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Authentication, authorization, permissions, secrets or tokens, shell execution, external input, network boundaries, workflow files, or security-sensitive configuration | `security-code-reviewer`          |
-| Executable behavior changes, tests change, executable source lacks corresponding tests, or coverage risk is material                                                    | `test-coverage-reviewer`          |
-| README or documentation changes, configuration examples, or user-visible interface or behavior changes                                                                  | `documentation-accuracy-reviewer` |
-| Loops, repeated I/O, large-data processing, concurrency, or other performance-sensitive code                                                                            | `performance-reviewer`            |
-
-Do not launch a reviewer merely because it appears in a default reviewer list. For `all` or no aspect, other specialty reviewers are never inferred and run only when explicitly requested. `code-simplifier` runs only for an explicit `simplify` aspect.
-
-Invoke at most one reviewer Task at a time. Wait for that Task to finish before starting another, and never emit multiple reviewer Task calls in one assistant turn.
+Requested aspects always force their mapped reviewers.
 
 Build a separate, minimal Task request for every selected reviewer. Include only its relevant files, diff hunks, and containing-function source context, plus only the metadata needed for that specialty. Exclude unchanged files and unrelated hunks. `code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents. Reviewers have no shell access, so each subset must be self-contained. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
 
