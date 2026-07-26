@@ -62,3 +62,17 @@ setup() {
   [ "${status}" -eq 0 ]
   [ "$(cat "${github_output}")" = "enabled=true" ]
 }
+
+@test "detect review mode entrypoint allows ordinary prompts without review validation" {
+  github_output="${BATS_TEST_TMPDIR}/github-output"
+
+  run env \
+    GITHUB_OUTPUT="${github_output}" \
+    PROMPT="summarize this change" \
+    USE_BUNDLED_TOOLKIT="false" \
+    OPENCODE_VERSION="latest" \
+    "${detect_script}"
+
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${github_output}")" = "enabled=false" ]
+}
