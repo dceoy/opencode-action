@@ -4,7 +4,7 @@ set -euox pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 # Markdown
-npx -y prettier --write './**/*.md'
+npx -y prettier --write './**/*.{md,json,jsonc}'
 
 # YAML
 git ls-files -z -- '*.yml' | xargs -0 -t uvx yamllint -d '{"extends": "relaxed", "rules": {"line-length": "disable"}}'

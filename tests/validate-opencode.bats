@@ -9,6 +9,8 @@ setup() {
   agents_dir="${repo_root}/.opencode/agents"
   review_pr_doc="${repo_root}/.opencode/commands/review-pr.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
+  # shellcheck source=scripts/opencode-action-lib.sh
+  source "${repo_root}/scripts/opencode-action-lib.sh"
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in review-pr.md that are skills, toolkits, or
   # config inputs rather than agents.
@@ -88,7 +90,7 @@ frontmatter() {
 }
 
 @test "opencode.jsonc parses as JSON once its // comments are stripped" {
-  sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}" | jq empty
+  opencode_jsonc_json | jq empty
 }
 
 @test "review-pr local fallback is limited to a missing trusted PR number" {
@@ -99,7 +101,7 @@ frontmatter() {
 }
 
 opencode_jsonc_json() {
-  sed -E 's#^[[:space:]]*//.*$##' "${opencode_jsonc}"
+  opencode_jsonc_to_json < "${opencode_jsonc}"
 }
 
 @test "review-pr.md sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
