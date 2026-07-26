@@ -128,20 +128,6 @@ opencode_resolve_app_token_candidates() {
   } | awk '!seen[$0]++'
 }
 
-# Resolve a single *candidate* App token: the first result from
-# opencode_resolve_app_token_candidates. Kept for callers that only want one
-# best-effort candidate without verifying it (reads via
-# opencode_prepare_gh_token). opencode_require_app_token_for_review checks
-# every candidate via opencode_resolve_app_token_candidates, not just this
-# first one, since the first candidate found is not necessarily the one
-# that verifies.
-opencode_resolve_app_token() {
-  local token
-  token="$(opencode_resolve_app_token_candidates | head -n1)"
-  [[ -n "${token}" ]] || return 1
-  printf '%s' "${token}"
-}
-
 # Best-effort resolution: exports GH_TOKEN/GITHUB_TOKEN when a *candidate*
 # App token is found, without verifying its identity. Only safe for reads
 # (gh pr view, gh pr diff); never use this to gate a structured PR review
@@ -161,7 +147,7 @@ opencode_resolve_app_token() {
 opencode_prepare_gh_token() {
   local use_github_token="${1:-false}" token
   [[ "${use_github_token}" == "true" ]] && return 1
-  token="$(opencode_resolve_app_token)" || return 1
+  IFS= read -r token < <(opencode_resolve_app_token_candidates) || return 1
   [[ -n "${token}" ]] || return 1
   export GH_TOKEN="${token}"
   export GITHUB_TOKEN="${token}"

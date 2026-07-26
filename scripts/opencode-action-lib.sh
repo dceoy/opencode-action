@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 # Resolve Markdown slash commands and the effective primary agent for
-# `opencode github run`. Intended to be sourced by action.yml.
+# `opencode github run`. Intended to be sourced by the action entrypoint scripts.
 #
 # Supported:
 # - Markdown command files named <command>.md

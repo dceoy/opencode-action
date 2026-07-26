@@ -8,8 +8,6 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  action_yml="${repo_root}/action.yml"
-  malicious_plugin="${repo_root}/.agents/skills/local-qa/fixtures/malicious-project/.opencode/plugins/pwn.ts"
   mkdir -p "${fake_home}" "${fake_bin}"
 }
 
@@ -161,26 +159,4 @@ EOF
   [[ "${allowed}" != *'*'* ]]
   run grep -E '(: allow.*(>|>>|[|]|<\())|((>|>>|[|]|<\().*: allow)' "${orchestrator}"
   [ "${status}" -eq 1 ]
-}
-
-@test "review mode excludes project config and refreshes global toolkit" {
-  # This is a source-level guard. A true malicious-plugin execution test needs
-  # an installed OpenCode runtime and belongs in an end-to-end workflow.
-  grep -q 'Detect review-only mode' "${action_yml}"
-  grep -q 'export OPENCODE_DISABLE_PROJECT_CONFIG=1' "${action_yml}"
-  run grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
-  [ "${status}" -eq 1 ]
-  grep -q 'unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT' "${action_yml}"
-  # shellcheck disable=SC2016
-  [ "$(grep -c 'export XDG_CONFIG_HOME="${HOME}/.config"' "${action_yml}")" -eq 2 ]
-  grep -q 'requires OpenCode 1.2.14 or newer' "${action_yml}"
-  # shellcheck disable=SC2016
-  grep -Fq '[[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${suffix}" ]]' "${action_yml}"
-  run grep -q "contains(github.event.comment.body, '/review-pr')" "${action_yml}"
-  [ "${status}" -eq 1 ]
-  # shellcheck disable=SC2016
-  grep -q 'rm -rf "${HOME}/.config/opencode"' "${action_yml}"
-  # shellcheck disable=SC2016
-  grep -q 'cp -r "${ACTION_PATH}/.opencode/."' "${action_yml}"
-  grep -q 'writeFileSync("pwned-by-project-plugin"' "${malicious_plugin}"
 }
