@@ -51,11 +51,11 @@ opencode_prepare_config() {
       mkdir -p "${config_dir}"
       cp -r "${action_path}/.opencode/." "${config_dir}/"
       if [[ -d "${HOME}/.opencode" ]]; then
-        # Remove inherited plugins, agents, and config that could affect the
-        # isolated review run. This now runs before the OpenCode binary is
-        # cached or installed, so leave "bin" alone either way: the Cache and
-        # Install steps that follow populate it for this job.
-        find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
+        # Remove inherited plugins, agents, config, and "bin" so no
+        # executable left on PATH (via GITHUB_PATH) survives from prior
+        # runner state; the Cache and Install steps that follow repopulate
+        # "bin" with only the expected OpenCode binary for this job.
+        find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
       fi
       echo "Installed fresh review-only OpenCode config"
       ;;
@@ -65,10 +65,15 @@ opencode_prepare_config() {
       # never execute helpers from the untrusted checkout's .opencode/scripts/.
       _opencode_copy_missing_config "${action_path}/.opencode" "${config_dir}"
       mkdir -p "${config_dir}/scripts"
+      if [[ -L "${config_dir}/scripts" ]]; then
+        echo "::error::'${config_dir}/scripts' is a symlink; refusing to install trusted review helpers without a trustworthy destination." >&2
+        return 1
+      fi
       for helper in "${required_helpers[@]}"; do
-        cp -f \
-          "${action_path}/.opencode/scripts/${helper}" \
-          "${config_dir}/scripts/${helper}"
+        # Unlink any existing destination first so a symlinked helper path
+        # left over from prior runner state is replaced, not written through.
+        rm -f "${config_dir}/scripts/${helper}"
+        cp "${action_path}/.opencode/scripts/${helper}" "${config_dir}/scripts/${helper}"
       done
       echo "Copied bundled OpenCode config into ~/.config/opencode/"
       ;;
