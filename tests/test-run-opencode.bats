@@ -84,6 +84,7 @@ setup() {
       [[ -z "${OPENCODE_CONFIG+x}" ]]
       [[ -z "${OPENCODE_CONFIG_DIR+x}" ]]
       [[ "$OPENCODE_DISABLE_PROJECT_CONFIG" == 1 ]]
+      [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]
       [[ "$XDG_CONFIG_HOME" == "$HOME/.config" ]]
       jq -e '\''
         .default_agent == "build" and

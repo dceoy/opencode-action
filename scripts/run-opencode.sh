@@ -33,6 +33,11 @@ opencode_configure_run() {
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     export XDG_CONFIG_HOME="${HOME}/.config"
     export OPENCODE_DISABLE_PROJECT_CONFIG=1
+    # OPENCODE_DISABLE_PROJECT_CONFIG does not stop OpenCode's separate
+    # discovery of project-level .claude/skills/**/SKILL.md and
+    # .agents/skills/**/SKILL.md; only this flag does. Without it, a PR could
+    # add a same-named external skill alongside the trusted bundled one.
+    export OPENCODE_DISABLE_EXTERNAL_SKILLS=1
     # Composite steps inherit caller env. Remove every explicit config
     # override before constructing the action's trusted inline config.
     unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT

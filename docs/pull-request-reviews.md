@@ -2,7 +2,7 @@
 
 The bundled `pr-review` skill runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API. The `/review-pr` command remains a thin wrapper that loads the skill and forwards any requested review aspects.
 
-Agents can also load `pr-review` directly through OpenCode's native skill tool when they need to reuse the workflow without invoking the slash command.
+Agents can also load `pr-review` directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees below: those come from `review-pr-orchestrator`'s `permission` config (denying edit and unrestricted `bash`), which only applies when the command routes to that agent. Loading the skill directly injects the same instructions into whatever agent calls it, and that agent's own permissions still apply, so the read-only behavior is advisory rather than enforced.
 
 ## Setup
 
@@ -68,7 +68,7 @@ If no finding can be anchored, the command returns a concise Markdown fallback i
 
 ### Review isolation
 
-When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration, removes inherited plugins and agents, and resolves the review command only from the action bundle.
+When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration and externally discovered skills, removes inherited plugins and agents, and resolves the review command only from the action bundle.
 
 External-directory access is denied by default. Only the trusted review helpers and their dedicated state directory under `~/.config/opencode/` are allowed. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
 
