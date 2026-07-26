@@ -210,10 +210,44 @@ EOF
   [ "${status}" -eq 0 ]
 }
 
-@test "OpenCode failure classification distinguishes timeout provider and generic errors" {
+@test "OpenCode failure classification uses the terminal provider error" {
   output_file="${BATS_TEST_TMPDIR}/output"
 
-  printf '%s\n' 'AI_APICallError: statusCode: 402' >"${output_file}"
+  printf '%s\n' \
+    'AI_APICallError: rate limit exceeded (statusCode: 429)' \
+    'UnknownError: "Request timed out"' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+  [[ "${output}" != *"rate limited"* ]]
+
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 124 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"timed out after 10 minutes"* ]]
+
+  printf '%s\n' 'AI_APICallError: statusCode: 429' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"rate limited"* ]]
+
+  printf '%s\n' 'AI_APICallError: Insufficient credits (statusCode: 402)' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"billing or quota"* ]]
+
+  printf '%s\n' 'AI_APICallError: provider unavailable' >"${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -222,13 +256,6 @@ EOF
   [[ "${output}" == *"model provider API error"* ]]
 
   printf '%s\n' unrelated >"${output_file}"
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_report_failure 124 "$2" 10 provider/model
-  ' _ "${run_script}" "${output_file}"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" == *"timed out after 10 minutes"* ]]
-
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 17 "$2" 10 provider/model
@@ -271,7 +298,7 @@ EOF
     printf 'unexpected status %s: %s\n' "${status}" "${output}" >&2
   fi
   [ "${status}" -eq 23 ]
-  [[ "${output}" == *"model provider API error"* ]]
+  [[ "${output}" == *"billing or quota"* ]]
   [ "$(cat "${invocation_file}")" = "github run" ]
 }
 

@@ -15,11 +15,26 @@ opencode_select_timeout_command() {
 }
 
 opencode_report_failure() {
-  local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}"
+  local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}" terminal_error
   if [[ "${status}" -eq 124 ]]; then
     echo "::error::OpenCode timed out after ${timeout_minutes} minutes for model '${model:-unknown}'."
-  elif grep -Eiq 'AI_APICallError|Insufficient credits|statusCode:[[:space:]]*402|"code":[[:space:]]*402' "${output_file}"; then
-    echo "::error::OpenCode failed with a model provider API error for model '${model:-unknown}'. Check provider credentials, quota, and billing."
+    return
+  fi
+
+  terminal_error="$(
+    grep -Ei \
+      'Request timed out|AI_APICallError|Insufficient credits|rate[ -]?limit|HTTP[^[:digit:]]*(402|429)|status(Code)?[^[:digit:]]*(402|429)|"code"[^[:digit:]]*(402|429)' \
+      "${output_file}" | tail -n 1 || true
+  )"
+
+  if grep -Eiq 'Request timed out' <<<"${terminal_error}"; then
+    echo "::error::OpenCode provider request timed out for model '${model:-unknown}'."
+  elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<<"${terminal_error}"; then
+    echo "::error::OpenCode failed because the model provider rate limited the request (HTTP 429) for model '${model:-unknown}'."
+  elif grep -Eiq 'Insufficient credits|HTTP[^[:digit:]]*402|status(Code)?[^[:digit:]]*402|"code"[^[:digit:]]*402' <<<"${terminal_error}"; then
+    echo "::error::OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for model '${model:-unknown}'."
+  elif grep -Eiq 'AI_APICallError' <<<"${terminal_error}"; then
+    echo "::error::OpenCode failed with a model provider API error for model '${model:-unknown}'. Check provider credentials and service status."
   else
     echo "::error::OpenCode failed with exit code ${status} for model '${model:-unknown}'."
   fi
