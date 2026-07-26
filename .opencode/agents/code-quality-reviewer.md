@@ -104,10 +104,13 @@ replacement code
 ````
 
 Do not emit a `suggestion` block for an incomplete sketch, when unchanged
-surrounding lines would have to be included, or when the replacement depends on
-unseen code. In those cases, describe the fix precisely and use a
-language-tagged code block only when a non-applicable example materially
-clarifies it.
+surrounding lines would have to be included, when the replacement depends on
+unseen code, or when the reported line is not itself a head-side changed
+line: the orchestrator may relocate an unanchorable finding to a nearby
+changed line, and GitHub would then apply the block to that different line
+instead of the one you examined. In those cases, describe the fix precisely
+and use a language-tagged code block only when a non-applicable example
+materially clarifies it.
 
 If no high-confidence issues exist, return an empty list and a one-line note confirming the code quality is good.
 
