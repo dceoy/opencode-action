@@ -2,6 +2,20 @@
 # Install the bundled OpenCode configuration after review-mode detection.
 # The function is sourceable for focused tests.
 
+_opencode_copy_missing_config() {
+  local source_dir="${1}" destination_dir="${2}" source relative destination
+
+  while IFS= read -r -d '' source; do
+    relative="${source#"${source_dir}/"}"
+    destination="${destination_dir}/${relative}"
+    if [[ -d "${source}" ]]; then
+      mkdir -p "${destination}"
+    elif [[ ! -e "${destination}" && ! -L "${destination}" ]]; then
+      cp -P "${source}" "${destination}"
+    fi
+  done < <(find "${source_dir}" -mindepth 1 -print0)
+}
+
 opencode_prepare_config() {
   local action_path="${1}" review_only="${2:-false}" config_dir helper
   local -a required_helpers=(
@@ -39,7 +53,7 @@ opencode_prepare_config() {
       mkdir -p "${config_dir}"
       # OpenCode invokes trusted review helpers only from this installed config;
       # never execute helpers from the untrusted checkout's .opencode/scripts/.
-      cp -rn "${action_path}/.opencode/." "${config_dir}/"
+      _opencode_copy_missing_config "${action_path}/.opencode" "${config_dir}"
       mkdir -p "${config_dir}/scripts"
       for helper in "${required_helpers[@]}"; do
         cp -f \
