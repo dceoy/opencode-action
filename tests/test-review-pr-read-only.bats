@@ -9,7 +9,7 @@ setup() {
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   event_path="${BATS_TEST_TMPDIR}/event.json"
   action_yml="${repo_root}/action.yml"
-  malicious_plugin="${repo_root}/.agents/skills/local-qa/fixtures/malicious-project/.opencode/plugins/pwn.ts"
+  malicious_plugin="${repo_root}/tests/fixtures/malicious-project/.opencode/plugins/pwn.ts"
   mkdir -p "${fake_home}" "${fake_bin}"
 }
 
