@@ -23,11 +23,11 @@ opencode_report_failure() {
 
   terminal_error="$(
     grep -Ei \
-      'Request timed out|AI_APICallError|Insufficient credits|rate[ -]?limit|HTTP[^[:digit:]]*(402|429)|status(Code)?[^[:digit:]]*(402|429)|"code"[^[:digit:]]*(402|429)' \
+      'Request timed out|SSE read timed out|TimeoutError|AI_APICallError|Insufficient credits|rate[ -]?limit|HTTP[^[:digit:]]*(402|429)|status(Code)?[^[:digit:]]*(402|429)|"code"[^[:digit:]]*(402|429)' \
       "${output_file}" | tail -n 1 || true
   )"
 
-  if grep -Eiq 'Request timed out' <<<"${terminal_error}"; then
+  if grep -Eiq 'Request timed out|SSE read timed out|TimeoutError' <<<"${terminal_error}"; then
     echo "::error::OpenCode provider request timed out for model '${model:-unknown}'."
   elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<<"${terminal_error}"; then
     echo "::error::OpenCode failed because the model provider rate limited the request (HTTP 429) for model '${model:-unknown}'."

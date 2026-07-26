@@ -231,6 +231,22 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"timed out after 10 minutes"* ]]
 
+  printf '%s\n' 'Error: SSE read timed out' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+
+  printf '%s\n' 'TimeoutError: The operation timed out' >"${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"provider request timed out"* ]]
+
   printf '%s\n' 'AI_APICallError: statusCode: 429' >"${output_file}"
   run bash -euo pipefail -c '
     source "$1"
