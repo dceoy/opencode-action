@@ -110,7 +110,8 @@ frontmatter() {
   grep -Fq '```suggestion' "${quality_reviewer}"
   grep -Fq "Preserve each finding message's Markdown" "${review_pr_doc}"
   grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_doc}"
-  grep -Fq 'message: <actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_doc}"
+  grep -Fq 'message: |-' "${review_pr_doc}"
+  grep -Fq '<actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_doc}"
 }
 
 @test "suggestion blocks are withheld or stripped for relocated anchors" {

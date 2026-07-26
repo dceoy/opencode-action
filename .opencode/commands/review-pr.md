@@ -51,7 +51,8 @@ Launch only the explicitly permitted reviewer agents. For each, supply the captu
   line: <head-file line number>
   severity: critical | important | suggestion
   source: <agent-name>
-  message: <actionable Markdown with the issue, impact, and concrete fix>
+  message: |-
+    <actionable Markdown with the issue, impact, and concrete fix>
 ```
 
 Do not let a reviewer post to GitHub.
