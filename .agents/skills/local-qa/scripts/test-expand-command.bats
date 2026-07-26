@@ -7,7 +7,17 @@ setup() {
   project_commands="${BATS_TEST_TMPDIR}/project"
   global_commands="${BATS_TEST_TMPDIR}/global"
   bundled_commands="${BATS_TEST_TMPDIR}/bundled"
-  mkdir -p "${project_commands}" "${global_commands}" "${bundled_commands}"
+  agents_dir="${BATS_TEST_TMPDIR}/agents"
+  mkdir -p "${project_commands}" "${global_commands}" "${bundled_commands}" "${agents_dir}"
+}
+
+write_agent() {
+  local name="${1}" mode="${2:-}"
+  if [[ -n "${mode}" ]]; then
+    printf -- '%s\n' '---' "mode: ${mode}" '---' >"${agents_dir}/${name}.md"
+  else
+    printf -- '%s\n' '---' 'description: test' '---' >"${agents_dir}/${name}.md"
+  fi
 }
 
 write_command() {
@@ -169,14 +179,100 @@ EOF_INNER
   [[ "${output}" == *'Args: a&b\c'* ]]
 }
 
-@test "JSONC conversion preserves comment-like string content" {
+@test "substitutes every ARGUMENTS occurrence" {
+  write_command "${project_commands}" inspect build '$ARGUMENTS then $ARGUMENTS'
   run bash -euo pipefail -c '
     source "$1"
-    opencode_jsonc_to_json <<EOF_INNER | jq -e ".url == \"https://example.test/a//b\" and .enabled"
+    opencode_resolve_prompt_and_agent "/inspect one two" "build" "$2"
+    printf "%s" "$OPENCODE_RESOLVED_PROMPT"
+  ' _ "${library}" "${project_commands}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *'one two then one two'* ]]
+}
+
+@test "appends command arguments when the template has no placeholder" {
+  write_command "${project_commands}" inspect build 'Inspect the change.'
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_resolve_prompt_and_agent "/inspect one two" "build" "$2"
+    printf "%s" "$OPENCODE_RESOLVED_PROMPT"
+  ' _ "${library}" "${project_commands}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *$'Inspect the change.\n\none two' ]]
+}
+
+@test "accepts custom primary-capable agent modes and rejects other modes" {
+  for mode in primary all ""; do
+    write_agent custom "${mode}"
+    write_command "${project_commands}" inspect custom 'inspect'
+    run bash -euo pipefail -c '
+      source "$1"
+      opencode_resolve_prompt_and_agent "/inspect" "build" "$2"
+      printf "%s" "$OPENCODE_RESOLVED_AGENT"
+    ' _ "${library}" "${project_commands}"
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"custom" ]]
+  done
+
+  write_agent custom subagent
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_resolve_prompt_and_agent "/inspect" "build" "$2"
+  ' _ "${library}" "${project_commands}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"non-primary mode 'subagent'"* ]]
+}
+
+@test "uses the earliest of multiple configured mentions" {
+  event_path="${BATS_TEST_TMPDIR}/event.json"
+  printf '%s\n' '{"comment":{"body":"prefix /second later /first final"}}' >"${event_path}"
+
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_effective_prompt "" "/first,/second" "$2"
+    printf "%s" "$OPENCODE_EFFECTIVE_PROMPT"
+  ' _ "${library}" "${event_path}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "later /first final" ]
+}
+
+@test "explicit prompt takes precedence over event comment extraction" {
+  event_path="${BATS_TEST_TMPDIR}/event.json"
+  printf '%s\n' '{"comment":{"body":"/oc from comment"}}' >"${event_path}"
+
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_effective_prompt "explicit prompt" "/oc" "$2"
+    printf "%s" "$OPENCODE_EFFECTIVE_PROMPT"
+  ' _ "${library}" "${event_path}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "explicit prompt" ]
+}
+
+@test "JSONC conversion handles comments nested trailing commas and escaped strings" {
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_jsonc_to_json <<'\''EOF_INNER'\'' | jq -e '\''
+      .url == "https://example.test/a//b" and
+      .literal == "/* not a comment */" and
+      .escaped == "quote: \" path: \\" and
+      .nested.items == [1, 2] and
+      .nested.enabled
+    '\''
     {
       // comment
       "url": "https://example.test/a//b",
-      "enabled": true,
+      "literal": "/* not a comment */",
+      "escaped": "quote: \" path: \\",
+      /* block comment */
+      "nested": {
+        "items": [1, 2,],
+        "enabled": true,
+      },
     }
 EOF_INNER
   ' _ "${library}"
