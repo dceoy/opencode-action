@@ -50,8 +50,8 @@ _opencode_detect_main() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  # shellcheck source=scripts/expand-command.sh
-  source "${script_dir}/expand-command.sh"
+  # shellcheck source=scripts/opencode-action-lib.sh
+  source "${script_dir}/opencode-action-lib.sh"
   opencode_detect_review_mode \
     "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}" \
     "${USE_BUNDLED_TOOLKIT:-}" "${OPENCODE_VERSION:-}"

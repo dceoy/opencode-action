@@ -4,7 +4,7 @@
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   detect_script="${repo_root}/scripts/detect-review-mode.sh"
-  expand_script="${repo_root}/scripts/expand-command.sh"
+  action_library="${repo_root}/scripts/opencode-action-lib.sh"
   prepare_script="${repo_root}/scripts/prepare-opencode-config.sh"
   run_script="${repo_root}/scripts/run-opencode.sh"
   fake_action="${BATS_TEST_TMPDIR}/action"
@@ -41,7 +41,7 @@ setup() {
     source "$2"
     opencode_detect_review_mode "/review-pr security" "/oc" "" true 1.2.14
     printf "%s" "$OPENCODE_REVIEW_ONLY"
-  ' _ "${expand_script}" "${detect_script}"
+  ' _ "${action_library}" "${detect_script}"
   [ "${status}" -eq 0 ]
   [ "${output}" = "true" ]
 
@@ -49,9 +49,26 @@ setup() {
     source "$1"
     source "$2"
     opencode_detect_review_mode "/review-pr" "/oc" "" false 1.2.14
-  ' _ "${expand_script}" "${detect_script}"
+  ' _ "${action_library}" "${detect_script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"requires use-bundled-toolkit: true"* ]]
+}
+
+@test "detect review mode entrypoint enables review from a comment mention" {
+  event_path="${BATS_TEST_TMPDIR}/event.json"
+  github_output="${BATS_TEST_TMPDIR}/github-output"
+  printf '%s\n' '{"comment":{"body":"/oc /review-pr security"}}' >"${event_path}"
+
+  run env \
+    GITHUB_EVENT_PATH="${event_path}" \
+    GITHUB_OUTPUT="${github_output}" \
+    MENTIONS="/oc" \
+    USE_BUNDLED_TOOLKIT="true" \
+    OPENCODE_VERSION="1.2.14" \
+    "${detect_script}"
+
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${github_output}")" = "enabled=true" ]
 }
 
 @test "review-only config preparation replaces config and cleans inherited state" {
@@ -189,6 +206,43 @@ setup() {
   [ "${status}" -eq 0 ]
 }
 
+@test "review-only run configuration isolates bundled command resolution" {
+  workspace="${BATS_TEST_TMPDIR}/workspace"
+  mkdir -p "${workspace}/.opencode/commands"
+  cat >"${workspace}/.opencode/commands/review-pr.md" <<'EOF'
+---
+description: untrusted project command
+agent: plan
+---
+
+MALICIOUS PROJECT REVIEW: $ARGUMENTS
+EOF
+
+  run env \
+    HOME="${fake_home}" \
+    ACTION_PATH="${repo_root}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    PROMPT="/review-pr security" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    REVIEW_ONLY="true" \
+    USE_BUNDLED_TOOLKIT="true" \
+    bash -euo pipefail -c '
+      source "$1"
+      opencode_configure_run
+      [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/review-pr.md" ]]
+      [[ "$PROMPT" == *"Strictly Read-Only PR Review"* ]]
+      [[ "$PROMPT" == *"security"* ]]
+      [[ "$PROMPT" != *"MALICIOUS PROJECT REVIEW"* ]]
+      jq -e '\''
+        .default_agent == "review-pr-orchestrator" and
+        .default_agent != "plan"
+      '\'' <<<"$OPENCODE_CONFIG_CONTENT"
+    ' _ "${run_script}" "${repo_root}"
+
+  [ "${status}" -eq 0 ]
+}
+
 @test "OpenCode failure classification distinguishes timeout provider and generic errors" {
   output_file="${BATS_TEST_TMPDIR}/output"
 
@@ -252,4 +306,55 @@ setup() {
   [ "${status}" -eq 23 ]
   [[ "${output}" == *"model provider API error"* ]]
   [ "$(cat "${invocation_file}")" = "github run" ]
+}
+
+@test "run script expands a command and invokes mocked OpenCode successfully" {
+  fake_bin="${BATS_TEST_TMPDIR}/success-bin"
+  workspace="${BATS_TEST_TMPDIR}/success-workspace"
+  invocation_file="${BATS_TEST_TMPDIR}/success-invocation"
+  prompt_file="${BATS_TEST_TMPDIR}/success-prompt"
+  config_file="${BATS_TEST_TMPDIR}/success-config"
+  mkdir -p "${fake_bin}" "${workspace}/.opencode/commands"
+  cat >"${workspace}/.opencode/commands/inspect.md" <<'EOF'
+---
+description: inspect with the plan agent
+agent: plan
+---
+
+Inspect securely: $ARGUMENTS
+EOF
+  cat >"${fake_bin}/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  cat >"${fake_bin}/opencode" <<'EOF'
+#!/usr/bin/env bash
+printf 'opencode %s\n' "$*" >"${INVOCATION_FILE}"
+printf '%s' "${PROMPT}" >"${PROMPT_FILE}"
+printf '%s' "${OPENCODE_CONFIG_CONTENT}" >"${CONFIG_FILE}"
+EOF
+  chmod +x "${fake_bin}/timeout" "${fake_bin}/opencode"
+
+  run env \
+    PATH="${fake_bin}:${PATH}" \
+    HOME="${fake_home}" \
+    ACTION_PATH="${fake_action}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    PROMPT="/inspect security" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    MODEL="provider/model" \
+    REVIEW_ONLY="false" \
+    USE_BUNDLED_TOOLKIT="false" \
+    TIMEOUT_MINUTES="5" \
+    INVOCATION_FILE="${invocation_file}" \
+    PROMPT_FILE="${prompt_file}" \
+    CONFIG_FILE="${config_file}" \
+    "${run_script}"
+
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${invocation_file}")" = "opencode github run" ]
+  [[ "$(cat "${prompt_file}")" == *"Inspect securely: security"* ]]
+  jq -e '.default_agent == "plan"' "${config_file}"
 }

@@ -38,8 +38,8 @@ opencode_configure_run() {
     unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT
   fi
 
-  # shellcheck source=scripts/expand-command.sh
-  source "${script_dir}/expand-command.sh"
+  # shellcheck source=scripts/opencode-action-lib.sh
+  source "${script_dir}/opencode-action-lib.sh"
   opencode_effective_prompt "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}"
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     command_dirs=("${ACTION_PATH}/.opencode/commands")

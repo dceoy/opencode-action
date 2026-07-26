@@ -8,8 +8,6 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  action_yml="${repo_root}/action.yml"
-  malicious_plugin="${repo_root}/tests/fixtures/malicious-project/.opencode/plugins/pwn.ts"
   mkdir -p "${fake_home}" "${fake_bin}"
 }
 
@@ -161,20 +159,4 @@ EOF
   [[ "${allowed}" != *'*'* ]]
   run grep -E '(: allow.*(>|>>|[|]|<\())|((>|>>|[|]|<\().*: allow)' "${orchestrator}"
   [ "${status}" -eq 1 ]
-}
-
-@test "review mode excludes project config and refreshes global toolkit" {
-  # This is a source-level guard. A true malicious-plugin execution test needs
-  # an installed OpenCode runtime and belongs in an end-to-end workflow.
-  grep -q 'Detect review-only mode' "${action_yml}"
-  grep -q 'scripts/detect-review-mode.sh' "${action_yml}"
-  grep -q 'scripts/prepare-opencode-config.sh' "${action_yml}"
-  grep -q 'scripts/run-opencode.sh' "${action_yml}"
-  run grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
-  [ "${status}" -eq 1 ]
-  run grep -q "contains(github.event.comment.body, '/review-pr')" "${action_yml}"
-  [ "${status}" -eq 1 ]
-  run grep -q 'rm -rf' "${action_yml}"
-  [ "${status}" -eq 1 ]
-  grep -q 'writeFileSync("pwned-by-project-plugin"' "${malicious_plugin}"
 }

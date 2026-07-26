@@ -3,7 +3,7 @@
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
-  library="${repo_root}/scripts/expand-command.sh"
+  library="${repo_root}/scripts/opencode-action-lib.sh"
   project_commands="${BATS_TEST_TMPDIR}/project"
   global_commands="${BATS_TEST_TMPDIR}/global"
   bundled_commands="${BATS_TEST_TMPDIR}/bundled"
