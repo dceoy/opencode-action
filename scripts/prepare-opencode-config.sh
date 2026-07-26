@@ -48,7 +48,9 @@ opencode_prepare_config() {
       cp -r "${action_path}/.opencode/." "${config_dir}/"
       if [[ -d "${HOME}/.opencode" ]]; then
         # Remove inherited plugins, agents, and config that could affect the
-        # isolated review run, while retaining the installed binary.
+        # isolated review run. This now runs before the OpenCode binary is
+        # cached or installed, so leave "bin" alone either way: the Cache and
+        # Install steps that follow populate it for this job.
         find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
       fi
       echo "Installed fresh review-only OpenCode config"

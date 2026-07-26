@@ -76,24 +76,6 @@ runs:
           OPENCODE_VERSION="${INPUT_VERSION}"
         fi
         echo "opencode-version=$(tr -d v <<< "${OPENCODE_VERSION}")" | tee -a "${GITHUB_OUTPUT}"
-    - name: Cache OpenCode
-      id: cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-      with:
-        path: ~/.opencode/bin
-        key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.opencode-version }}
-    - name: Install OpenCode
-      if: >
-        steps.cache.outputs.cache-hit != 'true'
-      shell: bash -euo pipefail {0}
-      env:
-        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
-      run: >
-        curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}"
-    - name: Add OpenCode to PATH
-      shell: bash -euo pipefail {0}
-      run: >  # zizmor: ignore[github-env] fixed path, not attacker-controlled
-        echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
     - name: Detect review-only mode
       id: review_mode
       shell: bash -euo pipefail {0}
@@ -113,6 +95,24 @@ runs:
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
       run: >
         "${ACTION_PATH}/scripts/prepare-opencode-config.sh"
+    - name: Cache OpenCode
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: ~/.opencode/bin
+        key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.opencode-version }}
+    - name: Install OpenCode
+      if: >
+        steps.cache.outputs.cache-hit != 'true'
+      shell: bash -euo pipefail {0}
+      env:
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
+      run: >
+        curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}"
+    - name: Add OpenCode to PATH
+      shell: bash -euo pipefail {0}
+      run: >  # zizmor: ignore[github-env] fixed path, not attacker-controlled
+        echo "${HOME}/.opencode/bin" | tee -a "${GITHUB_PATH}"
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
