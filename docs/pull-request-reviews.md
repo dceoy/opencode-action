@@ -6,7 +6,7 @@ Agents can also load `pr-review` directly through OpenCode's native skill tool, 
 
 ## Setup
 
-Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider.
+Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout.
 
 ```yaml
 permissions:
@@ -44,7 +44,7 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. The simplifier runs only when explicitly requested.
+A full review runs the core correctness, security, and test-coverage reviewers by default. Code quality, performance, and documentation reviewers run only when explicitly requested via their aspect or when the diff makes that specialty relevant, to limit provider request fan-out. The simplifier runs only when explicitly requested.
 
 ## Finding and submission behavior
 
