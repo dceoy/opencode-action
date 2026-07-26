@@ -3,6 +3,7 @@
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
+  detect_script="${repo_root}/scripts/detect-review-mode.sh"
   expand_script="${repo_root}/scripts/expand-command.sh"
   prepare_script="${repo_root}/scripts/prepare-opencode-config.sh"
   run_script="${repo_root}/scripts/run-opencode.sh"
@@ -19,7 +20,7 @@ setup() {
     run bash -euo pipefail -c '
       source "$1"
       opencode_validate_review_version "$2"
-    ' _ "${prepare_script}" "${version}"
+    ' _ "${detect_script}" "${version}"
     [ "${status}" -eq 0 ]
   done
 }
@@ -29,7 +30,7 @@ setup() {
     run bash -euo pipefail -c '
       source "$1"
       opencode_validate_review_version "$2"
-    ' _ "${prepare_script}" "${version}"
+    ' _ "${detect_script}" "${version}"
     [ "${status}" -ne 0 ]
   done
 }
@@ -40,7 +41,7 @@ setup() {
     source "$2"
     opencode_detect_review_mode "/review-pr security" "/oc" "" true 1.2.14
     printf "%s" "$OPENCODE_REVIEW_ONLY"
-  ' _ "${expand_script}" "${prepare_script}"
+  ' _ "${expand_script}" "${detect_script}"
   [ "${status}" -eq 0 ]
   [ "${output}" = "true" ]
 
@@ -48,7 +49,7 @@ setup() {
     source "$1"
     source "$2"
     opencode_detect_review_mode "/review-pr" "/oc" "" false 1.2.14
-  ' _ "${expand_script}" "${prepare_script}"
+  ' _ "${expand_script}" "${detect_script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"requires use-bundled-toolkit: true"* ]]
 }

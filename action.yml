@@ -103,14 +103,16 @@ runs:
         USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
         ACTION_PATH: ${{ github.action_path }}
-      run: "${ACTION_PATH}/scripts/prepare-opencode-config.sh detect"
+      run: >
+        ${ACTION_PATH}/scripts/detect-review-mode.sh
     - name: Copy bundled OpenCode config
       if: inputs.use-bundled-toolkit == 'true'
       shell: bash -euo pipefail {0}
       env:
         ACTION_PATH: ${{ github.action_path }}
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
-      run: "${ACTION_PATH}/scripts/prepare-opencode-config.sh prepare"
+      run: >
+        ${ACTION_PATH}/scripts/prepare-opencode-config.sh
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
@@ -127,4 +129,5 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}
-      run: "${ACTION_PATH}/scripts/run-opencode.sh"
+      run: >
+        ${ACTION_PATH}/scripts/run-opencode.sh

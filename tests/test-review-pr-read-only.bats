@@ -167,8 +167,8 @@ EOF
   # This is a source-level guard. A true malicious-plugin execution test needs
   # an installed OpenCode runtime and belongs in an end-to-end workflow.
   grep -q 'Detect review-only mode' "${action_yml}"
-  grep -q 'scripts/prepare-opencode-config.sh detect' "${action_yml}"
-  grep -q 'scripts/prepare-opencode-config.sh prepare' "${action_yml}"
+  grep -q 'scripts/detect-review-mode.sh' "${action_yml}"
+  grep -q 'scripts/prepare-opencode-config.sh' "${action_yml}"
   grep -q 'scripts/run-opencode.sh' "${action_yml}"
   run grep -q 'OPENCODE_DISABLE_PROJECT_CONFIG:' "${action_yml}"
   [ "${status}" -eq 1 ]
