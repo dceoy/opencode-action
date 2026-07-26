@@ -51,6 +51,25 @@ setup() {
   [ -f "${BATS_TEST_TMPDIR}/elsewhere/sensitive" ]
 }
 
+@test "review-only config preparation fails closed on a symlinked home .opencode/bin" {
+  mkdir -p "${fake_home}/.config/opencode" "${fake_home}/.opencode" \
+    "${BATS_TEST_TMPDIR}/elsewhere"
+  printf '%s\n' old >"${fake_home}/.config/opencode/old.txt"
+  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
+  ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.opencode/bin"
+
+  run env HOME="${fake_home}" bash -euo pipefail -c '
+    source "$1"
+    opencode_prepare_config "$2" true
+  ' _ "${prepare_script}" "${fake_action}"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"::error::"*".opencode/bin' is a symlink"* ]]
+  [ -L "${fake_home}/.opencode/bin" ]
+  [ -f "${BATS_TEST_TMPDIR}/elsewhere/sensitive" ]
+  [ -f "${fake_home}/.config/opencode/old.txt" ]
+}
+
 @test "normal config preparation preserves config and installs helpers directly" {
   mkdir -p "${fake_home}/.config/opencode/scripts"
   printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"

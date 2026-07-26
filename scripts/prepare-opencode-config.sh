@@ -42,6 +42,10 @@ opencode_prepare_config() {
         echo "::error::'${HOME}/.opencode' is a symlink; refusing to run review-only isolation without a trustworthy state directory." >&2
         return 1
       fi
+      if [[ -L "${HOME}/.opencode/bin" ]]; then
+        echo "::error::'${HOME}/.opencode/bin' is a symlink; refusing to run review-only isolation without a trustworthy state directory." >&2
+        return 1
+      fi
       export XDG_CONFIG_HOME="${HOME}/.config"
       rm -rf "${config_dir}"
       mkdir -p "${config_dir}"
