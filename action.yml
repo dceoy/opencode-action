@@ -53,7 +53,7 @@ outputs:
     description: OpenCode version resolved for this run.
     value: ${{ steps.version.outputs.opencode-version }}
   cache-hit:
-    description: Whether the OpenCode binary cache was restored.
+    description: Whether the OpenCode binary cache was restored. Empty for review-only runs, which always skip the cache and install fresh to avoid restoring a binary directory poisoned by prior runner state.
     value: ${{ steps.cache.outputs.cache-hit }}
 runs:
   using: composite
@@ -97,6 +97,7 @@ runs:
         "${ACTION_PATH}/scripts/prepare-opencode-config.sh"
     - name: Cache OpenCode
       id: cache
+      if: steps.review_mode.outputs.enabled != 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: ~/.opencode/bin

@@ -91,7 +91,7 @@ The provider account must have sufficient credits or quota. For providers not bu
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
-Outputs are `opencode-version` and `cache-hit`.
+Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-only runs (`prompt: /review-pr`), which always skip the cache and install fresh.
 
 ## Pull request reviews
 
