@@ -36,8 +36,11 @@ setup() {
 }
 
 @test "normal config preparation preserves config and installs helpers directly" {
-  mkdir -p "${fake_home}/.config/opencode"
+  mkdir -p "${fake_home}/.config/opencode/scripts"
   printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"
+  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh"
+  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/review-pr-gh.sh"
+  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/review-pr-submit.sh"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
     source "$1"
@@ -45,7 +48,7 @@ setup() {
   ' _ "${prepare_script}" "${fake_action}"
 
   [ "${status}" -eq 0 ]
-  [ -f "${fake_home}/.config/opencode/keep.txt" ]
+  [ "$(cat "${fake_home}/.config/opencode/keep.txt")" = keep ]
   [ -f "${fake_home}/.config/opencode/bundled.txt" ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/resolve-app-token.sh")" = resolver ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-gh.sh")" = github ]

@@ -40,6 +40,12 @@ opencode_prepare_config() {
       # OpenCode invokes trusted review helpers only from this installed config;
       # never execute helpers from the untrusted checkout's .opencode/scripts/.
       cp -rn "${action_path}/.opencode/." "${config_dir}/"
+      mkdir -p "${config_dir}/scripts"
+      for helper in "${required_helpers[@]}"; do
+        cp -f \
+          "${action_path}/.opencode/scripts/${helper}" \
+          "${config_dir}/scripts/${helper}"
+      done
       echo "Copied bundled OpenCode config into ~/.config/opencode/"
       ;;
     *)
