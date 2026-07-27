@@ -8,7 +8,7 @@ initial_payload="${state_dir}/initial.json"
 validated_payload="${state_dir}/validated-initial.json"
 update_payload="${state_dir}/update.json"
 review_id_file="${state_dir}/review_id"
-session_file="${HOME}/.config/opencode/review-session-started"
+session_file="${HOME}/.config/opencode/review-session-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 submission_attempt_file="${state_dir}/submission-attempted"
 
 load_token_lib() {
@@ -113,11 +113,16 @@ case "${operation}" in
     [[ ! -e "${validated_payload}" ]] ||
       fail "Initial review payload already passed validation and is sealed."
     validate_initial_payload
-    (umask 077; jq -cS . "${initial_payload}" >"${validated_payload}")
+    validated_payload_tmp="$(mktemp "${state_dir}/validated-initial.XXXXXX.json")"
+    trap 'rm -f "${validated_payload_tmp}"' EXIT
+    jq -cS . "${initial_payload}" >"${validated_payload_tmp}"
+    mv "${validated_payload_tmp}" "${validated_payload}"
+    trap - EXIT
     ;;
   submit-initial)
     [[ -s "${validated_payload}" ]] ||
       fail "Initial review payload must pass validate-initial before submission."
+    validate_initial_payload
     current_payload="$(jq -cS . "${initial_payload}")" ||
       fail "Initial review payload changed to invalid JSON after validation."
     [[ "${current_payload}" == "$(cat "${validated_payload}")" ]] ||
