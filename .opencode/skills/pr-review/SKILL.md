@@ -63,7 +63,23 @@ Drop praise, nitpicks, style-only feedback, findings outside the changed-file li
 
 Before returning any top-level text in PR mode, including no-finding and summary-only fallback results, invoke `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" validate`. If validation fails, stop. If there are no findings, then return exactly `No noteworthy issues found.` Do not post an empty review.
 
-For findings, the `prepare` and `context` operations in section 1 have already created the empty payload files and pinned the review context. Do not run them again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. The helper validates the payload and adds the trusted `commit_id` and `event` itself. Preserve each finding message's Markdown, including paragraph breaks and fenced code or `suggestion` blocks, except for a `suggestion` block already stripped in section 3 for a relocated anchor. Each inline body is `**<severity> · <source>**`, followed by a blank line and the unmodified finding message.
+For findings, the `prepare` and `context` operations in section 1 have already created the empty payload files and pinned the review context. Do not run them again. Use the edit tool only for `$HOME/.config/opencode/review-state/initial.json`, writing exactly `{body, comments}` with a nonempty body and inline comments array. Every single-line comment must have exactly `body`, `line`, `path`, and `side`; `line` is a positive integer and `side` is `LEFT` or `RIGHT`. A multiline comment additionally has exactly `start_line` and `start_side`; `start_line` is a positive integer no greater than `line`, and `start_side` equals `side`.
+
+```json
+{
+  "body": "OpenCode PR Review: 1 inline finding(s).",
+  "comments": [
+    {
+      "body": "**important · code-reviewer**\n\nFinding text.",
+      "line": 12,
+      "path": "path/to/file",
+      "side": "RIGHT"
+    }
+  ]
+}
+```
+
+The helper adds the trusted `commit_id` and `event` itself. Preserve each finding message's Markdown, including paragraph breaks and fenced code or `suggestion` blocks, except for a `suggestion` block already stripped in section 3 for a relocated anchor. Each inline body is `**<severity> · <source>**`, followed by a blank line and the unmodified finding message.
 
 Every finding with a valid diff anchor must be included in the `comments` array and submitted as an inline review comment. Never return anchorable findings only as top-level assistant text. If structured submission fails, fail the run instead of emitting the findings as a top-level completion comment.
 
@@ -74,14 +90,15 @@ When there are summary-only findings, the body begins `OpenCode PR Review: <N> i
 Use only these exact commands:
 
 ```bash
+bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" validate-initial
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update
 ```
 
-After the single `prepare` in section 1, write the initial payload only to `$HOME/.config/opencode/review-state/initial.json`. Before `update`, write exactly `{body}` only to `$HOME/.config/opencode/review-state/update.json`. Never add arguments, redirections, pipelines, or process substitutions to helper commands.
+After the single `prepare` in section 1, write the initial payload only to `$HOME/.config/opencode/review-state/initial.json`, then run `validate-initial`. Validation is non-mutating and reports the exact invalid field. Correct validation failures only in `initial.json` and rerun `validate-initial`; never create diagnostic or test findings. Once validation succeeds, the payload is sealed: do not modify it or run validation again. Run `submit-initial` exactly once. Any submission failure terminates the review: never retry submission, rerun `prepare`, or experiment with alternate payloads. Before `update`, write exactly `{body}` only to `$HOME/.config/opencode/review-state/update.json`. Never add arguments, redirections, pipelines, or process substitutions to helper commands.
 
 You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the head commit from the same context, and updates only the review ID it recorded when the initial submission succeeded in this run. It validates the trusted event context, temporary payload, target commit, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
 
-After successful inline submission, do not repeat findings in the final assistant output. Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, retry once only after converting the identified invalid anchors to summary-only; never lose a finding. If no inline anchors remain, return the concise markdown fallback instead of submitting an empty comments array.
+After successful inline submission, do not repeat findings in the final assistant output. Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, fail the run without retrying or posting a fallback. If no inline anchors remain before validation, return the concise markdown fallback instead of submitting an empty comments array.
 
 Do not clean, reset, restore, stash, commit, or push anything.

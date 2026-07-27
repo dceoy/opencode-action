@@ -37,6 +37,7 @@ permission:
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" diff': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" validate': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare': allow
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" validate-initial': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial': allow
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update': allow
   task:

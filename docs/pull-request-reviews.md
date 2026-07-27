@@ -56,9 +56,9 @@ The orchestrator retains the full pull request context for anchoring and normali
 4. posts anchorable findings as inline review comments
 5. keeps genuine unanchorable findings in the review body
 
-A successful run creates one structured GitHub review and updates its body with the workflow run link. `/review-pr` does not post through `gh pr comment` or the issue comment API.
+A successful run validates the complete payload without a GitHub write, then creates one structured GitHub review and updates its body with the workflow run link. The validated payload is sealed against later edits, and the live initial submission can be attempted only once per run. `/review-pr` does not post through `gh pr comment` or the issue comment API.
 
-If no finding can be anchored, the command returns a concise Markdown fallback instead of an empty review. Invalid inline anchors are retried once as summary-only findings. Submission failures fail the workflow rather than reposting findings as an unstructured comment.
+If no finding can be anchored, the command returns a concise Markdown fallback instead of an empty review. Validation identifies missing or invalid fields before submission. Submission failures fail the workflow without a retry rather than risking an unintended review artifact or reposting findings as an unstructured comment.
 
 `opencode github run` may separately post the command's final completion message, so a run can produce the structured review plus at most one top-level completion comment.
 
