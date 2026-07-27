@@ -15,7 +15,7 @@ setup() {
   required_keys=(name description mode permission)
   # Backtick-quoted identifiers in the pr-review skill that are skills, toolkits, or
   # config inputs rather than agents.
-  non_agents=(pr-feedback-triage pr-review-toolkit use-github-token)
+  non_agents=(pr-feedback-triage pr-review-toolkit submit-initial use-github-token validate-initial)
 }
 
 agent_files() {

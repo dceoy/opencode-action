@@ -5,10 +5,10 @@ setup() {
   helper="${repo_root}/.opencode/scripts/review-pr-gh.sh"
   submit="${repo_root}/.opencode/scripts/review-pr-submit.sh"
   orchestrator="${repo_root}/.opencode/agents/review-pr-orchestrator.md"
-  fake_home="${BATS_TEST_TMPDIR}/home"
-  fake_bin="${BATS_TEST_TMPDIR}/bin"
-  event_path="${BATS_TEST_TMPDIR}/event.json"
-  mkdir -p "${fake_home}" "${fake_bin}"
+  fake_home="$(mktemp -d "${BATS_TEST_TMPDIR}/home.XXXXXX")"
+  fake_bin="${fake_home}/bin"
+  event_path="${fake_home}/event.json"
+  mkdir -p "${fake_bin}"
 }
 
 write_resolver() {
@@ -69,12 +69,19 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
   [ "${status}" -eq 0 ]
   [ "$(jq -r '.id' <<<"${output}")" = "555" ]
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"must pass validate-initial"* ]]
 }
 
 @test "submission fails if the PR head changes after context" {
@@ -102,7 +109,9 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
@@ -139,12 +148,59 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"changed during token verification"* ]]
+}
+
+@test "validation identifies a missing comment side without submitting" {
+  prepare_state
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"comment 0 side must be LEFT or RIGHT"* ]]
+  [ ! -e "${fake_home}/.config/opencode/review-state/submission-attempted" ]
+}
+
+@test "submission rejects a payload changed after validation" {
+  prepare_state
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+
+  run env HOME="${fake_home}" bash "${submit}" submit-initial
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"changed after validation"* ]]
+  [ ! -e "${fake_home}/.config/opencode/review-state/submission-attempted" ]
+}
+
+@test "validation rejects a diagnostic comment body without submitting" {
+  prepare_state
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"must begin with a severity and reviewer source"* ]]
+  [ ! -e "${fake_home}/.config/opencode/review-state/submission-attempted" ]
+}
+
+@test "review state can be prepared only once per run" {
+  prepare_state
+
+  run env HOME="${fake_home}" bash "${submit}" prepare
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"already prepared"* ]]
 }
 
 @test "orchestrator helper commands are exact and reject shell composition" {
