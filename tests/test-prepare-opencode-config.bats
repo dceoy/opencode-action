@@ -7,19 +7,19 @@ setup() {
   fake_action="${BATS_TEST_TMPDIR}/action"
   fake_home="${BATS_TEST_TMPDIR}/home"
   mkdir -p "${fake_action}/.opencode/scripts" "${fake_home}"
-  printf '%s\n' bundled >"${fake_action}/.opencode/bundled.txt"
-  printf '%s\n' resolver >"${fake_action}/.opencode/scripts/resolve-app-token.sh"
-  printf '%s\n' github >"${fake_action}/.opencode/scripts/review-pr-gh.sh"
-  printf '%s\n' submit >"${fake_action}/.opencode/scripts/review-pr-submit.sh"
+  printf '%s\n' bundled > "${fake_action}/.opencode/bundled.txt"
+  printf '%s\n' resolver > "${fake_action}/.opencode/scripts/resolve-app-token.sh"
+  printf '%s\n' github > "${fake_action}/.opencode/scripts/review-pr-gh.sh"
+  printf '%s\n' submit > "${fake_action}/.opencode/scripts/review-pr-submit.sh"
 }
 
 @test "review-only config preparation replaces config and cleans inherited state, including bin" {
   mkdir -p "${fake_home}/.config/opencode" \
     "${fake_home}/.opencode/bin" "${fake_home}/.opencode/plugins"
-  printf '%s\n' old >"${fake_home}/.config/opencode/old.txt"
-  printf '%s\n' binary >"${fake_home}/.opencode/bin/opencode"
-  printf '%s\n' inherited >"${fake_home}/.opencode/bin/timeout"
-  printf '%s\n' plugin >"${fake_home}/.opencode/plugins/inherited"
+  printf '%s\n' old > "${fake_home}/.config/opencode/old.txt"
+  printf '%s\n' binary > "${fake_home}/.opencode/bin/opencode"
+  printf '%s\n' inherited > "${fake_home}/.opencode/bin/timeout"
+  printf '%s\n' plugin > "${fake_home}/.opencode/plugins/inherited"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
     source "$1"
@@ -38,7 +38,7 @@ setup() {
 
 @test "review-only config preparation fails closed on a symlinked home .opencode" {
   mkdir -p "${fake_home}/.config/opencode" "${BATS_TEST_TMPDIR}/elsewhere"
-  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
+  printf '%s\n' sensitive > "${BATS_TEST_TMPDIR}/elsewhere/sensitive"
   ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.opencode"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
@@ -55,8 +55,8 @@ setup() {
 @test "review-only config preparation fails closed on a symlinked home .opencode/bin" {
   mkdir -p "${fake_home}/.config/opencode" "${fake_home}/.opencode" \
     "${BATS_TEST_TMPDIR}/elsewhere"
-  printf '%s\n' old >"${fake_home}/.config/opencode/old.txt"
-  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
+  printf '%s\n' old > "${fake_home}/.config/opencode/old.txt"
+  printf '%s\n' sensitive > "${BATS_TEST_TMPDIR}/elsewhere/sensitive"
   ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.opencode/bin"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
@@ -73,10 +73,10 @@ setup() {
 
 @test "normal config preparation preserves config and installs helpers directly" {
   mkdir -p "${fake_home}/.config/opencode/scripts"
-  printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"
-  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh"
-  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/review-pr-gh.sh"
-  printf '%s\n' stale >"${fake_home}/.config/opencode/scripts/review-pr-submit.sh"
+  printf '%s\n' keep > "${fake_home}/.config/opencode/keep.txt"
+  printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh"
+  printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/review-pr-gh.sh"
+  printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/review-pr-submit.sh"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
     source "$1"
@@ -94,7 +94,7 @@ setup() {
 
 @test "normal config preparation replaces a symlinked helper destination instead of writing through it" {
   mkdir -p "${fake_home}/.config/opencode/scripts" "${BATS_TEST_TMPDIR}/elsewhere"
-  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/sensitive"
+  printf '%s\n' sensitive > "${BATS_TEST_TMPDIR}/elsewhere/sensitive"
   ln -s "${BATS_TEST_TMPDIR}/elsewhere/sensitive" \
     "${fake_home}/.config/opencode/scripts/review-pr-gh.sh"
 
@@ -126,7 +126,7 @@ setup() {
 
 @test "review-only config preparation fails closed on a symlinked home .config" {
   mkdir -p "${BATS_TEST_TMPDIR}/elsewhere/opencode"
-  printf '%s\n' sensitive >"${BATS_TEST_TMPDIR}/elsewhere/opencode/sensitive"
+  printf '%s\n' sensitive > "${BATS_TEST_TMPDIR}/elsewhere/opencode/sensitive"
   ln -s "${BATS_TEST_TMPDIR}/elsewhere" "${fake_home}/.config"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
@@ -157,7 +157,7 @@ setup() {
 
 @test "review-only config preparation fails closed before cleanup when bundle is missing" {
   mkdir -p "${fake_home}/.config/opencode"
-  printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"
+  printf '%s\n' keep > "${fake_home}/.config/opencode/keep.txt"
 
   run env HOME="${fake_home}" bash -euo pipefail -c '
     source "$1"
@@ -180,7 +180,7 @@ setup() {
     rm -f "${fake_action}/.opencode/scripts/${helper}"
     rm -rf "${fake_home}/.config/opencode"
     mkdir -p "${fake_home}/.config/opencode"
-    printf '%s\n' keep >"${fake_home}/.config/opencode/keep.txt"
+    printf '%s\n' keep > "${fake_home}/.config/opencode/keep.txt"
 
     run env HOME="${fake_home}" bash -euo pipefail -c '
       source "$1"
@@ -192,6 +192,6 @@ setup() {
     [ "$(cat "${fake_home}/.config/opencode/keep.txt")" = keep ]
     [ ! -e "${fake_home}/.config/opencode/bundled.txt" ]
 
-    printf '%s\n' restored >"${fake_action}/.opencode/scripts/${helper}"
+    printf '%s\n' restored > "${fake_action}/.opencode/scripts/${helper}"
   done
 }

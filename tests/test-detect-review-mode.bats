@@ -49,7 +49,7 @@ setup() {
 @test "detect review mode entrypoint enables review from a comment mention" {
   event_path="${BATS_TEST_TMPDIR}/event.json"
   github_output="${BATS_TEST_TMPDIR}/github-output"
-  printf '%s\n' '{"comment":{"body":"/oc /review-pr security"}}' >"${event_path}"
+  printf '%s\n' '{"comment":{"body":"/oc /review-pr security"}}' > "${event_path}"
 
   run env \
     GITHUB_EVENT_PATH="${event_path}" \

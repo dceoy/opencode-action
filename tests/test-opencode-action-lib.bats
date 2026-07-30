@@ -14,15 +14,15 @@ setup() {
 write_agent() {
   local name="${1}" mode="${2:-}"
   if [[ -n "${mode}" ]]; then
-    printf -- '%s\n' '---' "mode: ${mode}" '---' >"${agents_dir}/${name}.md"
+    printf -- '%s\n' '---' "mode: ${mode}" '---' > "${agents_dir}/${name}.md"
   else
-    printf -- '%s\n' '---' 'description: test' '---' >"${agents_dir}/${name}.md"
+    printf -- '%s\n' '---' 'description: test' '---' > "${agents_dir}/${name}.md"
   fi
 }
 
 write_command() {
   local dir="${1}" name="${2}" agent="${3}" body="${4}"
-  cat >"${dir}/${name}.md" <<EOF_INNER
+  cat > "${dir}/${name}.md" << EOF_INNER
 ---
 description: test
 agent: ${agent}
@@ -48,7 +48,7 @@ EOF_INNER
 @test "extracts a slash command after a configured comment mention" {
   write_command "${project_commands}" review-pr build 'Review: $ARGUMENTS'
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  printf '%s\n' '{"comment":{"body":"Please /OC /review-pr security"}}' >"${event_path}"
+  printf '%s\n' '{"comment":{"body":"Please /OC /review-pr security"}}' > "${event_path}"
 
   run bash -euo pipefail -c '
     source "$1"
@@ -64,7 +64,7 @@ EOF_INNER
 
 @test "ordinary comments remain on the native event prompt" {
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  printf '%s\n' '{"comment":{"body":"Please fix retries /oc and keep compatibility"}}' >"${event_path}"
+  printf '%s\n' '{"comment":{"body":"Please fix retries /oc and keep compatibility"}}' > "${event_path}"
 
   run bash -euo pipefail -c '
     source "$1"
@@ -113,7 +113,7 @@ EOF_INNER
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"cannot be verified as a primary agent"* ]]
 
-  cat >"${project_commands}/inspect.md" <<'EOF_INNER'
+  cat > "${project_commands}/inspect.md" << 'EOF_INNER'
 ---
 description: test
 agent: build
@@ -227,7 +227,7 @@ EOF_INNER
 
 @test "uses the earliest of multiple configured mentions" {
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  printf '%s\n' '{"comment":{"body":"prefix /second later /first final"}}' >"${event_path}"
+  printf '%s\n' '{"comment":{"body":"prefix /second later /first final"}}' > "${event_path}"
 
   run bash -euo pipefail -c '
     source "$1"
@@ -241,7 +241,7 @@ EOF_INNER
 
 @test "explicit prompt takes precedence over event comment extraction" {
   event_path="${BATS_TEST_TMPDIR}/event.json"
-  printf '%s\n' '{"comment":{"body":"/oc from comment"}}' >"${event_path}"
+  printf '%s\n' '{"comment":{"body":"/oc from comment"}}' > "${event_path}"
 
   run bash -euo pipefail -c '
     source "$1"

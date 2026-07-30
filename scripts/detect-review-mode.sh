@@ -21,10 +21,10 @@ opencode_validate_review_version() {
   minor="${BASH_REMATCH[2]}"
   patch="${BASH_REMATCH[3]}"
   prerelease="${BASH_REMATCH[5]:-}"
-  if (( 10#${major} < 1 ||
-    (10#${major} == 1 && 10#${minor} < 2) ||
-    (10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14) )) ||
-    [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
+  if ((10#${major} < 1 || (\
+    10#${major} == 1 && 10#${minor} < 2) || (\
+    10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14))) \
+      || [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
     echo "::error::Review-only mode requires OpenCode 1.2.14 or newer (got '${original_version}')." >&2
     return 1
   fi
@@ -55,7 +55,7 @@ _opencode_detect_main() {
   opencode_detect_review_mode \
     "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}" \
     "${USE_BUNDLED_TOOLKIT:-}" "${OPENCODE_VERSION:-}"
-  printf 'enabled=%s\n' "${OPENCODE_REVIEW_ONLY}" >>"${GITHUB_OUTPUT}"
+  printf 'enabled=%s\n' "${OPENCODE_REVIEW_ONLY}" >> "${GITHUB_OUTPUT}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

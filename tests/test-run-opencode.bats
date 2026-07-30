@@ -98,7 +98,7 @@ setup() {
 @test "review-only run configuration isolates bundled command resolution" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}/.opencode/commands"
-  cat >"${workspace}/.opencode/commands/review-pr.md" <<'EOF'
+  cat > "${workspace}/.opencode/commands/review-pr.md" << 'EOF'
 ---
 description: untrusted project command
 agent: plan
@@ -136,7 +136,7 @@ EOF
 @test "review-only runtime loads the bundled skill and excludes external skills" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}/.agents/skills/untrusted-review"
-  cat >"${workspace}/.agents/skills/untrusted-review/SKILL.md" <<'EOF'
+  cat > "${workspace}/.agents/skills/untrusted-review/SKILL.md" << 'EOF'
 ---
 name: untrusted-review
 description: untrusted project skill
@@ -181,7 +181,7 @@ EOF
 @test "normal run configuration falls back to the bundled toolkit's commands" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}" "${fake_action}/.opencode/commands"
-  cat >"${fake_action}/.opencode/commands/inspect.md" <<'EOF'
+  cat > "${fake_action}/.opencode/commands/inspect.md" << 'EOF'
 ---
 description: bundled inspect command
 agent: plan
@@ -215,7 +215,7 @@ EOF
 
   printf '%s\n' \
     'AI_APICallError: rate limit exceeded (statusCode: 429)' \
-    'UnknownError: "Request timed out"' >"${output_file}"
+    'UnknownError: "Request timed out"' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -231,7 +231,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"timed out after 10 minutes"* ]]
 
-  printf '%s\n' 'Error: SSE read timed out' >"${output_file}"
+  printf '%s\n' 'Error: SSE read timed out' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -239,7 +239,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"provider request timed out"* ]]
 
-  printf '%s\n' 'TimeoutError: The operation timed out' >"${output_file}"
+  printf '%s\n' 'TimeoutError: The operation timed out' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -247,7 +247,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"provider request timed out"* ]]
 
-  printf '%s\n' 'AI_APICallError: statusCode: 429' >"${output_file}"
+  printf '%s\n' 'AI_APICallError: statusCode: 429' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -255,7 +255,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"rate limited"* ]]
 
-  printf '%s\n' 'AI_APICallError: Insufficient credits (statusCode: 402)' >"${output_file}"
+  printf '%s\n' 'AI_APICallError: Insufficient credits (statusCode: 402)' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -263,7 +263,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"billing or quota"* ]]
 
-  printf '%s\n' 'AI_APICallError: provider unavailable' >"${output_file}"
+  printf '%s\n' 'AI_APICallError: provider unavailable' > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 1 "$2" 10 provider/model
@@ -271,7 +271,7 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"model provider API error"* ]]
 
-  printf '%s\n' unrelated >"${output_file}"
+  printf '%s\n' unrelated > "${output_file}"
   run bash -euo pipefail -c '
     source "$1"
     opencode_report_failure 17 "$2" 10 provider/model
@@ -287,12 +287,12 @@ EOF
   printf '%s\n' \
     '#!/usr/bin/env bash' \
     'shift' \
-    'exec "$@"' >"${fake_bin}/timeout"
+    'exec "$@"' > "${fake_bin}/timeout"
   printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "%s\n" "$*" >"${INVOCATION_FILE}"' \
     'echo "Insufficient credits"' \
-    'exit 23' >"${fake_bin}/opencode"
+    'exit 23' > "${fake_bin}/opencode"
   chmod +x "${fake_bin}/timeout" "${fake_bin}/opencode"
 
   run env \
@@ -325,7 +325,7 @@ EOF
   prompt_file="${BATS_TEST_TMPDIR}/success-prompt"
   config_file="${BATS_TEST_TMPDIR}/success-config"
   mkdir -p "${fake_bin}" "${workspace}/.opencode/commands"
-  cat >"${workspace}/.opencode/commands/inspect.md" <<'EOF'
+  cat > "${workspace}/.opencode/commands/inspect.md" << 'EOF'
 ---
 description: inspect with the plan agent
 agent: plan
@@ -333,12 +333,12 @@ agent: plan
 
 Inspect securely: $ARGUMENTS
 EOF
-  cat >"${fake_bin}/timeout" <<'EOF'
+  cat > "${fake_bin}/timeout" << 'EOF'
 #!/usr/bin/env bash
 shift
 exec "$@"
 EOF
-  cat >"${fake_bin}/opencode" <<'EOF'
+  cat > "${fake_bin}/opencode" << 'EOF'
 #!/usr/bin/env bash
 printf 'opencode %s\n' "$*" >"${INVOCATION_FILE}"
 printf '%s' "${PROMPT}" >"${PROMPT_FILE}"

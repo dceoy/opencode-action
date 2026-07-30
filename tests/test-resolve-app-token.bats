@@ -22,7 +22,9 @@ mk_repo() {
   printf '%s' "${d}"
 }
 
-encode_header() { printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"; }
+encode_header() {
+  printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"
+}
 
 # Writes a fake `gh` onto a fresh directory that answers the two `gh api`
 # shapes opencode_verify_app_token_identity issues: a POST to create a
@@ -31,7 +33,7 @@ encode_header() { printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-toke
 mk_gh_stub() {
   local dir="$1" login="$2"
   mkdir -p "${dir}"
-  cat > "${dir}/gh" <<STUB
+  cat > "${dir}/gh" << STUB
 #!/usr/bin/env bash
 set -euo pipefail
 joined="\$*"
@@ -63,7 +65,7 @@ mk_gh_stub_map() {
     cases="${cases}  ${tok}) login=\"${login}\" ;;
 "
   done
-  cat > "${dir}/gh" <<STUB
+  cat > "${dir}/gh" << STUB
 #!/usr/bin/env bash
 set -euo pipefail
 joined="\$*"
@@ -93,7 +95,7 @@ STUB
 mk_gh_stub_response_body() {
   local dir="$1" body="$2"
   mkdir -p "${dir}"
-  cat > "${dir}/gh" <<STUB
+  cat > "${dir}/gh" << STUB
 #!/usr/bin/env bash
 set -euo pipefail
 joined="\$*"
@@ -118,7 +120,7 @@ STUB
 mk_gh_stub_delete_fails() {
   local dir="$1" login="$2"
   mkdir -p "${dir}"
-  cat > "${dir}/gh" <<STUB
+  cat > "${dir}/gh" << STUB
 #!/usr/bin/env bash
 set -euo pipefail
 joined="\$*"
@@ -154,7 +156,7 @@ STUB
   # resolution must fall back to --get-urlmatch.
   git -C "${repo}" config --local http.https://github.com.extraheader "$(encode_header ghs_urlmatch_tok)"
 
-  exact="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  exact="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2> /dev/null || true)"
   [ -z "${exact}" ]
 
   run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"
@@ -176,7 +178,7 @@ STUB
   # The include-based header must not be visible via --local, so this
   # exercises the get-regexp/show-origin fallback rather than the earlier
   # exact-key or urlmatch lookups.
-  local_value="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+  local_value="$(git -C "${repo}" config --local --get http.https://github.com/.extraheader 2> /dev/null || true)"
   [ -z "${local_value}" ]
 
   run bash -c "cd '${repo}' && source '${lib}' && opencode_resolve_app_token_candidates"

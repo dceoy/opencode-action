@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fail() { echo "::error::$*" >&2; exit 1; }
+fail() {
+  echo "::error::$*" >&2
+  exit 1
+}
 state_dir="${HOME}/.config/opencode/review-state"
 context_file="${state_dir}/context.json"
 
@@ -52,7 +55,7 @@ case "${operation}" in
     fi
     [[ "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]] || fail "Trusted PR head SHA is unavailable."
     jq -n --arg repository "${repo}" --arg pr_number "${number}" --arg head_sha "${head_sha}" \
-      '{repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}' >"${context_file}"
+      '{repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}' > "${context_file}"
     chmod 600 "${context_file}"
     cat "${context_file}"
     ;;
@@ -65,7 +68,7 @@ case "${operation}" in
     exec gh pr diff "${number}" --repo "${repo}"
     ;;
   validate)
-    read_context >/dev/null
+    read_context > /dev/null
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
 esac
