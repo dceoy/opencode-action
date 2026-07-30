@@ -10,6 +10,7 @@ npx -y prettier --write './**/*.{md,json,jsonc}'
 git ls-files -z -- '*.yml' | xargs -0 -t uvx yamllint -d '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
 
 # Shell scripts
+git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 -t shfmt --write --indent=2 --binary-next-line --case-indent --space-redirects --keep-padding
 git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 -t shellcheck
 
 # GitHub Actions

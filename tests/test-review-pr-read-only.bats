@@ -13,7 +13,7 @@ setup() {
 
 write_resolver() {
   mkdir -p "${fake_home}/.config/opencode/scripts"
-  cat >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh" <<'EOF'
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << 'EOF'
 opencode_prepare_gh_token() { return 0; }
 opencode_require_app_token_for_review() { return 0; }
 EOF
@@ -25,8 +25,8 @@ prepare_state() {
 }
 
 @test "issue_comment context resolves and pins the PR head" {
-  printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
-  cat >"${fake_bin}/gh" <<'EOF'
+  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
+  cat > "${fake_bin}/gh" << 'EOF'
 #!/usr/bin/env bash
 [[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]] || exit 1
 printf '%s\n' 0123456789abcdef0123456789abcdef01234567
@@ -37,25 +37,25 @@ EOF
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
 
   [ "${status}" -eq 0 ]
-  [ "$(jq -r '.pr_number' <<<"${output}")" = "42" ]
-  [ "$(jq -r '.head_sha' <<<"${output}")" = "0123456789abcdef0123456789abcdef01234567" ]
+  [ "$(jq -r '.pr_number' <<< "${output}")" = "42" ]
+  [ "$(jq -r '.head_sha' <<< "${output}")" = "0123456789abcdef0123456789abcdef01234567" ]
 }
 
 @test "pull_request context uses the event head SHA" {
-  printf '%s\n' '{"pull_request":{"number":7,"head":{"sha":"abcdef0123456789abcdef0123456789abcdef01"}}}' >"${event_path}"
+  printf '%s\n' '{"pull_request":{"number":7,"head":{"sha":"abcdef0123456789abcdef0123456789abcdef01"}}}' > "${event_path}"
   prepare_state
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
 
   [ "${status}" -eq 0 ]
-  [ "$(jq -r '.pr_number' <<<"${output}")" = "7" ]
-  [ "$(jq -r '.head_sha' <<<"${output}")" = "abcdef0123456789abcdef0123456789abcdef01" ]
+  [ "$(jq -r '.pr_number' <<< "${output}")" = "7" ]
+  [ "$(jq -r '.head_sha' <<< "${output}")" = "abcdef0123456789abcdef0123456789abcdef01" ]
 }
 
 @test "issue_comment submission uses the pinned PR head" {
   write_resolver
-  printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
-  cat >"${fake_bin}/gh" <<'EOF'
+  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
+  cat > "${fake_bin}/gh" << 'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   printf '%s\n' 0123456789abcdef0123456789abcdef01234567
@@ -69,14 +69,14 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
   run env HOME="${fake_home}" bash "${submit}" validate-initial
   [ "${status}" -eq 0 ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
   [ "${status}" -eq 0 ]
-  [ "$(jq -r '.id' <<<"${output}")" = "555" ]
+  [ "$(jq -r '.id' <<< "${output}")" = "555" ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
@@ -86,10 +86,10 @@ EOF
 
 @test "submission fails if the PR head changes after context" {
   write_resolver
-  printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
+  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
   count_file="${BATS_TEST_TMPDIR}/gh-count"
-  printf '0' >"${count_file}"
-  cat >"${fake_bin}/gh" <<EOF
+  printf '0' > "${count_file}"
+  cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   count="\$(cat "${count_file}")"
@@ -109,7 +109,7 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
   run env HOME="${fake_home}" bash "${submit}" validate-initial
   [ "${status}" -eq 0 ]
 
@@ -120,15 +120,15 @@ EOF
 }
 
 @test "submission rechecks the PR head after token verification" {
-  printf '%s\n' '{"issue":{"number":42}}' >"${event_path}"
+  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
   count_file="${BATS_TEST_TMPDIR}/gh-count"
-  printf '0' >"${count_file}"
+  printf '0' > "${count_file}"
   mkdir -p "${fake_home}/.config/opencode/scripts"
-  cat >"${fake_home}/.config/opencode/scripts/resolve-app-token.sh" <<EOF
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
 opencode_prepare_gh_token() { return 0; }
 opencode_require_app_token_for_review() { printf '2' >"${count_file}"; }
 EOF
-  cat >"${fake_bin}/gh" <<EOF
+  cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
   count="\$(cat "${count_file}")"
@@ -148,7 +148,7 @@ EOF
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
   run env HOME="${fake_home}" bash "${submit}" validate-initial
   [ "${status}" -eq 0 ]
 
@@ -160,7 +160,7 @@ EOF
 
 @test "validation rejects malformed JSON" {
   prepare_state
-  printf '%s\n' '{"body": "Review", "comments": [' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body": "Review", "comments": [' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -170,7 +170,7 @@ EOF
 
 @test "validation rejects a top level with disallowed extra keys" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}],"extra":"y"}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}],"extra":"y"}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -180,7 +180,7 @@ EOF
 
 @test "validation rejects an empty body" {
   prepare_state
-  printf '%s\n' '{"body":"","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -190,7 +190,7 @@ EOF
 
 @test "validation rejects an empty comments array" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -200,7 +200,7 @@ EOF
 
 @test "validation rejects a comment that is not an object" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":["not an object"]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":["not an object"]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -210,7 +210,7 @@ EOF
 
 @test "validation rejects a comment with a missing path" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -220,7 +220,7 @@ EOF
 
 @test "validation rejects a non-positive comment line" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":0,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":0,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -230,7 +230,7 @@ EOF
 
 @test "validation rejects a non-integer comment line" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1.5,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1.5,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -240,7 +240,7 @@ EOF
 
 @test "validation accepts a valid multiline comment range" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"start_side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"start_side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -249,7 +249,7 @@ EOF
 
 @test "validation rejects a multiline comment missing start_side" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -259,7 +259,7 @@ EOF
 
 @test "validation rejects a multiline comment whose start_line is after line" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":9,"start_side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":9,"start_side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -269,7 +269,7 @@ EOF
 
 @test "validation rejects a multiline comment whose start_side differs from side" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"start_side":"LEFT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":5,"side":"RIGHT","start_line":2,"start_side":"LEFT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -279,7 +279,7 @@ EOF
 
 @test "validation identifies a missing comment side without submitting" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -290,10 +290,10 @@ EOF
 
 @test "submission rejects a payload changed after validation" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
   run env HOME="${fake_home}" bash "${submit}" validate-initial
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\na different finding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\na different finding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" submit-initial
 
@@ -304,7 +304,7 @@ EOF
 
 @test "validation rejects a diagnostic comment body without submitting" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -315,7 +315,7 @@ EOF
 
 @test "validation rejects a severity prefix with no blank line before content" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -325,7 +325,7 @@ EOF
 
 @test "validation rejects a severity prefix with no content after the blank line" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\n"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\n"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -335,7 +335,7 @@ EOF
 
 @test "validation rejects an unrecognized severity name" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**foo · bar**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**foo · bar**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 
@@ -345,11 +345,11 @@ EOF
 
 @test "submission re-validates the payload even if the sealed file is tampered to match" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
   run env HOME="${fake_home}" bash "${submit}" validate-initial
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
-  jq -cS . "${fake_home}/.config/opencode/review-state/initial.json" >"${fake_home}/.config/opencode/review-state/validated-initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"test comment"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
+  jq -cS . "${fake_home}/.config/opencode/review-state/initial.json" > "${fake_home}/.config/opencode/review-state/validated-initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" submit-initial
 
@@ -360,7 +360,7 @@ EOF
 
 @test "validate-initial does not leave a temporary validated payload file behind" {
   prepare_state
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' >"${fake_home}/.config/opencode/review-state/initial.json"
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
 
   run env HOME="${fake_home}" bash "${submit}" validate-initial
 

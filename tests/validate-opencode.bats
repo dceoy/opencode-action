@@ -44,7 +44,7 @@ frontmatter() {
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
     for key in "${required_keys[@]}"; do
-      grep -qE "^${key}:" <<<"${fm}" || missing+=("${f}: missing '${key}'")
+      grep -qE "^${key}:" <<< "${fm}" || missing+=("${f}: missing '${key}'")
     done
   done < <(agent_files)
 
@@ -58,7 +58,7 @@ frontmatter() {
   local f fm name base mismatches=()
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
-    name="$(grep -E '^name:' <<<"${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
+    name="$(grep -E '^name:' <<< "${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
     base="$(basename "${f}" .md)"
     [ "${name}" = "${base}" ] || mismatches+=("${f}: name '${name}' != filename '${base}'")
   done < <(agent_files)
@@ -73,8 +73,8 @@ frontmatter() {
   local fm name description
 
   fm="$(frontmatter "${review_pr_skill}")"
-  name="$(grep -E '^name:' <<<"${fm}" | sed -E 's/^name:[[:space:]]*//')"
-  description="$(grep -E '^description:' <<<"${fm}" | sed -E 's/^description:[[:space:]]*//')"
+  name="$(grep -E '^name:' <<< "${fm}" | sed -E 's/^name:[[:space:]]*//')"
+  description="$(grep -E '^description:' <<< "${fm}" | sed -E 's/^description:[[:space:]]*//')"
 
   [ "${name}" = "pr-review" ]
   [ -n "${description}" ]
@@ -237,7 +237,7 @@ opencode_jsonc_json() {
   local negative_status negative_output negative_exists
   local model_config
 
-  command -v opencode >/dev/null || {
+  command -v opencode > /dev/null || {
     echo "opencode is required for the runtime permission regression"
     return 1
   }

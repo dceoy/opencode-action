@@ -5,9 +5,9 @@
 opencode_select_timeout_command() {
   local timeout_minutes="${1}"
   OPENCODE_TIMEOUT_COMMAND=()
-  if command -v timeout >/dev/null 2>&1; then
+  if command -v timeout > /dev/null 2>&1; then
     OPENCODE_TIMEOUT_COMMAND=(timeout "${timeout_minutes}m")
-  elif command -v gtimeout >/dev/null 2>&1; then
+  elif command -v gtimeout > /dev/null 2>&1; then
     OPENCODE_TIMEOUT_COMMAND=(gtimeout "${timeout_minutes}m")
   else
     echo "::warning::No timeout command found (timeout/gtimeout); running OpenCode without an enforced timeout."
@@ -27,13 +27,13 @@ opencode_report_failure() {
       "${output_file}" | tail -n 1 || true
   )"
 
-  if grep -Eiq 'Request timed out|SSE read timed out|TimeoutError' <<<"${terminal_error}"; then
+  if grep -Eiq 'Request timed out|SSE read timed out|TimeoutError' <<< "${terminal_error}"; then
     echo "::error::OpenCode provider request timed out for model '${model:-unknown}'."
-  elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<<"${terminal_error}"; then
+  elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<< "${terminal_error}"; then
     echo "::error::OpenCode failed because the model provider rate limited the request (HTTP 429) for model '${model:-unknown}'."
-  elif grep -Eiq 'Insufficient credits|HTTP[^[:digit:]]*402|status(Code)?[^[:digit:]]*402|"code"[^[:digit:]]*402' <<<"${terminal_error}"; then
+  elif grep -Eiq 'Insufficient credits|HTTP[^[:digit:]]*402|status(Code)?[^[:digit:]]*402|"code"[^[:digit:]]*402' <<< "${terminal_error}"; then
     echo "::error::OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for model '${model:-unknown}'."
-  elif grep -Eiq 'AI_APICallError' <<<"${terminal_error}"; then
+  elif grep -Eiq 'AI_APICallError' <<< "${terminal_error}"; then
     echo "::error::OpenCode failed with a model provider API error for model '${model:-unknown}'. Check provider credentials and service status."
   else
     echo "::error::OpenCode failed with exit code ${status} for model '${model:-unknown}'."
@@ -82,7 +82,7 @@ opencode_configure_run() {
   if [[ -n "${OPENCODE_RESOLVED_AGENT}" ]]; then
     base_config="{}"
     if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
-      base_config="$(opencode_jsonc_to_json <<<"${OPENCODE_CONFIG_CONTENT}")"
+      base_config="$(opencode_jsonc_to_json <<< "${OPENCODE_CONFIG_CONTENT}")"
     fi
     OPENCODE_CONFIG_CONTENT="$(jq -nc \
       --arg agent "${OPENCODE_RESOLVED_AGENT}" \

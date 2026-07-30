@@ -16,7 +16,7 @@
 
 _opencode_strip_scalar_quotes() {
   local value="${1}"
-  if (( ${#value} >= 2 )) && {
+  if ((${#value} >= 2))   && {
     [[ "${value}" == \"*\" ]] || [[ "${value}" == \'*\' ]]
   }; then
     value="${value:1:${#value}-2}"
@@ -133,13 +133,13 @@ opencode_effective_prompt() {
     [[ "${lower_body}" == *"${lower_mention}"* ]] || continue
     before="${lower_body%%"${lower_mention}"*}"
     index=${#before}
-    if (( best_index < 0 || index < best_index )); then
+    if ((best_index < 0 || index < best_index)); then
       best_index=${index}
       best_length=${#mention}
     fi
   done
 
-  (( best_index >= 0 )) || return 0
+  ((best_index >= 0))   || return 0
   OPENCODE_EFFECTIVE_PROMPT="${body:best_index+best_length}"
   OPENCODE_EFFECTIVE_PROMPT="${OPENCODE_EFFECTIVE_PROMPT#"${OPENCODE_EFFECTIVE_PROMPT%%[![:space:]]*}"}"
 }
@@ -153,7 +153,7 @@ opencode_jsonc_to_json() {
   length=${#input}
   index=0
 
-  while (( index < length )); do
+  while ((index < length)); do
     char="${input:index:1}"
     next="${input:index+1:1}"
     case "${state}" in
