@@ -7,17 +7,22 @@ cd "$(git rev-parse --show-toplevel)"
 npx -y prettier --write './**/*.{md,json,jsonc}'
 
 # YAML
-git ls-files -z -- '*.yml' | xargs -0 -t uvx yamllint -d '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
+git ls-files -z -- '*.yml' \
+  | xargs -0 -t uvx yamllint -d '{"extends": "relaxed", "rules": {"line-length": "disable"}}'
 
 # Shell scripts
-git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 -t shfmt --write --indent=2 --binary-next-line --case-indent --space-redirects --keep-padding
-git ls-files -z -- '*.sh' '*.bash' '*.bats' | xargs -0 -t shellcheck
+git ls-files -z -- '*.sh' '*.bash' '*.bats' \
+  | xargs -0 -t shfmt --write --indent=2 --binary-next-line --case-indent --space-redirects
+git ls-files -z -- '*.sh' '*.bash' '*.bats' \
+  | xargs -0 -t shellcheck
 
 # GitHub Actions
 zizmor --fix=safe .github/workflows action.yml
-git ls-files -z -- '.github/workflows/*.yml' | xargs -0 -t actionlint
+git ls-files -z -- '.github/workflows/*.yml' \
+  | xargs -0 -t actionlint
 checkov --framework=all --output=github_failed_only --directory=.
 
 # Bats regression suites: OpenCode agent frontmatter/review-pr references,
 # and PR review token resolution.
-git ls-files -z -- '*.bats' | xargs -0 -t bats
+git ls-files -z -- '*.bats' \
+  | xargs -0 -t bats

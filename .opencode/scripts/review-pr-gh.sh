@@ -2,8 +2,8 @@
 set -euo pipefail
 
 fail() {
-         echo "::error::$*" >&2
-                                 exit 1
+  echo "::error::$*" >&2
+  exit 1
 }
 state_dir="${HOME}/.config/opencode/review-state"
 context_file="${state_dir}/context.json"

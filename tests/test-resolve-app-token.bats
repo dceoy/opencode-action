@@ -23,7 +23,7 @@ mk_repo() {
 }
 
 encode_header() {
-                  printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"
+  printf '%s' "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"
 }
 
 # Writes a fake `gh` onto a fresh directory that answers the two `gh api`

@@ -16,7 +16,7 @@
 
 _opencode_strip_scalar_quotes() {
   local value="${1}"
-  if ((${#value} >= 2))   && {
+  if ((${#value} >= 2)) && {
     [[ "${value}" == \"*\" ]] || [[ "${value}" == \'*\' ]]
   }; then
     value="${value:1:${#value}-2}"
@@ -139,7 +139,7 @@ opencode_effective_prompt() {
     fi
   done
 
-  ((best_index >= 0))   || return 0
+  ((best_index >= 0)) || return 0
   OPENCODE_EFFECTIVE_PROMPT="${body:best_index+best_length}"
   OPENCODE_EFFECTIVE_PROMPT="${OPENCODE_EFFECTIVE_PROMPT#"${OPENCODE_EFFECTIVE_PROMPT%%[![:space:]]*}"}"
 }

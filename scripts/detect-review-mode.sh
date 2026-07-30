@@ -24,7 +24,7 @@ opencode_validate_review_version() {
   if ((10#${major} < 1 || (\
     10#${major} == 1 && 10#${minor} < 2) || (\
     10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14))) \
-                                                                  || [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
+      || [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
     echo "::error::Review-only mode requires OpenCode 1.2.14 or newer (got '${original_version}')." >&2
     return 1
   fi
