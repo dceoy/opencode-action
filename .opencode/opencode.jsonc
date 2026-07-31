@@ -17,8 +17,8 @@
         "llm-jp-3.1-8x13b-instruct4": {
           "name": "llm-jp-3.1-8x13b-instruct4",
         },
-        "preview/Kimi-K2.6": {
-          "name": "preview/Kimi-K2.6",
+        "preview/Kimi-K2.7-Code": {
+          "name": "preview/Kimi-K2.7-Code",
         },
         "preview/Phi-4-mini-instruct-cpu": {
           "name": "preview/Phi-4-mini-instruct-cpu",
