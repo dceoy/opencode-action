@@ -45,7 +45,7 @@ jobs:
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         with:
-          model: sakura/preview/Kimi-K2.6
+          model: sakura/preview/Kimi-K2.7-Code
           prompt: /review-pr
   opencode-bot:
     if: >
@@ -86,4 +86,4 @@ jobs:
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         with:
-          model: sakura/preview/Kimi-K2.6
+          model: sakura/preview/Kimi-K2.7-Code
