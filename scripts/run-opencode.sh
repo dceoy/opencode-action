@@ -14,13 +14,21 @@ opencode_select_timeout_command() {
   fi
 }
 
+opencode_report_error() {
+  local message="${1}"
+  message="${message//'%'/'%25'}"
+  message="${message//$'\r'/'%0D'}"
+  message="${message//$'\n'/'%0A'}"
+  printf '::error::%s\n' "${message}"
+}
+
 opencode_report_failure() {
   local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}" opencode_version="${5:-unknown}"
   local terminal_error json_parse_error secondary_rest_error context
   context="model '${model:-unknown}' (opencode ${opencode_version:-unknown})"
 
   if [[ "${status}" -eq 124 ]]; then
-    echo "::error::OpenCode timed out after ${timeout_minutes} minutes for ${context}."
+    opencode_report_error "OpenCode timed out after ${timeout_minutes} minutes for ${context}."
     return
   fi
 
@@ -31,16 +39,16 @@ opencode_report_failure() {
   )"
 
   if grep -Eiq 'Request timed out|SSE read timed out|TimeoutError' <<< "${terminal_error}"; then
-    echo "::error::OpenCode provider request timed out for ${context}."
+    opencode_report_error "OpenCode provider request timed out for ${context}."
     return
   elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed because the model provider rate limited the request (HTTP 429) for ${context}."
+    opencode_report_error "OpenCode failed because the model provider rate limited the request (HTTP 429) for ${context}."
     return
   elif grep -Eiq 'Insufficient credits|HTTP[^[:digit:]]*402|status(Code)?[^[:digit:]]*402|"code"[^[:digit:]]*402' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for ${context}."
+    opencode_report_error "OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for ${context}."
     return
   elif grep -Eiq 'AI_APICallError' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed with a model provider API error for ${context}. Check provider credentials and service status."
+    opencode_report_error "OpenCode failed with a model provider API error for ${context}. Check provider credentials and service status."
     return
   fi
 
@@ -56,14 +64,14 @@ opencode_report_failure() {
   if [[ -n "${json_parse_error}" ]]; then
     local message="OpenCode failed to parse a JSON response while running for ${context}."
     if [[ -n "${secondary_rest_error}" ]]; then
-      message+=" A secondary failure in OpenCode's own error-handling path (an uninitialized GitHub client, '.rest' accessed on undefined) then masked further output."
+      message+=" OpenCode then hit a secondary failure while accessing '.rest' on a non-object value, masking further output."
     fi
     message+=" The underlying failure may be in OpenCode or the provider response path; do not assume OIDC or credentials are at fault unless the log shows direct evidence of that."
-    echo "::error::${message}"
+    opencode_report_error "${message}"
     return
   fi
 
-  echo "::error::OpenCode failed with exit code ${status} for ${context}."
+  opencode_report_error "OpenCode failed with exit code ${status} for ${context}."
 }
 
 opencode_configure_run() {
