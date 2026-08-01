@@ -55,6 +55,7 @@ opencode_report_failure() {
   read -r terminal_json_parse terminal_rest_failure < <(
     awk '
       function normalize(value) {
+        gsub(sprintf("%c", 27) "\\[[0-9;?]*[ -/]*[@-~]", "", value)
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
         return tolower(value)
       }
@@ -68,6 +69,7 @@ opencode_report_failure() {
       }
 
       NF {
+        previous_three = previous_two
         previous_two = previous
         previous = terminal
         terminal = normalize($0)
@@ -79,6 +81,8 @@ opencode_report_failure() {
         } else if (is_rest_error(terminal) && is_json_parse_error(previous)) {
           print "true true"
         } else if (is_rest_error(terminal) && previous == "creating comment..." && is_json_parse_error(previous_two)) {
+          print "true true"
+        } else if (is_rest_error(terminal) && previous == "error: unexpected error" && previous_two == "creating comment..." && is_json_parse_error(previous_three)) {
           print "true true"
         } else {
           print "false false"

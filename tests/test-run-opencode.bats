@@ -361,6 +361,25 @@ EOF
   [[ "${output}" != *"caused by OIDC"* ]]
 }
 
+@test "OpenCode failure classification recognizes the ANSI-decorated four-line failure sequence" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' \
+    $'\033[31mError:\033[0m \033[1mUnexpected error\033[0m' \
+    '' \
+    "undefined is not an object (evaluating 'p.rest')" > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
 @test "OpenCode failure classification requires the .rest failure after the JSON error" {
   output_file="${BATS_TEST_TMPDIR}/output"
 
