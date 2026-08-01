@@ -100,12 +100,12 @@ with:
 
 ## Variants for custom providers
 
-`variant` validation only applies while the bundled `.opencode/opencode.jsonc` registry is authoritative for the selected model. It is not validated, and passed through to OpenCode with a warning instead, whenever:
+`variant` validation only applies while the bundled `.opencode/opencode.jsonc` registry is authoritative for the selected model, and only for models actually declared in it. It is not validated whenever:
 
-- the model's provider is not declared in that registry at all (a custom `opencode.json` provider, or a built-in OpenCode provider such as `anthropic` or `openai`);
-- `use-bundled-toolkit: false` is set, so the bundled registry is never installed;
-- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present; or
-- a repository `opencode.json`/`opencode.jsonc` redefines the same provider/model.
+- the model is absent from that registry entirely — a custom `opencode.json` provider, a built-in OpenCode provider such as `anthropic` or `openai`, or a model discovered dynamically by its provider (never listed in `opencode.json`, such as an OpenCode Go model). `variant` passes through **silently**, since the model's absence says nothing about compatibility;
+- the model is declared in the registry but without a `variants` key. `variant` passes through with a **warning** that compatibility was not validated;
+- `use-bundled-toolkit: false` is set, so the bundled registry is never installed. `variant` passes through with a warning;
+- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present, or a repository `opencode.json`/`opencode.jsonc` redefines the same provider/model. `variant` passes through with a warning.
 
 A passed-through `variant` that the provider rejects surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
 

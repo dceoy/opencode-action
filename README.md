@@ -97,12 +97,14 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 `variant` selects provider-specific reasoning effort. Leaving it empty is the portable default and always works.
 
-A nonempty `variant` is checked before OpenCode starts, against the `variants` declared on each model in the bundled provider registry (`.opencode/opencode.jsonc`), whenever that registry is authoritative for the selected model:
+A nonempty `variant` is checked before OpenCode starts, against the bundled provider registry (`.opencode/opencode.jsonc`), whenever that registry is authoritative for the selected model. Within the registry, a model falls into one of four states:
 
-- Models declared there accept only the variants listed in their `variants` object. Anything else fails with an error naming the model, the requested variant, the supported values, and how to fix the workflow. Nothing is silently substituted.
-- Models declared there with an empty `variants` object reject every nonempty `variant`. All bundled `sakura/*` models are in this group, so `model: sakura/preview/Kimi-K2.7-Code` must run without `variant` — `variant: thinking` fails immediately instead of failing later inside OpenCode or the provider.
-- Models outside that registry — built-in OpenCode providers and custom providers from your own `opencode.json` — keep passing `variant` straight through, with a warning that compatibility was not validated.
-- The registry is treated as authoritative only when `use-bundled-toolkit: true` and nothing else could redefine the selected provider/model: `use-bundled-toolkit: false`, a workflow `OPENCODE_CONFIG`/`OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG_CONTENT` override, or a repository `opencode.json`/`opencode.jsonc` that redefines the same provider/model all fall back to passthrough with a warning. Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
+- **Absent from the registry** (a built-in OpenCode provider, a custom provider from your own `opencode.json`, or a dynamically discovered model such as an OpenCode Go model that is never listed in `opencode.json`): `variant` passes straight through silently, since the model's absence says nothing about compatibility.
+- **Declared without a `variants` key**: `variant` passes through with a warning that compatibility was not validated.
+- **Declared with an empty `variants` object**: every nonempty `variant` is rejected. All bundled `sakura/*` models are in this group, so `model: sakura/preview/Kimi-K2.7-Code` must run without `variant` — `variant: thinking` fails immediately instead of failing later inside OpenCode or the provider.
+- **Declared with a nonempty `variants` object**: only the listed variants are accepted. Anything else fails with an error naming the model, the requested variant, the supported values, and how to fix the workflow.
+
+Nothing is silently substituted. The registry is treated as authoritative only when `use-bundled-toolkit: true` and nothing else could redefine the selected provider/model: `use-bundled-toolkit: false`, a workflow `OPENCODE_CONFIG`/`OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG_CONTENT` override, or a repository `opencode.json`/`opencode.jsonc` that redefines the same provider/model all fall back to silent or warned passthrough as above. Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
 
 ## Pull request reviews
 

@@ -81,10 +81,15 @@ _opencode_config_defines_model() {
 # Reject a variant the bundled model registry does not declare, before
 # OpenCode starts. An empty variant is always allowed. Validation only
 # applies while the bundled .opencode/opencode.jsonc is authoritative for
-# this model (see _opencode_variant_override_reason); otherwise, and for
-# models the bundled registry does not list at all (custom or externally
-# configured providers), the variant is passed through with a warning that
-# nothing validated it. Depends on opencode_jsonc_to_json, so
+# this model (see _opencode_variant_override_reason); within that registry:
+# - a model absent entirely (for example a dynamically discovered OpenCode Go
+#   model, never listed in opencode.json) passes the variant through
+#   silently, since its absence says nothing about compatibility;
+# - a model present but without a "variants" key passes the variant through
+#   with a warning, since compatibility is unknown rather than unsupported;
+# - a model with an empty "variants" object rejects every nonempty variant;
+# - a model with a nonempty "variants" object accepts only its keys.
+# Nothing is substituted or normalized. Depends on opencode_jsonc_to_json, so
 # opencode-action-lib.sh must be sourced before this is called.
 #
 # $1: model input, in provider/model format
@@ -92,19 +97,13 @@ _opencode_config_defines_model() {
 # $3: path to the bundled .opencode/opencode.jsonc
 opencode_validate_variant() {
   local model="${1:-}" variant="${2:-}" bundled_config_file="${3:-}"
-  local provider model_id candidate supported_list="" override_reason bundled_json jq_rc
+  local provider model_id candidate override_reason bundled_json result jq_rc
   local -a supported=()
 
   [[ -n "${variant}" ]] || return 0
 
   provider="${model%%/*}"
   model_id="${model#*/}"
-
-  if [[ -z "${provider}" || -z "${model_id}" || "${model_id}" == "${model}" ]]; then
-    _opencode_report_annotation warning \
-      "Model '${model}' is not in the action's bundled model registry, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
-    return 0
-  fi
 
   override_reason="$(_opencode_variant_override_reason "${provider}" "${model_id}")" || true
   if [[ -n "${override_reason}" ]]; then
@@ -123,42 +122,46 @@ opencode_validate_variant() {
   fi
 
   set +e
-  jq -e --arg provider "${provider}" --arg model "${model_id}" \
-    '(.provider[$provider].models // {}) | has($model)' \
-    <<< "${bundled_json}" > /dev/null 2>&1
+  result="$(jq -r --arg provider "${provider}" --arg model "${model_id}" '
+    if ((.provider[$provider].models // {}) | has($model) | not) then
+      "absent"
+    elif (.provider[$provider].models[$model] | has("variants") | not) then
+      "no-variants"
+    else
+      (.provider[$provider].models[$model].variants | keys | join(","))
+    end
+  ' <<< "${bundled_json}" 2> /dev/null)"
   jq_rc=$?
   set -e
-  if ((jq_rc == 1)); then
-    _opencode_report_annotation warning \
-      "Model '${model}' is not in the action's bundled model registry, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
-    return 0
-  elif ((jq_rc != 0)); then
+  if ((jq_rc != 0)); then
     opencode_report_error "Failed to read the bundled OpenCode model registry for '${model}' while validating variant '${variant}' (jq exited ${jq_rc})."
     return 1
   fi
 
-  while IFS= read -r candidate; do
-    supported+=("${candidate}")
-  done < <(
-    jq -r --arg provider "${provider}" --arg model "${model_id}" \
-      '.provider[$provider].models[$model].variants // {} | keys[]' \
-      <<< "${bundled_json}"
-  )
-
-  if ((${#supported[@]} == 0)); then
-    opencode_report_error "Model '${model}' does not support variant '${variant}'. This model declares no variants. Remove the 'variant' input, or set it to an empty string, to run the model with its default configuration."
-    return 1
-  fi
-
-  for candidate in "${supported[@]}"; do
-    if [[ "${candidate}" == "${variant}" ]]; then
+  case "${result}" in
+    absent)
       return 0
-    fi
-  done
-
-  printf -v supported_list '%s, ' "${supported[@]}"
-  opencode_report_error "Model '${model}' does not support variant '${variant}'. Supported variants: ${supported_list%, }. Set 'variant' to one of those values, or leave it empty to run the model with its default configuration."
-  return 1
+      ;;
+    no-variants)
+      _opencode_report_annotation warning \
+        "Model '${model}' is in the action's bundled model registry but does not declare supported variants, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
+      return 0
+      ;;
+    "")
+      opencode_report_error "Model '${model}' does not support variant '${variant}'. This model declares no variants. Remove the 'variant' input, or set it to an empty string, to run the model with its default configuration."
+      return 1
+      ;;
+    *)
+      IFS=',' read -r -a supported <<< "${result}"
+      for candidate in "${supported[@]}"; do
+        if [[ "${candidate}" == "${variant}" ]]; then
+          return 0
+        fi
+      done
+      opencode_report_error "Model '${model}' does not support variant '${variant}'. Supported variants: ${result//,/, }. Set 'variant' to one of those values, or leave it empty to run the model with its default configuration."
+      return 1
+      ;;
+  esac
 }
 
 opencode_report_failure() {

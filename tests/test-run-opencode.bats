@@ -111,8 +111,11 @@ EOF
   [[ "${output}" != *"Supported variants"* ]]
 }
 
-@test "variant validation passes models outside the bundled registry through with a warning" {
-  for model in myprovider/my-model anthropic/claude-opus-5 bare-model; do
+@test "variant validation passes models absent from the bundled registry through silently" {
+  # e.g. OpenCode Go models are discovered dynamically and are never listed
+  # in the bundled opencode.jsonc, so warning here on every run would be
+  # pure noise unrelated to actual variant compatibility.
+  for model in opencode-go/kimi-k3 myprovider/my-model anthropic/claude-opus-5 bare-model; do
     run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
       bash -euo pipefail -c '
         source "$1"
@@ -120,10 +123,26 @@ EOF
         opencode_validate_variant "$3" high "$4"
       ' _ "${run_script}" "${lib_script}" "${model}" "${bundled_config}"
     [ "${status}" -eq 0 ]
-    [[ "${output}" == "::warning::"* ]]
-    [[ "${output}" == *"${model}"* ]]
-    [[ "${output}" == *"without validating compatibility"* ]]
+    [ -z "${output}" ]
   done
+}
+
+@test "variant validation warns when a bundled model is declared without a variants key" {
+  fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
+  cat > "${fixture}" << 'EOF'
+{"provider": {"demo": {"models": {"legacy-model": {"name": "legacy-model"}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant demo/legacy-model high "$3"
+    ' _ "${run_script}" "${lib_script}" "${fixture}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"demo/legacy-model"* ]]
+  [[ "${output}" == *"does not declare supported variants"* ]]
 }
 
 @test "variant validation passes through with a warning when use-bundled-toolkit is false" {
@@ -243,7 +262,10 @@ EOF
 }
 
 @test "variant validation escapes workflow command data in its annotations" {
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  # Use the use-bundled-toolkit:false passthrough branch, since a model
+  # absent from the registry now passes through silently and would leave
+  # nothing to check escaping on.
+  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
