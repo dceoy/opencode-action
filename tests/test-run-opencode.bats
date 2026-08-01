@@ -296,6 +296,22 @@ EOF
   [[ "${output}" != *"failed with exit code"* ]]
 }
 
+@test "OpenCode failure classification preserves a JSON parse failure followed by comment creation" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
 @test "OpenCode failure classification ignores ordinary JSON.parse output" {
   output_file="${BATS_TEST_TMPDIR}/output"
 

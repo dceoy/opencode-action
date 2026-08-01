@@ -81,6 +81,8 @@ opencode_report_failure() {
       END {
         if (is_json_parse_error(terminal)) {
           print "true false"
+        } else if (terminal == "creating comment..." && is_json_parse_error(previous)) {
+          print "true false"
         } else if (is_rest_error(terminal) && is_json_parse_error(previous)) {
           print "true true"
         } else if (is_rest_error(terminal) && previous == "creating comment..." && is_json_parse_error(previous_two)) {
