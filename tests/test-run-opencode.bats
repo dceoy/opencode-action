@@ -298,6 +298,21 @@ EOF
   [[ "${output}" != *"failed with exit code"* ]]
 }
 
+@test "OpenCode failure classification ignores ordinary JSON.parse output" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'const value = JSON.parse(raw)' \
+    'Error: unrelated failure' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 17 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed with exit code 17"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+}
+
 @test "OpenCode failure classification surfaces a JSON parse failure masked by the .rest handler crash" {
   output_file="${BATS_TEST_TMPDIR}/output"
 

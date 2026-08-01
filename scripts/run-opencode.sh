@@ -45,7 +45,7 @@ opencode_report_failure() {
   fi
 
   json_parse_error="$(
-    grep -Ei 'Failed to parse JSON|JSON\.parse|SyntaxError:.*JSON|Unexpected token.*JSON' \
+    grep -Ei 'Failed to parse JSON|SyntaxError:.*JSON|Unexpected token.*JSON' \
       "${output_file}" | tail -n 1 || true
   )"
   secondary_rest_error="$(
