@@ -127,6 +127,7 @@ runs:
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
         ACTION_PATH: ${{ github.action_path }}
         USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         REVIEW_ONLY: ${{ steps.review_mode.outputs.enabled }}

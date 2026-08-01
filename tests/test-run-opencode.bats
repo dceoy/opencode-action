@@ -280,6 +280,213 @@ EOF
   [[ "${output}" == *"failed with exit code 17"* ]]
 }
 
+@test "OpenCode failure classification surfaces a JSON parse failure alone" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' 'Failed to parse JSON' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"provider/model"* ]]
+  [[ "${output}" == *"opencode 1.18.10"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification preserves a JSON parse failure followed by comment creation" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification ignores ordinary JSON.parse output" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'const value = JSON.parse(raw)' \
+    'Error: unrelated failure' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 17 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed with exit code 17"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+}
+
+@test "OpenCode failure classification recognizes a SyntaxError JSON signature" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'SyntaxError: Unexpected token } in JSON at position 123' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification ignores nonterminal JSON error text" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'SyntaxError: Unexpected token } in JSON at position 123' \
+    'Error: unrelated failure' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 17 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed with exit code 17"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+}
+
+@test "OpenCode failure classification surfaces a JSON parse failure masked by the .rest handler crash" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' \
+    "Error: Unexpected error: undefined is not an object (evaluating 'p.rest')" > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"secondary failure"* ]]
+  [[ "${output}" == *".rest"* ]]
+  [[ "${output}" == *"provider/model"* ]]
+  [[ "${output}" == *"opencode 1.18.10"* ]]
+  [[ "${output}" == *"do not assume OIDC or credentials are at fault"* ]]
+  [[ "${output}" != *"caused by OIDC"* ]]
+}
+
+@test "OpenCode failure classification recognizes the ANSI-decorated four-line failure sequence" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' \
+    $'\033[31mError:\033[0m \033[1mUnexpected error\033[0m' \
+    '' \
+    "undefined is not an object (evaluating 'p.rest')" > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification ignores trailing ANSI-only lines" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' \
+    $'\033[31mError:\033[0m \033[1mUnexpected error\033[0m' \
+    "undefined is not an object (evaluating 'p.rest')" \
+    $'\033[0m' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification requires the .rest failure after the JSON error" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    "Error: Unexpected error: undefined is not an object (evaluating 'p.rest')" \
+    'Failed to parse JSON' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+}
+
+@test "OpenCode failure classification ignores a nonterminal JSON and .rest sequence" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    "Error: Unexpected error: undefined is not an object (evaluating 'p.rest')" \
+    'Error: unrelated failure' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 17 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed with exit code 17"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+}
+
+@test "OpenCode failure classification still prefers evidenced provider errors over JSON parse noise" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'AI_APICallError: rate limit exceeded (statusCode: 429)' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"rate limited"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+}
+
+@test "OpenCode failure annotations escape workflow command message data" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' unrelated > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 17 "$2" "$3" "$4" "$5"
+  ' _ "${run_script}" "${output_file}" \
+    $'10\n::notice::injected' \
+    $'provider/model%\n::warning::injected' \
+    $'1.18.10\r::debug::injected'
+  [ "${status}" -eq 0 ]
+  [ "${#lines[@]}" -eq 1 ]
+  [[ "${output}" == *"provider/model%25%0A::warning::injected"* ]]
+  [[ "${output}" == *"opencode 1.18.10%0D::debug::injected"* ]]
+
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 124 "$2" "$3" provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}" $'10\n::notice::injected'
+  [ "${status}" -eq 0 ]
+  [ "${#lines[@]}" -eq 1 ]
+  [[ "${output}" == *"after 10%0A::notice::injected minutes"* ]]
+}
+
 @test "run script preserves mocked OpenCode status and classifies its output" {
   fake_bin="${BATS_TEST_TMPDIR}/run-bin"
   invocation_file="${BATS_TEST_TMPDIR}/invocation"

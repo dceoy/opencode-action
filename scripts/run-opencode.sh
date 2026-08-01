@@ -14,10 +14,21 @@ opencode_select_timeout_command() {
   fi
 }
 
+opencode_report_error() {
+  local message="${1}"
+  message="${message//'%'/'%25'}"
+  message="${message//$'\r'/'%0D'}"
+  message="${message//$'\n'/'%0A'}"
+  printf '::error::%s\n' "${message}"
+}
+
 opencode_report_failure() {
-  local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}" terminal_error
+  local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}" opencode_version="${5:-unknown}"
+  local terminal_error terminal_json_parse terminal_rest_failure context
+  context="model '${model:-unknown}' (opencode ${opencode_version:-unknown})"
+
   if [[ "${status}" -eq 124 ]]; then
-    echo "::error::OpenCode timed out after ${timeout_minutes} minutes for model '${model:-unknown}'."
+    opencode_report_error "OpenCode timed out after ${timeout_minutes} minutes for ${context}."
     return
   fi
 
@@ -28,16 +39,74 @@ opencode_report_failure() {
   )"
 
   if grep -Eiq 'Request timed out|SSE read timed out|TimeoutError' <<< "${terminal_error}"; then
-    echo "::error::OpenCode provider request timed out for model '${model:-unknown}'."
+    opencode_report_error "OpenCode provider request timed out for ${context}."
+    return
   elif grep -Eiq 'rate[ -]?limit|HTTP[^[:digit:]]*429|status(Code)?[^[:digit:]]*429|"code"[^[:digit:]]*429' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed because the model provider rate limited the request (HTTP 429) for model '${model:-unknown}'."
+    opencode_report_error "OpenCode failed because the model provider rate limited the request (HTTP 429) for ${context}."
+    return
   elif grep -Eiq 'Insufficient credits|HTTP[^[:digit:]]*402|status(Code)?[^[:digit:]]*402|"code"[^[:digit:]]*402' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for model '${model:-unknown}'."
+    opencode_report_error "OpenCode failed because of model provider billing or quota (HTTP 402 or insufficient credits) for ${context}."
+    return
   elif grep -Eiq 'AI_APICallError' <<< "${terminal_error}"; then
-    echo "::error::OpenCode failed with a model provider API error for model '${model:-unknown}'. Check provider credentials and service status."
-  else
-    echo "::error::OpenCode failed with exit code ${status} for model '${model:-unknown}'."
+    opencode_report_error "OpenCode failed with a model provider API error for ${context}. Check provider credentials and service status."
+    return
   fi
+
+  read -r terminal_json_parse terminal_rest_failure < <(
+    awk '
+      function normalize(value) {
+        gsub(sprintf("%c", 27) "\\[[0-9;?]*[ -/]*[@-~]", "", value)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        return tolower(value)
+      }
+
+      function is_json_parse_error(value) {
+        return value ~ /^(error:[[:space:]]*)?(failed to parse json|syntaxerror:.*json.*|unexpected token.*json.*)$/
+      }
+
+      function is_rest_error(value) {
+        return value ~ /is not an object \(evaluating [^)]*\.rest[^)]*\)$/
+      }
+
+      {
+        normalized = normalize($0)
+        if (normalized != "") {
+          previous_three = previous_two
+          previous_two = previous
+          previous = terminal
+          terminal = normalized
+        }
+      }
+
+      END {
+        if (is_json_parse_error(terminal)) {
+          print "true false"
+        } else if (terminal == "creating comment..." && is_json_parse_error(previous)) {
+          print "true false"
+        } else if (is_rest_error(terminal) && is_json_parse_error(previous)) {
+          print "true true"
+        } else if (is_rest_error(terminal) && previous == "creating comment..." && is_json_parse_error(previous_two)) {
+          print "true true"
+        } else if (is_rest_error(terminal) && previous == "error: unexpected error" && previous_two == "creating comment..." && is_json_parse_error(previous_three)) {
+          print "true true"
+        } else {
+          print "false false"
+        }
+      }
+    ' "${output_file}"
+  )
+
+  if [[ "${terminal_json_parse}" == "true" ]]; then
+    local message="OpenCode failed to parse a JSON response while running for ${context}."
+    if [[ "${terminal_rest_failure}" == "true" ]]; then
+      message+=" OpenCode then hit a secondary failure while accessing '.rest' on a non-object value, masking further output."
+    fi
+    message+=" The underlying failure may be in OpenCode or the provider response path; do not assume OIDC or credentials are at fault unless the log shows direct evidence of that."
+    opencode_report_error "${message}"
+    return
+  fi
+
+  opencode_report_error "OpenCode failed with exit code ${status} for ${context}."
 }
 
 opencode_configure_run() {
@@ -108,7 +177,8 @@ _opencode_run_main() {
 
   if [[ "${opencode_status}" -ne 0 ]]; then
     opencode_report_failure \
-      "${opencode_status}" "${output_file}" "${timeout_minutes}" "${MODEL:-unknown}"
+      "${opencode_status}" "${output_file}" "${timeout_minutes}" \
+      "${MODEL:-unknown}" "${OPENCODE_VERSION:-unknown}"
     rm -f "${output_file}"
     trap - EXIT
     return "${opencode_status}"
