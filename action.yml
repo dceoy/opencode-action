@@ -30,7 +30,10 @@ inputs:
     default: /opencode,/oc
   variant:
     required: false
-    description: Model variant for provider-specific reasoning effort (e.g., high, max, minimal)
+    description: >-
+      Model variant for provider-specific reasoning effort (e.g., high, max, minimal).
+      Empty runs every model with its default configuration.
+      A nonempty value is rejected before OpenCode starts when the model is covered by the action's bundled model metadata (scripts/model-variants.json) and does not declare that variant; models outside that metadata pass their variant through with a warning that compatibility was not validated.
     default: ''
   oidc-base-url:
     required: false

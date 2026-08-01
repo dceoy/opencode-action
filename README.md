@@ -81,7 +81,7 @@ The provider account must have sufficient credits or quota. For providers not bu
 | `agent`               | `build`                   | Primary agent. A slash command can override it.                                                                                                                         |
 | `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.                                                                                                                  |
 | `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                                                                                                                                        |
-| `variant`             | -                         | Provider-specific reasoning effort.                                                                                                                                     |
+| `variant`             | -                         | Provider-specific reasoning effort. Validated before the run; see [Model variants](#model-variants).                                                                    |
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                                             |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                                           |
 | `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+; the bundled Sakura provider's `chunkTimeout` needs 1.2.25+ (older pins fall back to the request `timeout`). |
@@ -92,6 +92,16 @@ The provider account must have sufficient credits or quota. For providers not bu
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
 Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-only runs (`prompt: /review-pr`), which always skip the cache and install fresh.
+
+## Model variants
+
+`variant` selects provider-specific reasoning effort. Leaving it empty is the portable default and always works.
+
+A nonempty `variant` is checked against the action's bundled model metadata (`scripts/model-variants.json`) before OpenCode starts:
+
+- Models listed there accept only the variants they declare. Anything else fails with an error naming the model, the requested variant, the supported values, and how to fix the workflow. Nothing is silently substituted.
+- Models listed there with no declared variants reject every nonempty `variant`. All bundled `sakura/*` models are in this group, so `model: sakura/preview/Kimi-K2.7-Code` must run without `variant` — `variant: thinking` fails immediately instead of failing later inside OpenCode or the provider.
+- Models outside that metadata — built-in OpenCode providers and custom providers from your own `opencode.json` — keep passing `variant` straight through, with a warning that compatibility was not validated.
 
 ## Pull request reviews
 

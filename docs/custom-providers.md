@@ -90,6 +90,18 @@ with:
 
 Replace or extend `models` with model IDs available to the Sakura AI Engine account.
 
+Leave the action's `variant` input empty for Sakura models. Sakura AI Engine documents no OpenCode model variants, so the bundled metadata declares none and the action rejects a nonempty `variant` before the run starts:
+
+```yaml
+with:
+  model: sakura/preview/Kimi-K2.7-Code
+  # variant: thinking  # rejected: this model declares no variants
+```
+
+## Variants for custom providers
+
+Models that are not in the action's bundled metadata (`scripts/model-variants.json`) are not validated. A nonempty `variant` is passed through to OpenCode with a warning, so an unsupported value surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
+
 ## Limitations and security
 
 The bundled `/review-pr` mode installs a fresh trusted OpenCode configuration and disables project and caller-supplied configuration. Custom providers defined in the repository's `opencode.json` are therefore unavailable to `/review-pr`; use a built-in provider for isolated review runs. Providers defined in the bundled toolkit's own `.opencode/opencode.jsonc` are a separate case: that file is reinstalled fresh for every `/review-pr` run, so `sakura/*` models stay selectable there too, provided the workflow step still exposes `SAKURA_AI_ENGINE_API_KEY`.

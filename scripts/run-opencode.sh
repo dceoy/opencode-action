@@ -14,12 +14,65 @@ opencode_select_timeout_command() {
   fi
 }
 
-opencode_report_error() {
-  local message="${1}"
+_opencode_report_annotation() {
+  local level="${1}" message="${2}"
   message="${message//'%'/'%25'}"
   message="${message//$'\r'/'%0D'}"
   message="${message//$'\n'/'%0A'}"
-  printf '::error::%s\n' "${message}"
+  printf '::%s::%s\n' "${level}" "${message}"
+}
+
+opencode_report_error() {
+  _opencode_report_annotation error "${1}"
+}
+
+# Reject a variant the bundled model metadata does not declare, before OpenCode
+# starts. An empty variant is always allowed. Models outside the bundled
+# metadata (custom or externally configured providers) keep passing their
+# variant through, with a warning that nothing validated it.
+#
+# $1: model input, in provider/model format
+# $2: variant input
+# $3: bundled variant metadata file
+opencode_validate_variant() {
+  local model="${1:-}" variant="${2:-}" metadata_file="${3:-}"
+  local provider model_id candidate supported_list=""
+  local -a supported=()
+
+  [[ -n "${variant}" ]] || return 0
+
+  provider="${model%%/*}"
+  model_id="${model#*/}"
+  if [[ -z "${provider}" || -z "${model_id}" || "${model_id}" == "${model}" ]] \
+    || ! jq -e --arg provider "${provider}" --arg model "${model_id}" \
+      '(.providers[$provider].models // {}) | has($model)' \
+      "${metadata_file}" > /dev/null 2>&1; then
+    _opencode_report_annotation warning \
+      "Model '${model}' is not in the action's bundled model metadata, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
+    return 0
+  fi
+
+  while IFS= read -r candidate; do
+    supported+=("${candidate}")
+  done < <(
+    jq -r --arg provider "${provider}" --arg model "${model_id}" \
+      '.providers[$provider].models[$model][]' "${metadata_file}"
+  )
+
+  if ((${#supported[@]} == 0)); then
+    opencode_report_error "Model '${model}' does not support variant '${variant}'. This model declares no variants. Remove the 'variant' input, or set it to an empty string, to run the model with its default configuration."
+    return 1
+  fi
+
+  for candidate in "${supported[@]}"; do
+    if [[ "${candidate}" == "${variant}" ]]; then
+      return 0
+    fi
+  done
+
+  printf -v supported_list '%s, ' "${supported[@]}"
+  opencode_report_error "Model '${model}' does not support variant '${variant}'. Supported variants: ${supported_list%, }. Set 'variant' to one of those values, or leave it empty to run the model with its default configuration."
+  return 1
 }
 
 opencode_report_failure() {
@@ -113,6 +166,9 @@ opencode_configure_run() {
   local script_dir base_config
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  opencode_validate_variant \
+    "${MODEL:-}" "${VARIANT:-}" "${script_dir}/model-variants.json" || return 1
 
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     export XDG_CONFIG_HOME="${HOME}/.config"
