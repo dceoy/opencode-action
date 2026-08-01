@@ -4,8 +4,11 @@
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   run_script="${repo_root}/scripts/run-opencode.sh"
+  lib_script="${repo_root}/scripts/opencode-action-lib.sh"
+  bundled_config="${repo_root}/.opencode/opencode.jsonc"
   fake_action="${BATS_TEST_TMPDIR}/action"
   fake_home="${BATS_TEST_TMPDIR}/home"
+  fake_workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${fake_action}/.opencode" "${fake_home}"
 }
 
@@ -45,52 +48,60 @@ setup() {
 
 @test "variant validation accepts an empty variant for every model" {
   for model in sakura/preview/Kimi-K2.7-Code myprovider/my-model ''; do
-    run bash -euo pipefail -c '
-      source "$1"
-      opencode_validate_variant "$2" "" "$3"
-    ' _ "${run_script}" "${model}" "${repo_root}/scripts/model-variants.json"
+    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+      bash -euo pipefail -c '
+        source "$1"
+        source "$2"
+        opencode_validate_variant "$3" "" "$4"
+      ' _ "${run_script}" "${lib_script}" "${model}" "${bundled_config}"
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
   done
 }
 
 @test "variant validation accepts a declared variant for a bundled model" {
-  metadata="${BATS_TEST_TMPDIR}/model-variants.json"
-  cat > "${metadata}" << 'EOF'
-{"providers": {"demo": {"models": {"nested/model": ["low", "high"]}}}}
+  fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
+  cat > "${fixture}" << 'EOF'
+{"provider": {"demo": {"models": {"nested/model": {"variants": {"low": {}, "high": {}}}}}}}
 EOF
 
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_validate_variant demo/nested/model high "$2"
-  ' _ "${run_script}" "${metadata}"
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant demo/nested/model high "$3"
+    ' _ "${run_script}" "${lib_script}" "${fixture}"
   [ "${status}" -eq 0 ]
   [ -z "${output}" ]
 }
 
 @test "variant validation rejects an undeclared variant for a bundled model" {
-  metadata="${BATS_TEST_TMPDIR}/model-variants.json"
-  cat > "${metadata}" << 'EOF'
-{"providers": {"demo": {"models": {"nested/model": ["low", "high"]}}}}
+  fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
+  cat > "${fixture}" << 'EOF'
+{"provider": {"demo": {"models": {"nested/model": {"variants": {"low": {}, "high": {}}}}}}}
 EOF
 
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_validate_variant demo/nested/model thinking "$2"
-  ' _ "${run_script}" "${metadata}"
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant demo/nested/model thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${fixture}"
   [ "${status}" -eq 1 ]
   [[ "${output}" == "::error::"* ]]
   [[ "${output}" == *"demo/nested/model"* ]]
   [[ "${output}" == *"variant 'thinking'"* ]]
-  [[ "${output}" == *"Supported variants: low, high."* ]]
+  [[ "${output}" == *"Supported variants: high, low."* ]]
   [[ "${output}" == *"leave it empty"* ]]
 }
 
 @test "variant validation rejects any variant for a bundled model without declared variants" {
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$2"
-  ' _ "${run_script}" "${repo_root}/scripts/model-variants.json"
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
   [ "${status}" -eq 1 ]
   [[ "${output}" == "::error::"* ]]
   [[ "${output}" == *"sakura/preview/Kimi-K2.7-Code"* ]]
@@ -100,12 +111,14 @@ EOF
   [[ "${output}" != *"Supported variants"* ]]
 }
 
-@test "variant validation passes custom provider models through with a warning" {
+@test "variant validation passes models outside the bundled registry through with a warning" {
   for model in myprovider/my-model anthropic/claude-opus-5 bare-model; do
-    run bash -euo pipefail -c '
-      source "$1"
-      opencode_validate_variant "$2" high "$3"
-    ' _ "${run_script}" "${model}" "${repo_root}/scripts/model-variants.json"
+    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+      bash -euo pipefail -c '
+        source "$1"
+        source "$2"
+        opencode_validate_variant "$3" high "$4"
+      ' _ "${run_script}" "${lib_script}" "${model}" "${bundled_config}"
     [ "${status}" -eq 0 ]
     [[ "${output}" == "::warning::"* ]]
     [[ "${output}" == *"${model}"* ]]
@@ -113,30 +126,144 @@ EOF
   done
 }
 
+@test "variant validation passes through with a warning when use-bundled-toolkit is false" {
+  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"sakura/preview/Kimi-K2.7-Code"* ]]
+  [[ "${output}" == *"use-bundled-toolkit is false"* ]]
+}
+
+@test "variant validation passes through with a warning when OPENCODE_CONFIG or OPENCODE_CONFIG_DIR is set" {
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    OPENCODE_CONFIG="/tmp/caller-opencode.json" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"OPENCODE_CONFIG"* ]]
+}
+
+@test "variant validation passes through with a warning when OPENCODE_CONFIG_CONTENT redefines the model" {
+  override='{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{}}}}}'
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    OPENCODE_CONFIG_CONTENT="${override}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"OPENCODE_CONFIG_CONTENT redefines"* ]]
+  [[ "${output}" == *"sakura/preview/Kimi-K2.7-Code"* ]]
+}
+
+@test "variant validation ignores OPENCODE_CONFIG_CONTENT that does not touch the model" {
+  other='{"provider":{"other":{"models":{"other-model":{}}}}}'
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    OPENCODE_CONFIG_CONTENT="${other}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
+}
+
+@test "variant validation passes through with a warning when a project opencode.json redefines the model" {
+  mkdir -p "${fake_workspace}"
+  cat > "${fake_workspace}/opencode.json" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"repository's opencode.json redefines"* ]]
+}
+
+@test "variant validation still enforces the bundled registry during review-only runs" {
+  override='{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{}}}}}'
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=true GITHUB_WORKSPACE="${fake_workspace}" \
+    OPENCODE_CONFIG_CONTENT="${override}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
+}
+
+@test "variant validation surfaces a missing bundled config file as an error, not a silent passthrough" {
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${BATS_TEST_TMPDIR}/missing.jsonc"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"not found"* ]]
+}
+
+@test "variant validation surfaces an unparseable bundled config as an error, not a silent passthrough" {
+  fixture="${BATS_TEST_TMPDIR}/broken.jsonc"
+  printf '%s' 'not valid json at all' > "${fixture}"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${fixture}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"Failed to read the bundled OpenCode model registry"* ]]
+}
+
 @test "variant validation escapes workflow command data in its annotations" {
-  run bash -euo pipefail -c '
-    source "$1"
-    opencode_validate_variant "$2" "$3" "$4"
-  ' _ "${run_script}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant "$3" "$4" "$5"
+    ' _ "${run_script}" "${lib_script}" \
     $'myprovider/my-model%\n::notice::injected' \
     $'high\r::debug::injected' \
-    "${repo_root}/scripts/model-variants.json"
+    "${bundled_config}"
   [ "${status}" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
   [[ "${output}" == *"my-model%25%0A::notice::injected"* ]]
   [[ "${output}" == *"high%0D::debug::injected"* ]]
 }
 
-@test "bundled variant metadata covers exactly the bundled provider models" {
-  # shellcheck source=/dev/null
-  source "${repo_root}/scripts/opencode-action-lib.sh"
-  model_ids='[to_entries[] | .key as $provider | (.value.models // {} | keys[]) | "\($provider)/\(.)"] | sort'
-
-  configured="$(opencode_jsonc_to_json < "${repo_root}/.opencode/opencode.jsonc" \
-    | jq -c ".provider | ${model_ids}")"
-  declared="$(jq -c ".providers | ${model_ids}" "${repo_root}/scripts/model-variants.json")"
-
-  [ "${configured}" = "${declared}" ]
+@test "bundled model registry declares an explicit variants object for every model" {
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_jsonc_to_json < "$2" | jq -e "[.provider[].models[] | has(\"variants\")] | all"
+  ' _ "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
 }
 
 @test "run script rejects an unsupported variant before invoking OpenCode" {
@@ -147,12 +274,45 @@ EOF
     '#!/usr/bin/env bash' \
     'printf "%s\n" "$*" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
   chmod +x "${fake_bin}/opencode"
+  cat > "${fake_action}/.opencode/opencode.jsonc" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {"variants": {}}}}}}
+EOF
 
   run env \
     PATH="${fake_bin}:${PATH}" \
     HOME="${fake_home}" \
     ACTION_PATH="${fake_action}" \
-    GITHUB_WORKSPACE="${BATS_TEST_TMPDIR}/workspace" \
+    GITHUB_WORKSPACE="${fake_workspace}" \
+    PROMPT="explicit prompt" \
+    AGENT="build" \
+    MENTIONS="/oc" \
+    MODEL="sakura/preview/Kimi-K2.7-Code" \
+    VARIANT="thinking" \
+    REVIEW_ONLY="false" \
+    USE_BUNDLED_TOOLKIT="true" \
+    TIMEOUT_MINUTES="5" \
+    INVOCATION_FILE="${invocation_file}" \
+    "${run_script}"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"does not support variant 'thinking'"* ]]
+  [ ! -e "${invocation_file}" ]
+}
+
+@test "run script passes an unsupported variant through with a warning when use-bundled-toolkit is false" {
+  fake_bin="${BATS_TEST_TMPDIR}/variant-bin-2"
+  invocation_file="${BATS_TEST_TMPDIR}/variant-invocation-2"
+  mkdir -p "${fake_bin}"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\n" "$*" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
+  chmod +x "${fake_bin}/opencode"
+
+  run env \
+    PATH="${fake_bin}:${PATH}" \
+    HOME="${fake_home}" \
+    ACTION_PATH="${fake_action}" \
+    GITHUB_WORKSPACE="${fake_workspace}" \
     PROMPT="explicit prompt" \
     AGENT="build" \
     MENTIONS="/oc" \
@@ -164,9 +324,10 @@ EOF
     INVOCATION_FILE="${invocation_file}" \
     "${run_script}"
 
-  [ "${status}" -ne 0 ]
-  [[ "${output}" == *"does not support variant 'thinking'"* ]]
-  [ ! -e "${invocation_file}" ]
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"::warning::"* ]]
+  [[ "${output}" == *"use-bundled-toolkit is false"* ]]
+  [ "$(cat "${invocation_file}")" = "github run" ]
 }
 
 @test "run configuration merges default_agent into existing JSONC" {

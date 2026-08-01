@@ -90,7 +90,7 @@ with:
 
 Replace or extend `models` with model IDs available to the Sakura AI Engine account.
 
-Leave the action's `variant` input empty for Sakura models. Sakura AI Engine documents no OpenCode model variants, so the bundled metadata declares none and the action rejects a nonempty `variant` before the run starts:
+Leave the action's `variant` input empty for Sakura models. Sakura AI Engine documents no OpenCode model variants, so each bundled model declares an empty `variants` object in `.opencode/opencode.jsonc` and the action rejects a nonempty `variant` before the run starts:
 
 ```yaml
 with:
@@ -100,7 +100,14 @@ with:
 
 ## Variants for custom providers
 
-Models that are not in the action's bundled metadata (`scripts/model-variants.json`) are not validated. A nonempty `variant` is passed through to OpenCode with a warning, so an unsupported value surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
+`variant` validation only applies while the bundled `.opencode/opencode.jsonc` registry is authoritative for the selected model. It is not validated, and passed through to OpenCode with a warning instead, whenever:
+
+- the model's provider is not declared in that registry at all (a custom `opencode.json` provider, or a built-in OpenCode provider such as `anthropic` or `openai`);
+- `use-bundled-toolkit: false` is set, so the bundled registry is never installed;
+- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present; or
+- a repository `opencode.json`/`opencode.jsonc` redefines the same provider/model.
+
+A passed-through `variant` that the provider rejects surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
 
 ## Limitations and security
 

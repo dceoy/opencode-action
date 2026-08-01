@@ -26,37 +26,123 @@ opencode_report_error() {
   _opencode_report_annotation error "${1}"
 }
 
-# Reject a variant the bundled model metadata does not declare, before OpenCode
-# starts. An empty variant is always allowed. Models outside the bundled
-# metadata (custom or externally configured providers) keep passing their
-# variant through, with a warning that nothing validated it.
+# True (prints a reason and returns 0) when something other than the bundled
+# .opencode/opencode.jsonc could determine the final provider/model config,
+# so that file can no longer be trusted as the single source of truth for
+# $1/$2. False (prints nothing, returns 1) when the bundled registry is
+# authoritative. Review-only runs always discard caller/project config before
+# invoking OpenCode (see opencode_configure_run), so the bundled registry
+# stays authoritative there regardless of what the caller's environment sets.
+_opencode_variant_override_reason() {
+  local provider="${1}" model_id="${2}" name project_file
+
+  if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
+    printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
+    return 0
+  fi
+
+  [[ "${REVIEW_ONLY:-false}" != "true" ]] || return 1
+
+  if [[ -n "${OPENCODE_CONFIG:-}" || -n "${OPENCODE_CONFIG_DIR:-}" ]]; then
+    printf "the workflow sets OPENCODE_CONFIG or OPENCODE_CONFIG_DIR, which can redefine any provider"
+    return 0
+  fi
+
+  if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]] \
+    && _opencode_config_defines_model "${OPENCODE_CONFIG_CONTENT}" "${provider}" "${model_id}"; then
+    printf "OPENCODE_CONFIG_CONTENT redefines '%s/%s'" "${provider}" "${model_id}"
+    return 0
+  fi
+
+  for name in opencode.json opencode.jsonc; do
+    project_file="${GITHUB_WORKSPACE:-${PWD}}/${name}"
+    if [[ -f "${project_file}" ]] \
+      && _opencode_config_defines_model "$(cat "${project_file}")" "${provider}" "${model_id}"; then
+      printf "the repository's %s redefines '%s/%s'" "${name}" "${provider}" "${model_id}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+_opencode_config_defines_model() {
+  local content="${1}" provider="${2}" model_id="${3}" json rc
+  json="$(opencode_jsonc_to_json <<< "${content}" 2> /dev/null)" || return 1
+  set +e
+  jq -e --arg provider "${provider}" --arg model "${model_id}" \
+    '(.provider[$provider].models // {}) | has($model)' \
+    <<< "${json}" > /dev/null 2>&1
+  rc=$?
+  set -e
+  return "${rc}"
+}
+
+# Reject a variant the bundled model registry does not declare, before
+# OpenCode starts. An empty variant is always allowed. Validation only
+# applies while the bundled .opencode/opencode.jsonc is authoritative for
+# this model (see _opencode_variant_override_reason); otherwise, and for
+# models the bundled registry does not list at all (custom or externally
+# configured providers), the variant is passed through with a warning that
+# nothing validated it. Depends on opencode_jsonc_to_json, so
+# opencode-action-lib.sh must be sourced before this is called.
 #
 # $1: model input, in provider/model format
 # $2: variant input
-# $3: bundled variant metadata file
+# $3: path to the bundled .opencode/opencode.jsonc
 opencode_validate_variant() {
-  local model="${1:-}" variant="${2:-}" metadata_file="${3:-}"
-  local provider model_id candidate supported_list=""
+  local model="${1:-}" variant="${2:-}" bundled_config_file="${3:-}"
+  local provider model_id candidate supported_list="" override_reason bundled_json jq_rc
   local -a supported=()
 
   [[ -n "${variant}" ]] || return 0
 
   provider="${model%%/*}"
   model_id="${model#*/}"
-  if [[ -z "${provider}" || -z "${model_id}" || "${model_id}" == "${model}" ]] \
-    || ! jq -e --arg provider "${provider}" --arg model "${model_id}" \
-      '(.providers[$provider].models // {}) | has($model)' \
-      "${metadata_file}" > /dev/null 2>&1; then
+
+  if [[ -z "${provider}" || -z "${model_id}" || "${model_id}" == "${model}" ]]; then
     _opencode_report_annotation warning \
-      "Model '${model}' is not in the action's bundled model metadata, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
+      "Model '${model}' is not in the action's bundled model registry, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
     return 0
+  fi
+
+  override_reason="$(_opencode_variant_override_reason "${provider}" "${model_id}")" || true
+  if [[ -n "${override_reason}" ]]; then
+    _opencode_report_annotation warning \
+      "Model '${model}' variant compatibility was not validated (${override_reason}), so variant '${variant}' was passed through to OpenCode. If the provider rejects the request, rerun with an empty variant."
+    return 0
+  fi
+
+  if [[ ! -f "${bundled_config_file}" ]]; then
+    opencode_report_error "Bundled OpenCode configuration not found at '${bundled_config_file}' while validating variant '${variant}' for model '${model}'."
+    return 1
+  fi
+  if ! bundled_json="$(opencode_jsonc_to_json < "${bundled_config_file}")"; then
+    opencode_report_error "Failed to parse the bundled OpenCode configuration at '${bundled_config_file}' while validating variant '${variant}' for model '${model}'."
+    return 1
+  fi
+
+  set +e
+  jq -e --arg provider "${provider}" --arg model "${model_id}" \
+    '(.provider[$provider].models // {}) | has($model)' \
+    <<< "${bundled_json}" > /dev/null 2>&1
+  jq_rc=$?
+  set -e
+  if ((jq_rc == 1)); then
+    _opencode_report_annotation warning \
+      "Model '${model}' is not in the action's bundled model registry, so variant '${variant}' was passed through to OpenCode without validating compatibility. If the provider rejects the request, rerun with an empty variant."
+    return 0
+  elif ((jq_rc != 0)); then
+    opencode_report_error "Failed to read the bundled OpenCode model registry for '${model}' while validating variant '${variant}' (jq exited ${jq_rc})."
+    return 1
   fi
 
   while IFS= read -r candidate; do
     supported+=("${candidate}")
   done < <(
     jq -r --arg provider "${provider}" --arg model "${model_id}" \
-      '.providers[$provider].models[$model][]' "${metadata_file}"
+      '.provider[$provider].models[$model].variants // {} | keys[]' \
+      <<< "${bundled_json}"
   )
 
   if ((${#supported[@]} == 0)); then
@@ -167,9 +253,6 @@ opencode_configure_run() {
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  opencode_validate_variant \
-    "${MODEL:-}" "${VARIANT:-}" "${script_dir}/model-variants.json" || return 1
-
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     export XDG_CONFIG_HOME="${HOME}/.config"
     export OPENCODE_DISABLE_PROJECT_CONFIG=1
@@ -185,6 +268,10 @@ opencode_configure_run() {
 
   # shellcheck source=scripts/opencode-action-lib.sh
   source "${script_dir}/opencode-action-lib.sh"
+
+  opencode_validate_variant \
+    "${MODEL:-}" "${VARIANT:-}" "${ACTION_PATH:-}/.opencode/opencode.jsonc" || return 1
+
   opencode_effective_prompt "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}"
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     command_dirs=("${ACTION_PATH}/.opencode/commands")

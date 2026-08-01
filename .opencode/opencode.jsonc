@@ -13,33 +13,43 @@
       "models": {
         "gpt-oss-120b": {
           "name": "gpt-oss-120b",
+          "variants": {},
         },
         "llm-jp-3.1-8x13b-instruct4": {
           "name": "llm-jp-3.1-8x13b-instruct4",
+          "variants": {},
         },
         "preview/Kimi-K2.6": {
           "name": "preview/Kimi-K2.6",
+          "variants": {},
         },
         "preview/Kimi-K2.7-Code": {
           "name": "preview/Kimi-K2.7-Code",
+          "variants": {},
         },
         "preview/Phi-4-mini-instruct-cpu": {
           "name": "preview/Phi-4-mini-instruct-cpu",
+          "variants": {},
         },
         "preview/Phi-4-multimodal-instruct": {
           "name": "preview/Phi-4-multimodal-instruct",
+          "variants": {},
         },
         "preview/Qwen3-0.6B-cpu": {
           "name": "preview/Qwen3-0.6B-cpu",
+          "variants": {},
         },
         "preview/Qwen3-VL-30B-A3B-Instruct": {
           "name": "preview/Qwen3-VL-30B-A3B-Instruct",
+          "variants": {},
         },
         "preview/Qwen3.6-35B-A3B": {
           "name": "preview/Qwen3.6-35B-A3B",
+          "variants": {},
         },
         "preview/gemma-4-31B-it": {
           "name": "preview/gemma-4-31B-it",
+          "variants": {},
         },
       },
     },
