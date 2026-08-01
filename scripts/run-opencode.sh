@@ -24,7 +24,7 @@ opencode_report_error() {
 
 opencode_report_failure() {
   local status="${1}" output_file="${2}" timeout_minutes="${3}" model="${4:-unknown}" opencode_version="${5:-unknown}"
-  local terminal_error json_parse_error secondary_rest_error context
+  local terminal_error terminal_json_parse terminal_rest_failure context
   context="model '${model:-unknown}' (opencode ${opencode_version:-unknown})"
 
   if [[ "${status}" -eq 124 ]]; then
@@ -52,18 +52,44 @@ opencode_report_failure() {
     return
   fi
 
-  json_parse_error="$(
-    grep -Ei 'Failed to parse JSON|SyntaxError:.*JSON|Unexpected token.*JSON' \
-      "${output_file}" | tail -n 1 || true
-  )"
-  secondary_rest_error="$(
-    grep -Ei "is not an object \\(evaluating '[^']*\\.rest[^']*'\\)" \
-      "${output_file}" | tail -n 1 || true
-  )"
+  read -r terminal_json_parse terminal_rest_failure < <(
+    awk '
+      function normalize(value) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        return tolower(value)
+      }
 
-  if [[ -n "${json_parse_error}" ]]; then
+      function is_json_parse_error(value) {
+        return value ~ /^(error:[[:space:]]*)?(failed to parse json|syntaxerror:.*json.*|unexpected token.*json.*)$/
+      }
+
+      function is_rest_error(value) {
+        return value ~ /is not an object \(evaluating [^)]*\.rest[^)]*\)$/
+      }
+
+      NF {
+        previous_two = previous
+        previous = terminal
+        terminal = normalize($0)
+      }
+
+      END {
+        if (is_json_parse_error(terminal)) {
+          print "true false"
+        } else if (is_rest_error(terminal) && is_json_parse_error(previous)) {
+          print "true true"
+        } else if (is_rest_error(terminal) && previous == "creating comment..." && is_json_parse_error(previous_two)) {
+          print "true true"
+        } else {
+          print "false false"
+        }
+      }
+    ' "${output_file}"
+  )
+
+  if [[ "${terminal_json_parse}" == "true" ]]; then
     local message="OpenCode failed to parse a JSON response while running for ${context}."
-    if [[ -n "${secondary_rest_error}" ]]; then
+    if [[ "${terminal_rest_failure}" == "true" ]]; then
       message+=" OpenCode then hit a secondary failure while accessing '.rest' on a non-object value, masking further output."
     fi
     message+=" The underlying failure may be in OpenCode or the provider response path; do not assume OIDC or credentials are at fault unless the log shows direct evidence of that."
