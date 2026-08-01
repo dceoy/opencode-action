@@ -280,6 +280,60 @@ EOF
   [[ "${output}" == *"failed with exit code 17"* ]]
 }
 
+@test "OpenCode failure classification surfaces a JSON parse failure alone" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Error: Unexpected end of process' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"provider/model"* ]]
+  [[ "${output}" == *"opencode 1.18.10"* ]]
+  [[ "${output}" != *"secondary failure"* ]]
+  [[ "${output}" != *"failed with exit code"* ]]
+}
+
+@test "OpenCode failure classification surfaces a JSON parse failure masked by the .rest handler crash" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'Creating comment...' \
+    "Error: Unexpected error: undefined is not an object (evaluating 'p.rest')" > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"failed to parse a JSON response"* ]]
+  [[ "${output}" == *"secondary failure"* ]]
+  [[ "${output}" == *".rest"* ]]
+  [[ "${output}" == *"provider/model"* ]]
+  [[ "${output}" == *"opencode 1.18.10"* ]]
+  [[ "${output}" == *"do not assume OIDC or credentials are at fault"* ]]
+  [[ "${output}" != *"caused by OIDC"* ]]
+}
+
+@test "OpenCode failure classification still prefers evidenced provider errors over JSON parse noise" {
+  output_file="${BATS_TEST_TMPDIR}/output"
+
+  printf '%s\n' \
+    'Failed to parse JSON' \
+    'AI_APICallError: rate limit exceeded (statusCode: 429)' > "${output_file}"
+  run bash -euo pipefail -c '
+    source "$1"
+    opencode_report_failure 1 "$2" 10 provider/model 1.18.10
+  ' _ "${run_script}" "${output_file}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"rate limited"* ]]
+  [[ "${output}" != *"failed to parse a JSON response"* ]]
+}
+
 @test "run script preserves mocked OpenCode status and classifies its output" {
   fake_bin="${BATS_TEST_TMPDIR}/run-bin"
   invocation_file="${BATS_TEST_TMPDIR}/invocation"
