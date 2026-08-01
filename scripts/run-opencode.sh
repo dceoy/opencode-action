@@ -68,11 +68,14 @@ opencode_report_failure() {
         return value ~ /is not an object \(evaluating [^)]*\.rest[^)]*\)$/
       }
 
-      NF {
-        previous_three = previous_two
-        previous_two = previous
-        previous = terminal
-        terminal = normalize($0)
+      {
+        normalized = normalize($0)
+        if (normalized != "") {
+          previous_three = previous_two
+          previous_two = previous
+          previous = terminal
+          terminal = normalized
+        }
       }
 
       END {
