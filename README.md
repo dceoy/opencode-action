@@ -111,7 +111,8 @@ Nothing is silently substituted. The registry is treated as authoritative only w
 - a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` that redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former);
 - a nonempty `plugin` array in any of the config sources above, or a populated project/global `.opencode/plugins` directory, since a plugin's `config` hook can mutate provider/model metadata before OpenCode validates it;
 - a workflow-set `XDG_CONFIG_HOME` (the action always installs the bundled registry under `~/.config/opencode`, so any other value points OpenCode's global config search elsewhere);
-- a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there).
+- a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there);
+- an `opencode.json`/`opencode.jsonc` in OpenCode's managed config directory (`/etc/opencode` by default), which OpenCode loads last with the highest precedence of any config source and which this action cannot clear, including on review-only runs.
 
 Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
 

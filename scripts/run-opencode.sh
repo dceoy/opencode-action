@@ -32,28 +32,58 @@ opencode_report_error() {
 # for $1/$2. False (prints nothing, returns 1) when the bundled registry is
 # authoritative. Review-only runs always discard caller/project config before
 # invoking OpenCode (see opencode_configure_run), so the bundled registry
-# stays authoritative there regardless of what the caller's environment sets.
-# Checks project config OpenCode itself would load with higher precedence
-# than the bundled registry: repository-root opencode.json(c), then
-# .opencode/opencode.json(c) (OpenCode 1.2.14+). Also checks for any plugin
-# that could mutate provider/model metadata via its config hook before
-# OpenCode builds the effective registry: a nonempty "plugin" array in any
-# checked config, or a populated project/global .opencode/plugins directory
-# that OpenCode auto-loads regardless of config. Also checks that the bundled
-# registry actually reaches OpenCode's global config: prepare-opencode-config.sh
+# stays authoritative there against every check below except the managed
+# config directory, which OpenCode loads last with higher precedence than
+# any source review-only isolation clears. Checks project config OpenCode
+# itself would load with higher precedence than the bundled registry:
+# repository-root opencode.json(c), then .opencode/opencode.json(c) (OpenCode
+# 1.2.14+). Also checks for any plugin that could mutate provider/model
+# metadata via its config hook before OpenCode builds the effective registry:
+# a nonempty "plugin" array in any checked config, or a populated
+# project/global .opencode/plugins directory that OpenCode auto-loads
+# regardless of config. Also checks that the bundled registry actually
+# reaches OpenCode's global config: prepare-opencode-config.sh
 # (opencode_prepare_config) installs it into "${HOME}/.config/opencode" only,
 # and only when nothing already sits at that destination, so a caller-set
 # XDG_CONFIG_HOME or a pre-existing config on a reused runner can both leave a
-# different file authoritative.
+# different file authoritative. Also checks OpenCode's managed config
+# directory (managedConfigDir(), "/etc/opencode" on Linux by default,
+# overridable for testing via OPENCODE_TEST_MANAGED_CONFIG_DIR), which an
+# admin-controlled opencode.json(c) there overrides every other config
+# source with, including review-only isolation, since that directory sits
+# outside $HOME and nothing in this action clears or replaces it.
 _opencode_variant_override_reason() {
   local provider="${1}" model_id="${2}" bundled_config_file="${3}"
   local relative project_file project_content
   local default_global_config_dir global_config_dir global_file name
+  local managed_config_dir managed_name managed_file managed_content
 
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
     return 0
   fi
+
+  # OpenCode loads this directory last, with the highest precedence of any
+  # config source -- above even OPENCODE_CONFIG_CONTENT -- and it is not
+  # scoped under $HOME, so review-only isolation (opencode_configure_run)
+  # cannot clear it. Check it before the review-only early return below.
+  managed_config_dir="${OPENCODE_TEST_MANAGED_CONFIG_DIR:-/etc/opencode}"
+  for managed_name in opencode.json opencode.jsonc; do
+    managed_file="${managed_config_dir}/${managed_name}"
+    if [[ -f "${managed_file}" ]]; then
+      managed_content="$(cat "${managed_file}")"
+      if _opencode_config_defines_model "${managed_content}" "${provider}" "${model_id}"; then
+        printf "the managed OpenCode configuration at '%s' redefines '%s/%s', and OpenCode loads managed config with the highest precedence of any source" \
+          "${managed_file}" "${provider}" "${model_id}"
+        return 0
+      fi
+      if _opencode_config_declares_plugin "${managed_content}"; then
+        printf "the managed OpenCode configuration at '%s' declares a plugin, which can mutate provider/model metadata before OpenCode validates it" \
+          "${managed_file}"
+        return 0
+      fi
+    fi
+  done
 
   [[ "${REVIEW_ONLY:-false}" != "true" ]] || return 1
 

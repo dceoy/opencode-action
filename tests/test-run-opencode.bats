@@ -353,6 +353,52 @@ EOF
   [[ "${output}" == *"declares no variants"* ]]
 }
 
+@test "variant validation passes through with a warning when the managed OpenCode config directory redefines the model" {
+  # OpenCode loads a platform managed config directory (managedConfigDir(),
+  # "/etc/opencode" by default) last, with higher precedence than even
+  # OPENCODE_CONFIG_CONTENT, so an admin-controlled file there can redefine
+  # the same model regardless of anything the workflow or this action sets.
+  managed_config_dir="${BATS_TEST_TMPDIR}/managed"
+  mkdir -p "${managed_config_dir}"
+  cat > "${managed_config_dir}/opencode.jsonc" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {"variants": {"thinking": {}}}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    OPENCODE_TEST_MANAGED_CONFIG_DIR="${managed_config_dir}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"managed OpenCode configuration"* ]]
+}
+
+@test "variant validation passes through with a warning when the managed OpenCode config directory redefines the model during review-only runs" {
+  # Review-only isolation (opencode_configure_run) only clears $HOME-scoped
+  # config; it cannot clear the managed config directory, so this preflight
+  # must still detect it even though every other override check is skipped
+  # in review-only mode.
+  managed_config_dir="${BATS_TEST_TMPDIR}/managed-review"
+  mkdir -p "${managed_config_dir}"
+  cat > "${managed_config_dir}/opencode.jsonc" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {"variants": {"thinking": {}}}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=true GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    OPENCODE_TEST_MANAGED_CONFIG_DIR="${managed_config_dir}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"managed OpenCode configuration"* ]]
+}
+
 @test "variant validation still enforces the bundled registry when the installed global config matches it" {
   # The normal case: prepare-opencode-config.sh copied the bundled file
   # verbatim into the installed config directory, so it stays authoritative.
