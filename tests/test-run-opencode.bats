@@ -48,7 +48,7 @@ setup() {
 
 @test "variant validation accepts an empty variant for every model" {
   for model in sakura/preview/Kimi-K2.7-Code myprovider/my-model ''; do
-    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
       bash -euo pipefail -c '
         source "$1"
         source "$2"
@@ -65,7 +65,7 @@ setup() {
 {"provider": {"demo": {"models": {"nested/model": {"variants": {"low": {}, "high": {}}}}}}}
 EOF
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -81,7 +81,7 @@ EOF
 {"provider": {"demo": {"models": {"nested/model": {"variants": {"low": {}, "high": {}}}}}}}
 EOF
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -96,7 +96,7 @@ EOF
 }
 
 @test "variant validation rejects any variant for a bundled model without declared variants" {
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -116,7 +116,7 @@ EOF
   # in the bundled opencode.jsonc, so warning here on every run would be
   # pure noise unrelated to actual variant compatibility.
   for model in opencode-go/kimi-k3 myprovider/my-model anthropic/claude-opus-5 bare-model; do
-    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+    run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
       bash -euo pipefail -c '
         source "$1"
         source "$2"
@@ -133,7 +133,7 @@ EOF
 {"provider": {"demo": {"models": {"legacy-model": {"name": "legacy-model"}}}}}
 EOF
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -146,7 +146,7 @@ EOF
 }
 
 @test "variant validation passes through with a warning when use-bundled-toolkit is false" {
-  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -159,7 +159,7 @@ EOF
 }
 
 @test "variant validation passes through with a warning when OPENCODE_CONFIG or OPENCODE_CONFIG_DIR is set" {
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     OPENCODE_CONFIG="/tmp/caller-opencode.json" \
     bash -euo pipefail -c '
       source "$1"
@@ -174,7 +174,7 @@ EOF
 @test "variant validation passes through with a warning when OPENCODE_CONFIG_CONTENT redefines the model" {
   override='{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{}}}}}'
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     OPENCODE_CONFIG_CONTENT="${override}" \
     bash -euo pipefail -c '
       source "$1"
@@ -190,7 +190,7 @@ EOF
 @test "variant validation ignores OPENCODE_CONFIG_CONTENT that does not touch the model" {
   other='{"provider":{"other":{"models":{"other-model":{}}}}}'
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     OPENCODE_CONFIG_CONTENT="${other}" \
     bash -euo pipefail -c '
       source "$1"
@@ -208,7 +208,7 @@ EOF
 {"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {}}}}}
 EOF
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -222,7 +222,7 @@ EOF
 @test "variant validation still enforces the bundled registry during review-only runs" {
   override='{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{}}}}}'
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=true GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=true GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     OPENCODE_CONFIG_CONTENT="${override}" \
     bash -euo pipefail -c '
       source "$1"
@@ -234,8 +234,62 @@ EOF
   [[ "${output}" == *"declares no variants"* ]]
 }
 
+@test "variant validation still enforces the bundled registry when the installed global config matches it" {
+  # The normal case: prepare-opencode-config.sh copied the bundled file
+  # verbatim into the installed config directory, so it stays authoritative.
+  mkdir -p "${fake_home}/.config/opencode"
+  cp "${bundled_config}" "${fake_home}/.config/opencode/opencode.jsonc"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
+}
+
+@test "variant validation passes through with a warning when a pre-existing global OpenCode config differs from the bundled registry" {
+  # prepare-opencode-config.sh only installs the bundled file when nothing
+  # already sits at the destination, so a self-hosted runner with a
+  # pre-existing "~/.config/opencode/opencode.jsonc" keeps its own file.
+  mkdir -p "${fake_home}/.config/opencode"
+  cat > "${fake_home}/.config/opencode/opencode.jsonc" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"installed OpenCode config"* ]]
+  [[ "${output}" == *"pre-existing config may be authoritative"* ]]
+}
+
+@test "variant validation passes through with a warning when XDG_CONFIG_HOME points outside the installed config directory" {
+  # prepare-opencode-config.sh always installs into "\${HOME}/.config/opencode",
+  # ignoring a caller-set XDG_CONFIG_HOME, so OpenCode's global config search
+  # can diverge from where the bundled registry actually landed.
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/custom-xdg" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"XDG_CONFIG_HOME"* ]]
+}
+
 @test "variant validation surfaces a missing bundled config file as an error, not a silent passthrough" {
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -250,7 +304,7 @@ EOF
   fixture="${BATS_TEST_TMPDIR}/broken.jsonc"
   printf '%s' 'not valid json at all' > "${fixture}"
 
-  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
@@ -265,7 +319,7 @@ EOF
   # Use the use-bundled-toolkit:false passthrough branch, since a model
   # absent from the registry now passes through silently and would leave
   # nothing to check escaping on.
-  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" \
+  run env USE_BUNDLED_TOOLKIT=false REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"

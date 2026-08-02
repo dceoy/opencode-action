@@ -27,14 +27,20 @@ opencode_report_error() {
 }
 
 # True (prints a reason and returns 0) when something other than the bundled
-# .opencode/opencode.jsonc could determine the final provider/model config,
-# so that file can no longer be trusted as the single source of truth for
-# $1/$2. False (prints nothing, returns 1) when the bundled registry is
+# .opencode/opencode.jsonc at $3 could determine the final provider/model
+# config, so that file can no longer be trusted as the single source of truth
+# for $1/$2. False (prints nothing, returns 1) when the bundled registry is
 # authoritative. Review-only runs always discard caller/project config before
 # invoking OpenCode (see opencode_configure_run), so the bundled registry
 # stays authoritative there regardless of what the caller's environment sets.
+# Also checks that the bundled registry actually reaches OpenCode's global
+# config: prepare-opencode-config.sh (opencode_prepare_config) installs it
+# into "${HOME}/.config/opencode" only, and only when nothing already sits at
+# that destination, so a caller-set XDG_CONFIG_HOME or a pre-existing config
+# on a reused runner can both leave a different file authoritative.
 _opencode_variant_override_reason() {
-  local provider="${1}" model_id="${2}" name project_file
+  local provider="${1}" model_id="${2}" bundled_config_file="${3}"
+  local name project_file default_global_config_dir global_config_dir global_file
 
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
@@ -59,6 +65,26 @@ _opencode_variant_override_reason() {
     if [[ -f "${project_file}" ]] \
       && _opencode_config_defines_model "$(cat "${project_file}")" "${provider}" "${model_id}"; then
       printf "the repository's %s redefines '%s/%s'" "${name}" "${provider}" "${model_id}"
+      return 0
+    fi
+  done
+
+  default_global_config_dir="${HOME}/.config"
+  global_config_dir="${XDG_CONFIG_HOME:-${default_global_config_dir}}/opencode"
+  if [[ "${global_config_dir}" != "${default_global_config_dir}/opencode" ]]; then
+    printf "the workflow sets XDG_CONFIG_HOME to '%s', which OpenCode reads global config from instead of the directory the action installs the bundled registry into" \
+      "${XDG_CONFIG_HOME}"
+    return 0
+  fi
+
+  # _opencode_copy_missing_config leaves a pre-existing
+  # "${global_config_dir}/opencode.json(c)" in place instead of overwriting
+  # it, so on a reused runner that file -- not $3 -- is what OpenCode loads.
+  for name in opencode.json opencode.jsonc; do
+    global_file="${global_config_dir}/${name}"
+    if [[ -f "${global_file}" ]] && ! cmp -s "${global_file}" "${bundled_config_file}" 2> /dev/null; then
+      printf "the installed OpenCode config at '%s' is not the bundled registry, so a pre-existing config may be authoritative" \
+        "${global_file}"
       return 0
     fi
   done
@@ -105,7 +131,7 @@ opencode_validate_variant() {
   provider="${model%%/*}"
   model_id="${model#*/}"
 
-  override_reason="$(_opencode_variant_override_reason "${provider}" "${model_id}")" || true
+  override_reason="$(_opencode_variant_override_reason "${provider}" "${model_id}" "${bundled_config_file}")" || true
   if [[ -n "${override_reason}" ]]; then
     _opencode_report_annotation warning \
       "Model '${model}' variant compatibility was not validated (${override_reason}), so variant '${variant}' was passed through to OpenCode. If the provider rejects the request, rerun with an empty variant."

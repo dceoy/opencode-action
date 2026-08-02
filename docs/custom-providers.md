@@ -105,7 +105,9 @@ with:
 - the model is absent from that registry entirely — a custom `opencode.json` provider, a built-in OpenCode provider such as `anthropic` or `openai`, or a model discovered dynamically by its provider (never listed in `opencode.json`, such as an OpenCode Go model). `variant` passes through **silently**, since the model's absence says nothing about compatibility;
 - the model is declared in the registry but without a `variants` key. `variant` passes through with a **warning** that compatibility was not validated;
 - `use-bundled-toolkit: false` is set, so the bundled registry is never installed. `variant` passes through with a warning;
-- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present, or a repository `opencode.json`/`opencode.jsonc` redefines the same provider/model. `variant` passes through with a warning.
+- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present, or a repository `opencode.json`/`opencode.jsonc` redefines the same provider/model. `variant` passes through with a warning;
+- a workflow-set `XDG_CONFIG_HOME` points OpenCode's global config search outside `~/.config/opencode`, the one directory the action installs its bundled registry into. `variant` passes through with a warning;
+- a `~/.config/opencode/opencode.json` or `opencode.jsonc` already existed on the runner before this run (the action only installs its bundled file when the destination is empty, so a reused self-hosted runner can keep an older or externally managed config). `variant` passes through with a warning.
 
 A passed-through `variant` that the provider rejects surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
 
