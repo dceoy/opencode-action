@@ -81,7 +81,7 @@ The provider account must have sufficient credits or quota. For providers not bu
 | `agent`               | `build`                   | Primary agent. A slash command can override it.                                                                                                                         |
 | `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.                                                                                                                  |
 | `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                                                                                                                                        |
-| `variant`             | -                         | Provider-specific reasoning effort.                                                                                                                                     |
+| `variant`             | -                         | Provider-specific reasoning effort. Validated before the run; see [Model variants](#model-variants).                                                                    |
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                                             |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                                           |
 | `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+; the bundled Sakura provider's `chunkTimeout` needs 1.2.25+ (older pins fall back to the request `timeout`). |
@@ -92,6 +92,33 @@ The provider account must have sufficient credits or quota. For providers not bu
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
 Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-only runs (`prompt: /review-pr`), which always skip the cache and install fresh.
+
+## Model variants
+
+`variant` selects provider-specific reasoning effort. Leaving it empty is the portable default and always works.
+
+A nonempty `variant` is checked before OpenCode starts, against the bundled provider registry (`.opencode/opencode.jsonc`), whenever that registry is authoritative for the selected model. Within the registry, a model falls into one of four states:
+
+- **Absent from the registry** (a built-in OpenCode provider, a custom provider from your own `opencode.json`, or a dynamically discovered model such as an OpenCode Go model that is never listed in `opencode.json`): `variant` passes straight through silently, since the model's absence says nothing about compatibility.
+- **Declared without a `variants` key**: `variant` passes through with a warning that compatibility was not validated.
+- **Declared with an empty `variants` object**: every nonempty `variant` is rejected. All bundled `sakura/*` models are in this group, so `model: sakura/preview/Kimi-K2.7-Code` must run without `variant` — `variant: thinking` fails immediately instead of failing later inside OpenCode or the provider.
+- **Declared with a nonempty `variants` object**: only the listed variants are accepted. Anything else fails with an error naming the model, the requested variant, the supported values, and how to fix the workflow.
+
+Nothing is silently substituted. The registry is treated as authoritative only when `use-bundled-toolkit: true` and nothing else could redefine the selected provider/model or inject a plugin that mutates it; any of the following fall back to silent or warned passthrough as above instead:
+
+- `use-bundled-toolkit: false`;
+- a workflow `OPENCODE_CONFIG`/`OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG_CONTENT` override;
+- a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` that redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former);
+- a nonempty `plugin` array in any of the config sources above, or a populated project/global `.opencode/plugins` directory, since a plugin's `config` hook can mutate provider/model metadata before OpenCode validates it;
+- a workflow-set `XDG_CONFIG_HOME` (the action always installs the bundled registry under `~/.config/opencode`, so any other value points OpenCode's global config search elsewhere);
+- a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there);
+- an `opencode.json`/`opencode.jsonc` in OpenCode's managed config directory (`managedConfigDir()`: `/etc/opencode` on Linux, `/Library/Application Support/opencode` on macOS, `%ProgramData%/opencode` on Windows), which OpenCode loads last with the highest precedence of any config source and which this action cannot clear, including on review-only runs;
+- macOS's `ai.opencode.managed` MDM preference domain, which OpenCode applies after the managed config files;
+- a persisted OpenCode auth state (`auth.json` under `XDG_DATA_HOME`, normally `~/.local/share/opencode`), the precondition for the remote or active-organization configuration an authenticated account can merge after `OPENCODE_CONFIG_CONTENT` — this action cannot inspect that server-side config, so the auth state's presence alone is the signal.
+
+Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there — except the managed config directory, MDM preferences, and persisted auth state above, which OpenCode loads with higher precedence than anything review-only isolation clears (it only resets `$HOME/.config/opencode` and `$HOME/.opencode`).
+
+This check is a best-effort CI preflight, not an exhaustive model of every source OpenCode can merge into its effective configuration. The device-management and account-state sources above are detected by presence only — this action cannot inspect an MDM preference's contents or a remote organization's server-side config, so it treats their mere presence as reason enough to distrust the bundled registry rather than guessing further. If a run with a variant fails unexpectedly despite passing this check, retry with an empty `variant`.
 
 ## Pull request reviews
 

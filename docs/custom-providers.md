@@ -90,6 +90,31 @@ with:
 
 Replace or extend `models` with model IDs available to the Sakura AI Engine account.
 
+Leave the action's `variant` input empty for Sakura models. Sakura AI Engine documents no OpenCode model variants, so each bundled model declares an empty `variants` object in `.opencode/opencode.jsonc` and the action rejects a nonempty `variant` before the run starts:
+
+```yaml
+with:
+  model: sakura/preview/Kimi-K2.7-Code
+  # variant: thinking  # rejected: this model declares no variants
+```
+
+## Variants for custom providers
+
+`variant` validation only applies while the bundled `.opencode/opencode.jsonc` registry is authoritative for the selected model, and only for models actually declared in it. It is not validated whenever:
+
+- the model is absent from that registry entirely — a custom `opencode.json` provider, a built-in OpenCode provider such as `anthropic` or `openai`, or a model discovered dynamically by its provider (never listed in `opencode.json`, such as an OpenCode Go model). `variant` passes through **silently**, since the model's absence says nothing about compatibility;
+- the model is declared in the registry but without a `variants` key. `variant` passes through with a **warning** that compatibility was not validated;
+- `use-bundled-toolkit: false` is set, so the bundled registry is never installed. `variant` passes through with a warning;
+- a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present, or a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former). `variant` passes through with a warning;
+- a nonempty `plugin` array is declared in `OPENCODE_CONFIG_CONTENT` or a repository `opencode.json(c)`/`.opencode/opencode.json(c)`, or a project or global `.opencode/plugins` directory is not empty — OpenCode auto-loads plugins from that directory regardless of config. A plugin's `config` hook can mutate provider/model metadata before OpenCode validates it, so `variant` passes through with a warning;
+- a workflow-set `XDG_CONFIG_HOME` points OpenCode's global config search outside `~/.config/opencode`, the one directory the action installs its bundled registry into. `variant` passes through with a warning;
+- a `~/.config/opencode/opencode.json` or `opencode.jsonc` already existed on the runner before this run (the action only installs its bundled file when the destination is empty, so a reused self-hosted runner can keep an older or externally managed config). `variant` passes through with a warning;
+- OpenCode's managed config directory (`managedConfigDir()`: `/etc/opencode` on Linux, `/Library/Application Support/opencode` on macOS, `%ProgramData%/opencode` on Windows) contains an `opencode.json` or `opencode.jsonc` that redefines the same provider/model or declares a plugin. OpenCode loads this directory last, with the highest precedence of any config source — above even `OPENCODE_CONFIG_CONTENT` — and this action never clears or replaces it, so this check applies even on review-only runs, which otherwise treat the bundled registry as authoritative. `variant` passes through with a warning;
+- macOS applies the `ai.opencode.managed` MDM preference domain after the managed config files. This action cannot inspect that preference's contents, so its mere presence — detected only on macOS — is enough to pass `variant` through with a warning;
+- a persisted OpenCode auth state exists (`auth.json` under `XDG_DATA_HOME`, normally `~/.local/share/opencode`). An authenticated account is the precondition for the remote or active-organization configuration OpenCode can merge after `OPENCODE_CONFIG_CONTENT`; since this action cannot inspect that server-side config, the auth state's presence alone is the signal. Review-only isolation resets `$HOME/.config/opencode` and `$HOME/.opencode` only, so a reused runner's persisted auth state survives it, and this check applies there too. `variant` passes through with a warning.
+
+A passed-through `variant` that the provider rejects surfaces as a provider error rather than a configuration error. If a run with a variant fails in an unclear way, retry with an empty `variant` to confirm whether the variant is the cause.
+
 ## Limitations and security
 
 The bundled `/review-pr` mode installs a fresh trusted OpenCode configuration and disables project and caller-supplied configuration. Custom providers defined in the repository's `opencode.json` are therefore unavailable to `/review-pr`; use a built-in provider for isolated review runs. Providers defined in the bundled toolkit's own `.opencode/opencode.jsonc` are a separate case: that file is reinstalled fresh for every `/review-pr` run, so `sakura/*` models stay selectable there too, provided the workflow step still exposes `SAKURA_AI_ENGINE_API_KEY`.
