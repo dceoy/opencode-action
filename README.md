@@ -114,7 +114,9 @@ Nothing is silently substituted. The registry is treated as authoritative only w
 - a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there);
 - an `opencode.json`/`opencode.jsonc` in OpenCode's managed config directory (`/etc/opencode` by default), which OpenCode loads last with the highest precedence of any config source and which this action cannot clear, including on review-only runs.
 
-Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
+Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there — except OpenCode's managed configuration directory (`managedConfigDir()`, `/etc/opencode` on Linux by default), which OpenCode loads with the highest precedence of any source and which review-only isolation cannot clear because it lives outside `$HOME`.
+
+This check is a best-effort CI preflight, not an exhaustive model of every source OpenCode can merge into its effective configuration. It targets the sources realistic for a GitHub Actions runner (ephemeral or self-hosted); it does not detect enterprise device-management profiles or an interactively authenticated OpenCode account's remote organization config. If a run with a variant fails unexpectedly despite passing this check, retry with an empty `variant`.
 
 ## Pull request reviews
 
