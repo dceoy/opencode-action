@@ -106,6 +106,7 @@ with:
 - the model is declared in the registry but without a `variants` key. `variant` passes through with a **warning** that compatibility was not validated;
 - `use-bundled-toolkit: false` is set, so the bundled registry is never installed. `variant` passes through with a warning;
 - a workflow `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, or `OPENCODE_CONFIG_CONTENT` override is present, or a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former). `variant` passes through with a warning;
+- a nonempty `plugin` array is declared in `OPENCODE_CONFIG_CONTENT` or a repository `opencode.json(c)`/`.opencode/opencode.json(c)`, or a project or global `.opencode/plugins` directory is not empty — OpenCode auto-loads plugins from that directory regardless of config. A plugin's `config` hook can mutate provider/model metadata before OpenCode validates it, so `variant` passes through with a warning;
 - a workflow-set `XDG_CONFIG_HOME` points OpenCode's global config search outside `~/.config/opencode`, the one directory the action installs its bundled registry into. `variant` passes through with a warning;
 - a `~/.config/opencode/opencode.json` or `opencode.jsonc` already existed on the runner before this run (the action only installs its bundled file when the destination is empty, so a reused self-hosted runner can keep an older or externally managed config). `variant` passes through with a warning.
 

@@ -104,7 +104,16 @@ A nonempty `variant` is checked before OpenCode starts, against the bundled prov
 - **Declared with an empty `variants` object**: every nonempty `variant` is rejected. All bundled `sakura/*` models are in this group, so `model: sakura/preview/Kimi-K2.7-Code` must run without `variant` — `variant: thinking` fails immediately instead of failing later inside OpenCode or the provider.
 - **Declared with a nonempty `variants` object**: only the listed variants are accepted. Anything else fails with an error naming the model, the requested variant, the supported values, and how to fix the workflow.
 
-Nothing is silently substituted. The registry is treated as authoritative only when `use-bundled-toolkit: true` and nothing else could redefine the selected provider/model: `use-bundled-toolkit: false`, a workflow `OPENCODE_CONFIG`/`OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG_CONTENT` override, a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` that redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former), a workflow-set `XDG_CONFIG_HOME` (the action always installs the bundled registry under `~/.config/opencode`, so any other value points OpenCode's global config search elsewhere), or a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there) all fall back to silent or warned passthrough as above. Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
+Nothing is silently substituted. The registry is treated as authoritative only when `use-bundled-toolkit: true` and nothing else could redefine the selected provider/model or inject a plugin that mutates it; any of the following fall back to silent or warned passthrough as above instead:
+
+- `use-bundled-toolkit: false`;
+- a workflow `OPENCODE_CONFIG`/`OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG_CONTENT` override;
+- a repository `opencode.json`/`opencode.jsonc` or `.opencode/opencode.json`/`opencode.jsonc` that redefines the same provider/model (OpenCode 1.2.14+ loads the latter after the former);
+- a nonempty `plugin` array in any of the config sources above, or a populated project/global `.opencode/plugins` directory, since a plugin's `config` hook can mutate provider/model metadata before OpenCode validates it;
+- a workflow-set `XDG_CONFIG_HOME` (the action always installs the bundled registry under `~/.config/opencode`, so any other value points OpenCode's global config search elsewhere);
+- a pre-existing `~/.config/opencode/opencode.json`/`opencode.jsonc` on a reused runner (the action only installs its bundled file when nothing already exists there).
+
+Review-only runs (`prompt: /review-pr`) always discard caller and project configuration, so the bundled registry stays authoritative there.
 
 ## Pull request reviews
 

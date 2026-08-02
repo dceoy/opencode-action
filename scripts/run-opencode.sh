@@ -35,7 +35,11 @@ opencode_report_error() {
 # stays authoritative there regardless of what the caller's environment sets.
 # Checks project config OpenCode itself would load with higher precedence
 # than the bundled registry: repository-root opencode.json(c), then
-# .opencode/opencode.json(c) (OpenCode 1.2.14+). Also checks that the bundled
+# .opencode/opencode.json(c) (OpenCode 1.2.14+). Also checks for any plugin
+# that could mutate provider/model metadata via its config hook before
+# OpenCode builds the effective registry: a nonempty "plugin" array in any
+# checked config, or a populated project/global .opencode/plugins directory
+# that OpenCode auto-loads regardless of config. Also checks that the bundled
 # registry actually reaches OpenCode's global config: prepare-opencode-config.sh
 # (opencode_prepare_config) installs it into "${HOME}/.config/opencode" only,
 # and only when nothing already sits at that destination, so a caller-set
@@ -43,7 +47,8 @@ opencode_report_error() {
 # different file authoritative.
 _opencode_variant_override_reason() {
   local provider="${1}" model_id="${2}" bundled_config_file="${3}"
-  local relative project_file default_global_config_dir global_config_dir global_file name
+  local relative project_file project_content
+  local default_global_config_dir global_config_dir global_file name
 
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
@@ -57,23 +62,42 @@ _opencode_variant_override_reason() {
     return 0
   fi
 
-  if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]] \
-    && _opencode_config_defines_model "${OPENCODE_CONFIG_CONTENT}" "${provider}" "${model_id}"; then
-    printf "OPENCODE_CONFIG_CONTENT redefines '%s/%s'" "${provider}" "${model_id}"
-    return 0
+  if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
+    if _opencode_config_defines_model "${OPENCODE_CONFIG_CONTENT}" "${provider}" "${model_id}"; then
+      printf "OPENCODE_CONFIG_CONTENT redefines '%s/%s'" "${provider}" "${model_id}"
+      return 0
+    fi
+    if _opencode_config_declares_plugin "${OPENCODE_CONFIG_CONTENT}"; then
+      printf "OPENCODE_CONFIG_CONTENT declares a plugin, which can mutate provider/model metadata before OpenCode validates it"
+      return 0
+    fi
   fi
 
   # OpenCode 1.2.14+ loads a project's own opencode.json(c) at the repository
   # root, then .opencode/opencode.json(c) after it, so either can redefine
-  # the same provider/model the bundled registry declares.
+  # the same provider/model the bundled registry declares, or declare a
+  # plugin that mutates provider/model metadata before validation.
   for relative in opencode.json opencode.jsonc .opencode/opencode.jsonc .opencode/opencode.json; do
     project_file="${GITHUB_WORKSPACE:-${PWD}}/${relative}"
-    if [[ -f "${project_file}" ]] \
-      && _opencode_config_defines_model "$(cat "${project_file}")" "${provider}" "${model_id}"; then
-      printf "the repository's %s redefines '%s/%s'" "${relative}" "${provider}" "${model_id}"
-      return 0
+    if [[ -f "${project_file}" ]]; then
+      project_content="$(cat "${project_file}")"
+      if _opencode_config_defines_model "${project_content}" "${provider}" "${model_id}"; then
+        printf "the repository's %s redefines '%s/%s'" "${relative}" "${provider}" "${model_id}"
+        return 0
+      fi
+      if _opencode_config_declares_plugin "${project_content}"; then
+        printf "the repository's %s declares a plugin, which can mutate provider/model metadata before OpenCode validates it" \
+          "${relative}"
+        return 0
+      fi
     fi
   done
+
+  # OpenCode auto-loads plugins from this directory regardless of config.
+  if _opencode_dir_has_entries "${GITHUB_WORKSPACE:-${PWD}}/.opencode/plugins"; then
+    printf "the repository's .opencode/plugins directory is not empty, and OpenCode auto-loads plugins from it, which can mutate provider/model metadata before validation"
+    return 0
+  fi
 
   default_global_config_dir="${HOME}/.config"
   global_config_dir="${XDG_CONFIG_HOME:-${default_global_config_dir}}/opencode"
@@ -95,6 +119,14 @@ _opencode_variant_override_reason() {
     fi
   done
 
+  # A pre-existing global plugins directory survives _opencode_copy_missing_config
+  # the same way a pre-existing opencode.json(c) does.
+  if _opencode_dir_has_entries "${global_config_dir}/plugins"; then
+    printf "'%s/plugins' is not empty, and OpenCode auto-loads plugins from it, which can mutate provider/model metadata before validation" \
+      "${global_config_dir}"
+    return 0
+  fi
+
   return 1
 }
 
@@ -108,6 +140,24 @@ _opencode_config_defines_model() {
   rc=$?
   set -e
   return "${rc}"
+}
+
+_opencode_config_declares_plugin() {
+  local content="${1}" json rc
+  json="$(opencode_jsonc_to_json <<< "${content}" 2> /dev/null)" || return 1
+  set +e
+  jq -e '(.plugin // []) | length > 0' <<< "${json}" > /dev/null 2>&1
+  rc=$?
+  set -e
+  return "${rc}"
+}
+
+_opencode_dir_has_entries() {
+  local dir="${1}"
+  local -a entries
+  [[ -d "${dir}" ]] || return 1
+  entries=("${dir}"/*)
+  [[ -e "${entries[0]}" ]]
 }
 
 # Reject a variant the bundled model registry does not declare, before

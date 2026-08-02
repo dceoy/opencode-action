@@ -244,6 +244,100 @@ EOF
   [[ "${output}" == *"repository's .opencode/opencode.jsonc redefines"* ]]
 }
 
+@test "variant validation passes through with a warning when OPENCODE_CONFIG_CONTENT declares a plugin" {
+  # A plugin's config hook can add "variants.thinking" to a bundled model
+  # before OpenCode builds its effective provider registry, so this check
+  # can't see it, but the plugin declaration itself is visible.
+  content='{"plugin":["./my-plugin.js"]}'
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    OPENCODE_CONFIG_CONTENT="${content}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"OPENCODE_CONFIG_CONTENT declares a plugin"* ]]
+}
+
+@test "variant validation ignores OPENCODE_CONFIG_CONTENT with an empty plugin array" {
+  content='{"plugin":[]}'
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    OPENCODE_CONFIG_CONTENT="${content}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
+}
+
+@test "variant validation passes through with a warning when a project opencode.json declares a plugin" {
+  mkdir -p "${fake_workspace}"
+  cat > "${fake_workspace}/opencode.json" << 'EOF'
+{"plugin": ["./my-plugin.js"]}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"repository's opencode.json declares a plugin"* ]]
+}
+
+@test "variant validation passes through with a warning when the project .opencode/plugins directory is not empty" {
+  mkdir -p "${fake_workspace}/.opencode/plugins"
+  touch "${fake_workspace}/.opencode/plugins/my-plugin.js"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *".opencode/plugins directory is not empty"* ]]
+}
+
+@test "variant validation ignores an empty project .opencode/plugins directory" {
+  mkdir -p "${fake_workspace}/.opencode/plugins"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
+}
+
+@test "variant validation passes through with a warning when the global plugins directory is not empty" {
+  mkdir -p "${fake_home}/.config/opencode/plugins"
+  touch "${fake_home}/.config/opencode/plugins/my-plugin.js"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"/plugins' is not empty"* ]]
+}
+
 @test "variant validation still enforces the bundled registry during review-only runs" {
   override='{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{}}}}}'
 
