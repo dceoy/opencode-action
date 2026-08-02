@@ -10,6 +10,11 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${fake_action}/.opencode" "${fake_home}"
+  # Pin XDG_CONFIG_HOME to match fake_home rather than inheriting whatever
+  # the CI runner has set, so _opencode_variant_override_reason's "does
+  # XDG_CONFIG_HOME point outside the installed config directory" check sees
+  # a match by default. Tests exercising that check override it explicitly.
+  export XDG_CONFIG_HOME="${fake_home}/.config"
 }
 
 @test "timeout selection prefers timeout then gtimeout and supports no timeout" {
@@ -217,6 +222,26 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == "::warning::"* ]]
   [[ "${output}" == *"repository's opencode.json redefines"* ]]
+}
+
+@test "variant validation passes through with a warning when a project .opencode/opencode.jsonc redefines the model" {
+  # OpenCode 1.2.14+ loads .opencode/opencode.json(c) after the repository
+  # root opencode.json(c), so a consumer can validly redefine a bundled
+  # model there too, e.g. adding "variants.thinking" to a sakura model.
+  mkdir -p "${fake_workspace}/.opencode"
+  cat > "${fake_workspace}/.opencode/opencode.jsonc" << 'EOF'
+{"provider": {"sakura": {"models": {"preview/Kimi-K2.7-Code": {"variants": {"thinking": {}}}}}}}
+EOF
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"repository's .opencode/opencode.jsonc redefines"* ]]
 }
 
 @test "variant validation still enforces the bundled registry during review-only runs" {

@@ -33,14 +33,17 @@ opencode_report_error() {
 # authoritative. Review-only runs always discard caller/project config before
 # invoking OpenCode (see opencode_configure_run), so the bundled registry
 # stays authoritative there regardless of what the caller's environment sets.
-# Also checks that the bundled registry actually reaches OpenCode's global
-# config: prepare-opencode-config.sh (opencode_prepare_config) installs it
-# into "${HOME}/.config/opencode" only, and only when nothing already sits at
-# that destination, so a caller-set XDG_CONFIG_HOME or a pre-existing config
-# on a reused runner can both leave a different file authoritative.
+# Checks project config OpenCode itself would load with higher precedence
+# than the bundled registry: repository-root opencode.json(c), then
+# .opencode/opencode.json(c) (OpenCode 1.2.14+). Also checks that the bundled
+# registry actually reaches OpenCode's global config: prepare-opencode-config.sh
+# (opencode_prepare_config) installs it into "${HOME}/.config/opencode" only,
+# and only when nothing already sits at that destination, so a caller-set
+# XDG_CONFIG_HOME or a pre-existing config on a reused runner can both leave a
+# different file authoritative.
 _opencode_variant_override_reason() {
   local provider="${1}" model_id="${2}" bundled_config_file="${3}"
-  local name project_file default_global_config_dir global_config_dir global_file
+  local relative project_file default_global_config_dir global_config_dir global_file name
 
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
@@ -60,11 +63,14 @@ _opencode_variant_override_reason() {
     return 0
   fi
 
-  for name in opencode.json opencode.jsonc; do
-    project_file="${GITHUB_WORKSPACE:-${PWD}}/${name}"
+  # OpenCode 1.2.14+ loads a project's own opencode.json(c) at the repository
+  # root, then .opencode/opencode.json(c) after it, so either can redefine
+  # the same provider/model the bundled registry declares.
+  for relative in opencode.json opencode.jsonc .opencode/opencode.jsonc .opencode/opencode.json; do
+    project_file="${GITHUB_WORKSPACE:-${PWD}}/${relative}"
     if [[ -f "${project_file}" ]] \
       && _opencode_config_defines_model "$(cat "${project_file}")" "${provider}" "${model_id}"; then
-      printf "the repository's %s redefines '%s/%s'" "${name}" "${provider}" "${model_id}"
+      printf "the repository's %s redefines '%s/%s'" "${relative}" "${provider}" "${model_id}"
       return 0
     fi
   done
