@@ -33,30 +33,35 @@ opencode_report_error() {
 # authoritative. Review-only runs always discard caller/project config before
 # invoking OpenCode (see opencode_configure_run), so the bundled registry
 # stays authoritative there against every check below except the managed
-# config directory, which OpenCode loads last with higher precedence than
-# any source review-only isolation clears. Checks project config OpenCode
-# itself would load with higher precedence than the bundled registry:
-# repository-root opencode.json(c), then .opencode/opencode.json(c) (OpenCode
-# 1.2.14+). Also checks for any plugin that could mutate provider/model
-# metadata via its config hook before OpenCode builds the effective registry:
-# a nonempty "plugin" array in any checked config, or a populated
-# project/global .opencode/plugins directory that OpenCode auto-loads
-# regardless of config. Also checks that the bundled registry actually
-# reaches OpenCode's global config: prepare-opencode-config.sh
+# config directory, MDM-managed preferences, and persisted auth state, which
+# OpenCode loads with higher precedence than anything review-only isolation
+# clears. Checks project config OpenCode itself would load with higher
+# precedence than the bundled registry: repository-root opencode.json(c),
+# then .opencode/opencode.json(c) (OpenCode 1.2.14+). Also checks for any
+# plugin that could mutate provider/model metadata via its config hook before
+# OpenCode builds the effective registry: a nonempty "plugin" array in any
+# checked config, or a populated project/global .opencode/plugins directory
+# that OpenCode auto-loads regardless of config. Also checks that the bundled
+# registry actually reaches OpenCode's global config: prepare-opencode-config.sh
 # (opencode_prepare_config) installs it into "${HOME}/.config/opencode" only,
 # and only when nothing already sits at that destination, so a caller-set
 # XDG_CONFIG_HOME or a pre-existing config on a reused runner can both leave a
 # different file authoritative. Also checks OpenCode's managed config
-# directory (managedConfigDir(), "/etc/opencode" on Linux by default,
-# overridable for testing via OPENCODE_TEST_MANAGED_CONFIG_DIR), which an
-# admin-controlled opencode.json(c) there overrides every other config
-# source with, including review-only isolation, since that directory sits
-# outside $HOME and nothing in this action clears or replaces it.
+# directory (managedConfigDir(): "/etc/opencode" on Linux, "/Library/Application
+# Support/opencode" on macOS, "%ProgramData%/opencode" on Windows; overridable
+# for testing via OPENCODE_TEST_MANAGED_CONFIG_DIR) and, on macOS, the
+# "ai.opencode.managed" MDM preference domain OpenCode applies after those
+# files -- both outside $HOME, so nothing in this action clears or replaces
+# them. Also checks for a persisted OpenCode auth state under XDG_DATA_HOME,
+# since an authenticated account is the precondition for the remote or
+# active-organization configuration OpenCode can merge after
+# OPENCODE_CONFIG_CONTENT, which this action cannot reach or inspect.
 _opencode_variant_override_reason() {
   local provider="${1}" model_id="${2}" bundled_config_file="${3}"
   local relative project_file project_content
   local default_global_config_dir global_config_dir global_file name
   local managed_config_dir managed_name managed_file managed_content
+  local data_dir
 
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
@@ -67,7 +72,7 @@ _opencode_variant_override_reason() {
   # config source -- above even OPENCODE_CONFIG_CONTENT -- and it is not
   # scoped under $HOME, so review-only isolation (opencode_configure_run)
   # cannot clear it. Check it before the review-only early return below.
-  managed_config_dir="${OPENCODE_TEST_MANAGED_CONFIG_DIR:-/etc/opencode}"
+  managed_config_dir="$(_opencode_managed_config_dir)"
   for managed_name in opencode.json opencode.jsonc; do
     managed_file="${managed_config_dir}/${managed_name}"
     if [[ -f "${managed_file}" ]]; then
@@ -84,6 +89,23 @@ _opencode_variant_override_reason() {
       fi
     fi
   done
+
+  if _opencode_mdm_preference_present; then
+    printf "the host applies macOS MDM-managed OpenCode preferences ('ai.opencode.managed'), which OpenCode loads after managed config files with higher precedence than any source this action controls"
+    return 0
+  fi
+
+  # A persisted auth.json is the precondition for OpenCode merging remote or
+  # active-organization configuration; its contents are account/server-side
+  # state this action cannot reach, so presence alone is the signal. Outside
+  # $HOME/.config and $HOME/.opencode, review-only isolation does not clear
+  # it either.
+  data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencode"
+  if [[ -f "${data_dir}/auth.json" ]]; then
+    printf "a persisted OpenCode auth state exists at '%s', and an authenticated account can merge remote or active-organization configuration that OpenCode loads after OPENCODE_CONFIG_CONTENT" \
+      "${data_dir}/auth.json"
+    return 0
+  fi
 
   [[ "${REVIEW_ONLY:-false}" != "true" ]] || return 1
 
@@ -188,6 +210,42 @@ _opencode_dir_has_entries() {
   [[ -d "${dir}" ]] || return 1
   entries=("${dir}"/*)
   [[ -e "${entries[0]}" ]]
+}
+
+# Resolves the same directory OpenCode's managedConfigDir() does, so
+# admin-controlled config is found regardless of the runner's OS. Override
+# for testing via OPENCODE_TEST_MANAGED_CONFIG_DIR.
+_opencode_managed_config_dir() {
+  if [[ -n "${OPENCODE_TEST_MANAGED_CONFIG_DIR:-}" ]]; then
+    printf '%s' "${OPENCODE_TEST_MANAGED_CONFIG_DIR}"
+    return 0
+  fi
+  case "$(uname -s 2> /dev/null)" in
+    Darwin)
+      printf '%s' "/Library/Application Support/opencode"
+      ;;
+    MINGW* | MSYS* | CYGWIN*)
+      printf '%s' "${ProgramData:-C:/ProgramData}/opencode"
+      ;;
+    *)
+      printf '%s' "/etc/opencode"
+      ;;
+  esac
+}
+
+# True when the host applies macOS's "ai.opencode.managed" MDM preference
+# domain, which OpenCode loads after managedConfigDir()'s files. Its content
+# is enterprise device-management state this action cannot parse, so
+# presence alone is the signal. Override for testing via
+# OPENCODE_TEST_MDM_PREFERENCE_PRESENT.
+_opencode_mdm_preference_present() {
+  if [[ -n "${OPENCODE_TEST_MDM_PREFERENCE_PRESENT:-}" ]]; then
+    [[ "${OPENCODE_TEST_MDM_PREFERENCE_PRESENT}" == "true" ]]
+    return
+  fi
+  [[ "$(uname -s 2> /dev/null)" == "Darwin" ]] || return 1
+  command -v defaults > /dev/null 2>&1 || return 1
+  [[ -n "$(defaults read ai.opencode.managed 2> /dev/null)" ]]
 }
 
 # Reject a variant the bundled model registry does not declare, before

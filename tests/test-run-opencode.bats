@@ -10,11 +10,13 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${fake_action}/.opencode" "${fake_home}"
-  # Pin XDG_CONFIG_HOME to match fake_home rather than inheriting whatever
-  # the CI runner has set, so _opencode_variant_override_reason's "does
-  # XDG_CONFIG_HOME point outside the installed config directory" check sees
-  # a match by default. Tests exercising that check override it explicitly.
+  # Pin XDG_CONFIG_HOME and XDG_DATA_HOME to fake_home rather than inheriting
+  # whatever the CI runner has set (both leaked from the runner env before;
+  # see the XDG_CONFIG_HOME fix), so _opencode_variant_override_reason's
+  # XDG_CONFIG_HOME and persisted-auth-state checks see no override by
+  # default. Tests exercising those checks override them explicitly.
   export XDG_CONFIG_HOME="${fake_home}/.config"
+  export XDG_DATA_HOME="${fake_home}/.local/share"
 }
 
 @test "timeout selection prefers timeout then gtimeout and supports no timeout" {
@@ -397,6 +399,146 @@ EOF
   [ "${status}" -eq 0 ]
   [[ "${output}" == "::warning::"* ]]
   [[ "${output}" == *"managed OpenCode configuration"* ]]
+}
+
+@test "managed config directory resolution mirrors OpenCode's platform-specific managedConfigDir()" {
+  fake_bin="${BATS_TEST_TMPDIR}/uname-bin"
+  mkdir -p "${fake_bin}"
+
+  printf '%s\n' '#!/usr/bin/env bash' 'echo Darwin' > "${fake_bin}/uname"
+  chmod +x "${fake_bin}/uname"
+  run env PATH="${fake_bin}:${PATH}" bash -euo pipefail -c '
+    source "$1"
+    _opencode_managed_config_dir
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "/Library/Application Support/opencode" ]
+
+  printf '%s\n' '#!/usr/bin/env bash' 'echo MINGW64_NT-10.0' > "${fake_bin}/uname"
+  run env PATH="${fake_bin}:${PATH}" ProgramData='C:/ProgramData' bash -euo pipefail -c '
+    source "$1"
+    _opencode_managed_config_dir
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "C:/ProgramData/opencode" ]
+
+  printf '%s\n' '#!/usr/bin/env bash' 'echo Linux' > "${fake_bin}/uname"
+  run env PATH="${fake_bin}:${PATH}" bash -euo pipefail -c '
+    source "$1"
+    _opencode_managed_config_dir
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "/etc/opencode" ]
+
+  run env PATH="${fake_bin}:${PATH}" OPENCODE_TEST_MANAGED_CONFIG_DIR="/custom/dir" bash -euo pipefail -c '
+    source "$1"
+    _opencode_managed_config_dir
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "/custom/dir" ]
+}
+
+@test "MDM preference detection is overridable for testing and defaults to absent on this host" {
+  run bash -euo pipefail -c '
+    source "$1"
+    if _opencode_mdm_preference_present; then echo present; else echo absent; fi
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "absent" ]
+
+  run env OPENCODE_TEST_MDM_PREFERENCE_PRESENT=true bash -euo pipefail -c '
+    source "$1"
+    if _opencode_mdm_preference_present; then echo present; else echo absent; fi
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "present" ]
+
+  run env OPENCODE_TEST_MDM_PREFERENCE_PRESENT=false bash -euo pipefail -c '
+    source "$1"
+    if _opencode_mdm_preference_present; then echo present; else echo absent; fi
+  ' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "absent" ]
+}
+
+@test "variant validation passes through with a warning when macOS MDM-managed OpenCode preferences are present" {
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    OPENCODE_TEST_MDM_PREFERENCE_PRESENT=true \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"ai.opencode.managed"* ]]
+}
+
+@test "variant validation passes through with a warning when a persisted OpenCode auth state exists" {
+  # A logged-in OpenCode account is the precondition for the remote or
+  # active-organization configuration OpenCode can merge after
+  # OPENCODE_CONFIG_CONTENT; this action cannot inspect that server-side
+  # config, so the persisted auth state's mere presence is the signal.
+  mkdir -p "${fake_home}/.local/share/opencode"
+  printf '{}' > "${fake_home}/.local/share/opencode/auth.json"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"auth.json"* ]]
+  [[ "${output}" == *"active-organization"* ]]
+}
+
+@test "variant validation passes through with a warning when a persisted OpenCode auth state exists during review-only runs" {
+  # Review-only isolation (opencode_configure_run) only resets
+  # $HOME/.config/opencode and $HOME/.opencode; it does not clear
+  # XDG_DATA_HOME, so a reused runner's persisted auth state survives it.
+  mkdir -p "${fake_home}/.local/share/opencode"
+  printf '{}' > "${fake_home}/.local/share/opencode/auth.json"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=true GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"auth.json"* ]]
+}
+
+@test "variant validation honors a custom XDG_DATA_HOME when checking for a persisted auth state" {
+  custom_data_home="${BATS_TEST_TMPDIR}/custom-xdg-data"
+  mkdir -p "${custom_data_home}/opencode"
+  printf '{}' > "${custom_data_home}/opencode/auth.json"
+
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    XDG_DATA_HOME="${custom_data_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == "::warning::"* ]]
+  [[ "${output}" == *"${custom_data_home}/opencode/auth.json"* ]]
+}
+
+@test "variant validation still enforces the bundled registry when no auth state or MDM preference is present" {
+  run env USE_BUNDLED_TOOLKIT=true REVIEW_ONLY=false GITHUB_WORKSPACE="${fake_workspace}" HOME="${fake_home}" \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant sakura/preview/Kimi-K2.7-Code thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${bundled_config}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
 }
 
 @test "variant validation still enforces the bundled registry when the installed global config matches it" {
