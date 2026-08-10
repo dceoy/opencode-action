@@ -38,14 +38,24 @@ EOF
   chmod +x "${fake_bin}/gh"
 }
 
+run_trusted_context() {
+  local repository="${1:-octo/repo}" path="${2:-${event_path}}"
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
+    GITHUB_REPOSITORY="${repository}" GITHUB_EVENT_PATH="${path}" \
+    bash -c 'source "$1"; opencode_review_trusted_context' _ "${context_lib}"
+}
+
+assert_trusted_context_rejected() {
+  run_trusted_context "$@"
+  [ "${status}" -ne 0 ]
+}
+
 @test "trusted context accepts a matching event repository and live head" {
   write_event
   write_context
   write_gh_head
 
-  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
-    GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
-    bash -c 'source "$1"; opencode_review_trusted_context' _ "${context_lib}"
+  run_trusted_context
 
   [ "${status}" -eq 0 ]
   [ "${output}" = $'octo/repo\t42\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]
@@ -56,11 +66,7 @@ EOF
   write_context "other/repo"
   write_gh_head
 
-  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
-    GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
-    bash -c 'source "$1"; opencode_review_trusted_context' _ "${context_lib}"
-
-  [ "${status}" -ne 0 ]
+  assert_trusted_context_rejected
 }
 
 @test "trusted context rejects a pull request mismatch" {
@@ -68,11 +74,7 @@ EOF
   write_context
   write_gh_head
 
-  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
-    GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
-    bash -c 'source "$1"; opencode_review_trusted_context' _ "${context_lib}"
-
-  [ "${status}" -ne 0 ]
+  assert_trusted_context_rejected
 }
 
 @test "trusted context rejects a stale live head" {
@@ -80,11 +82,70 @@ EOF
   write_context
   write_gh_head "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
+  assert_trusted_context_rejected
+}
+
+@test "trusted context rejects malformed or unavailable trust inputs" {
+  local context_file="${fake_home}/.config/opencode/review-state/context.json"
+  write_event
+  write_gh_head
+
+  rm -f "${context_file}"
+  assert_trusted_context_rejected
+
+  : >"${context_file}"
+  assert_trusted_context_rejected
+
+  printf '{\n' >"${context_file}"
+  assert_trusted_context_rejected
+
+  jq -n --argjson pr_number 42 --arg head_sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    '{repository: 7, pr_number: $pr_number, head_sha: $head_sha}' >"${context_file}"
+  assert_trusted_context_rejected
+
+  write_context "octo/repo" 0
+  assert_trusted_context_rejected
+
+  write_context "octo/repo" 1.5
+  assert_trusted_context_rejected
+
+  write_context "octo/repo" 42 "not-a-sha"
+  assert_trusted_context_rejected
+
+  write_context
+  assert_trusted_context_rejected "octo/repo" "${fake_home}/missing-event.json"
+
+  cat >"${fake_bin}/gh" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "${fake_bin}/gh"
+  assert_trusted_context_rejected
+}
+
+@test "metadata validates the pinned head with one GitHub read" {
+  local calls="${fake_home}/gh-calls"
+  write_event
+  write_context
+  cat >"${fake_bin}/gh" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'call\n' >>'${calls}'
+if [[ "\$*" == "pr view 42 --repo octo/repo --json number,title,body,baseRefName,headRefName,headRefOid,files,url" ]]; then
+  printf '%s\n' '{"number":42,"headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "${fake_bin}/gh"
+
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
     GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
-    bash -c 'source "$1"; opencode_review_trusted_context' _ "${context_lib}"
+    bash "${gh_helper}" metadata
 
-  [ "${status}" -ne 0 ]
+  [ "${status}" -eq 0 ]
+  [ "$(wc -l <"${calls}")" -eq 1 ]
+  jq -e '.headRefOid == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' <<<"${output}" >/dev/null
 }
 
 @test "both review helpers source the canonical trusted context implementation" {
@@ -118,6 +179,27 @@ EOF
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
     GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
     bash -c 'cd "$1"; bash "$2" validate' _ "${checkout}" "${installed_dir}/review-pr-gh.sh"
+
+  [ "${status}" -eq 0 ]
+  [ ! -e "${marker}" ]
+}
+
+@test "installed submission helper ignores repository-controlled trusted context files" {
+  local installed_dir checkout marker
+  installed_dir="${fake_home}/.config/opencode/scripts"
+  checkout="${fake_home}/checkout"
+  marker="${fake_home}/repository-helper-ran"
+  mkdir -p "${installed_dir}" "${checkout}/.opencode/scripts"
+  cp "${submit_helper}" "${installed_dir}/review-pr-submit.sh"
+  cp "${context_lib}" "${installed_dir}/review-pr-context.sh"
+  cat >"${checkout}/.opencode/scripts/review-pr-context.sh" <<EOF
+touch '${marker}'
+opencode_review_trusted_context() { return 0; }
+opencode_review_event_pr_number() { printf '42'; }
+EOF
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
+    bash -c 'cd "$1"; bash "$2" prepare' _ "${checkout}" "${installed_dir}/review-pr-submit.sh"
 
   [ "${status}" -eq 0 ]
   [ ! -e "${marker}" ]
