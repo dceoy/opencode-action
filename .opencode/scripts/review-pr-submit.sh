@@ -144,7 +144,8 @@ case "${operation}" in
     trap 'rm -f "${request}"' EXIT
     jq --arg commit_id "${head_sha}" '. + {commit_id: $commit_id, event: "COMMENT"}' <<< "${current_payload}" > "${request}"
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
-    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
+    opencode_review_verify_head "${repo}" "${pr_number}" "${head_sha}" \
+      || fail "Pinned PR context is unavailable or the PR head changed during token verification."
     response="$(gh api --method POST "repos/${repo}/pulls/${pr_number}/reviews" --input "${request}")"
     review_id="$(jq -r '.id // empty' <<< "${response}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Review ID was not returned."
@@ -155,14 +156,15 @@ case "${operation}" in
     load_token_lib
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
     context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
-    IFS=$'\t' read -r repo pr_number _ <<< "${context}"
+    IFS=$'\t' read -r repo pr_number head_sha <<< "${context}"
     jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" > /dev/null \
       || fail "Invalid review update payload."
     [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
     review_id="$(cat "${review_id_file}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Recorded review ID is invalid."
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
-    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
+    opencode_review_verify_head "${repo}" "${pr_number}" "${head_sha}" \
+      || fail "Pinned PR context is unavailable or the PR head changed during token verification."
     gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}" \
       || fail "Failed to submit the review update."
     ;;
