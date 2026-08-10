@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -90,7 +91,8 @@ EOF
   grep -Fq 'review-pr-context.sh' "${gh_helper}"
   grep -Fq 'review-pr-context.sh' "${submit_helper}"
 
-  ! grep -Eq '^(event_pr_number|read_context|trusted_context)\(\)' "${gh_helper}" "${submit_helper}"
+  run grep -Eq '^(event_pr_number|read_context|trusted_context)\(\)' "${gh_helper}" "${submit_helper}"
+  [ "${status}" -eq 1 ]
 }
 
 @test "installed read helper ignores repository-controlled trusted context files" {
