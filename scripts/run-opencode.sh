@@ -35,6 +35,15 @@ _opencode_dir_has_entries() (
   ((${#entries[@]} > 0))
 )
 
+_opencode_data_has_account_db() (
+  local data_dir="${1}"
+  local -a dbs
+  [[ -d "${data_dir}" ]] || return 1
+  shopt -s nullglob
+  dbs=("${data_dir}"/opencode.db "${data_dir}"/opencode-*.db)
+  ((${#dbs[@]} > 0))
+)
+
 # Print a reason and return success when the bundled model registry is not a
 # deterministic authority for variant metadata. Normal runs deliberately do
 # not inspect or enumerate OpenCode project/global/plugin configuration: they
@@ -78,7 +87,16 @@ _opencode_variant_passthrough_reason() {
     return 0
   fi
 
+  if [[ -n "${OPENCODE_DB:-}" ]]; then
+    printf "OPENCODE_DB is set, so persisted OpenCode account or active-organization state may affect model metadata"
+    return 0
+  fi
+
   data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencode"
+  if _opencode_data_has_account_db "${data_dir}"; then
+    printf "a persisted OpenCode account database exists under '%s', so active-organization configuration may affect model metadata" "${data_dir}"
+    return 0
+  fi
   if [[ -f "${data_dir}/auth.json" ]]; then
     printf "persisted OpenCode authentication exists at '%s', so remote or organization configuration may affect model metadata" "${data_dir}/auth.json"
     return 0
