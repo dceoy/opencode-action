@@ -26,12 +26,23 @@ opencode_report_error() {
   _opencode_report_annotation error "${1}"
 }
 
+_opencode_dir_has_entries() (
+  local dir="${1}"
+  local -a entries
+  [[ -d "${dir}" ]] || return 1
+  shopt -s nullglob dotglob
+  entries=("${dir}"/*)
+  ((${#entries[@]} > 0))
+)
+
 # Print a reason and return success when the bundled model registry is not a
 # deterministic authority for variant metadata. Normal runs deliberately do
 # not inspect or enumerate OpenCode project/global/plugin configuration: they
-# pass variants through. Review-only runs can validate only after the action's
-# fresh isolation on a GitHub-hosted runner has removed caller/project state.
+# pass variants through. Review-only runs validate only when the action's fresh
+# GitHub-hosted isolation leaves no known higher-trust OpenCode state behind.
 _opencode_variant_passthrough_reason() {
+  local data_dir managed_config_dir runner_os
+
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
     return 0
@@ -44,6 +55,42 @@ _opencode_variant_passthrough_reason() {
     printf "the review is not running in the action's isolated GitHub-hosted environment"
     return 0
   fi
+
+  runner_os="${RUNNER_OS:-$(uname -s 2> /dev/null || true)}"
+  case "${runner_os}" in
+    Linux)
+      managed_config_dir="/etc/opencode"
+      ;;
+    macOS | Darwin)
+      managed_config_dir="/Library/Application Support/opencode"
+      ;;
+    Windows | MINGW* | MSYS* | CYGWIN*)
+      managed_config_dir="${ProgramData:-C:/ProgramData}/opencode"
+      ;;
+    *)
+      printf "the runner OS '%s' is not recognized, so managed OpenCode state cannot be ruled out" "${runner_os:-unknown}"
+      return 0
+      ;;
+  esac
+
+  if _opencode_dir_has_entries "${managed_config_dir}"; then
+    printf "managed OpenCode state exists at '%s' outside the action's review isolation" "${managed_config_dir}"
+    return 0
+  fi
+
+  data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencode"
+  if [[ -f "${data_dir}/auth.json" ]]; then
+    printf "persisted OpenCode authentication exists at '%s', so remote or organization configuration may affect model metadata" "${data_dir}/auth.json"
+    return 0
+  fi
+
+  if [[ "${runner_os}" == "macOS" || "${runner_os}" == "Darwin" ]]; then
+    if command -v defaults > /dev/null 2>&1 && defaults read ai.opencode.managed > /dev/null 2>&1; then
+      printf "macOS MDM-managed OpenCode preferences are present outside the action's review isolation"
+      return 0
+    fi
+  fi
+
   return 1
 }
 
