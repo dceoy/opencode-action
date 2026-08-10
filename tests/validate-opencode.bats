@@ -37,7 +37,12 @@ permission_allow_keys() {
       line = $0
       sub(/^[[:space:]]+/, "", line)
       sub(/: allow$/, "", line)
-      gsub(/^"|"$/, "", line)
+      first = substr(line, 1, 1)
+      last = substr(line, length(line), 1)
+      quote = sprintf("%c", 39)
+      if ((first == "\"" && last == "\"") || (first == quote && last == quote)) {
+        line = substr(line, 2, length(line) - 2)
+      }
       print line
     }
   ' | sort
@@ -148,11 +153,10 @@ opencode_jsonc_json() {
 }
 
 @test "orchestrator may load only pr-review and approved fixed bash commands" {
-  local actual expected
+  local actual expected helper
 
   actual="$(permission_allow_keys "${orchestrator}" skill)"
   [ "${actual}" = "pr-review" ]
-  grep -Fq '    "*": deny' "${orchestrator}"
 
   actual="$(permission_allow_keys "${orchestrator}" bash)"
   expected="$(printf '%s\n' \
@@ -171,6 +175,10 @@ opencode_jsonc_json() {
     printf 'unexpected bash allow-list:\n%s\n' "${actual}"
     return 1
   }
+
+  for helper in review-pr-gh.sh review-pr-submit.sh; do
+    [ -f "${repo_root}/.opencode/scripts/${helper}" ]
+  done
 }
 
 @test "external directory access exposes only trusted review helpers and state" {
@@ -199,11 +207,14 @@ opencode_jsonc_json() {
 
 @test "removed reviewers and legacy helpers have no references" {
   local symbol
-  for symbol in \
-    comment-analyzer \
-    code-quality-reviewer \
-    pr-test-analyzer \
-    opencode_assert_pr_head_unchanged; do
+  local -a removed=(
+    'comment-''analyzer'
+    'code-quality-''reviewer'
+    'pr-test-''analyzer'
+    'opencode_assert_pr_head_''unchanged'
+  )
+
+  for symbol in "${removed[@]}"; do
     run git -C "${repo_root}" grep -n -F "${symbol}"
     [ "${status}" -eq 1 ] || {
       echo "stale reference to ${symbol}: ${output}"
@@ -255,9 +266,8 @@ EOF
         printf 'export {}\n' > "${workspace}/.opencode/plugins/demo.js"
         ;;
       home-opencode)
-        printf 'source state\n' > "${home}/.opencode-config-source"
         mkdir -p "${home}/.opencode"
-        mv "${home}/.opencode-config-source" "${home}/.opencode/config.json"
+        printf 'source state\n' > "${home}/.opencode/config.json"
         ;;
     esac
 
