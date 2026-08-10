@@ -5,7 +5,6 @@ fail() {
   echo "::error::$*" >&2
   exit 1
 }
-
 state_dir="${HOME}/.config/opencode/review-state"
 context_file="${state_dir}/context.json"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -40,24 +39,24 @@ case "${operation}" in
     fi
     [[ "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]] || fail "Trusted PR head SHA is unavailable."
     jq -n --arg repository "${repo}" --arg pr_number "${number}" --arg head_sha "${head_sha}" \
-      '{repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}' >"${context_file}"
+      '{repository: $repository, pr_number: ($pr_number | tonumber), head_sha: $head_sha}' > "${context_file}"
     chmod 600 "${context_file}"
     cat "${context_file}"
     ;;
   metadata)
     trusted_context="$(opencode_review_trusted_context)" ||
       fail "Pinned review context is unavailable or invalid, or the PR head changed."
-    IFS=$'\t' read -r repo number _ <<<"${trusted_context}"
+    IFS=$'\t' read -r repo number _ <<< "${trusted_context}"
     exec gh pr view "${number}" --repo "${repo}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
     ;;
   diff)
     trusted_context="$(opencode_review_trusted_context)" ||
       fail "Pinned review context is unavailable or invalid, or the PR head changed."
-    IFS=$'\t' read -r repo number _ <<<"${trusted_context}"
+    IFS=$'\t' read -r repo number _ <<< "${trusted_context}"
     exec gh pr diff "${number}" --repo "${repo}"
     ;;
   validate)
-    opencode_review_trusted_context >/dev/null ||
+    opencode_review_trusted_context > /dev/null ||
       fail "Pinned review context is unavailable or invalid, or the PR head changed."
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
