@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-# shellcheck disable=SC2016
 # Validate .opencode/ agent and skill frontmatter, pr-review routing and
 # references, release examples, opencode.jsonc parsing, and the runtime
 # read-only review permission boundary.
@@ -44,7 +43,7 @@ frontmatter() {
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
     for key in "${required_keys[@]}"; do
-      grep -qE "^${key}:" <<<"${fm}" || missing+=("${f}: missing '${key}'")
+      grep -qE "^${key}:" <<< "${fm}" || missing+=("${f}: missing '${key}'")
     done
   done < <(agent_files)
 
@@ -58,7 +57,7 @@ frontmatter() {
   local f fm name base mismatches=()
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
-    name="$(grep -E '^name:' <<<"${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
+    name="$(grep -E '^name:' <<< "${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
     base="$(basename "${f}" .md)"
     [ "${name}" = "${base}" ] || mismatches+=("${f}: name '${name}' != filename '${base}'")
   done < <(agent_files)
@@ -73,8 +72,8 @@ frontmatter() {
   local fm name description
 
   fm="$(frontmatter "${review_pr_skill}")"
-  name="$(grep -E '^name:' <<<"${fm}" | sed -E 's/^name:[[:space:]]*//')"
-  description="$(grep -E '^description:' <<<"${fm}" | sed -E 's/^description:[[:space:]]*//')"
+  name="$(grep -E '^name:' <<< "${fm}" | sed -E 's/^name:[[:space:]]*//')"
+  description="$(grep -E '^description:' <<< "${fm}" | sed -E 's/^description:[[:space:]]*//')"
 
   [ "${name}" = "pr-review" ]
   [ -n "${description}" ]
@@ -103,6 +102,7 @@ frontmatter() {
 @test "review-pr default selection uses five core reviewers for all documented dimensions" {
   local reviewer
 
+  # shellcheck disable=SC2016
   grep -Fq 'the core reviewers `code-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, and `security-code-reviewer`' "${review_pr_skill}"
   grep -Fq 'The five core reviewers still cover the six documented default dimensions' "${review_pr_skill}"
   grep -Fq 'include specialty reviewers when the supplied diff is relevant' "${review_pr_skill}"
@@ -118,10 +118,15 @@ frontmatter() {
 }
 
 @test "review-pr explicit core aspects force one canonical reviewer each" {
+  # shellcheck disable=SC2016
   grep -Fq -- '- `code` or `quality`: `code-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq -- '- `performance`: `performance-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq -- '- `security`: `security-code-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq -- '- `tests` or `coverage`: `test-coverage-reviewer`' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq -- '- `docs` or `documentation`: `documentation-accuracy-reviewer`' "${review_pr_skill}"
   grep -Fq 'Requested aspects always force their mapped reviewers.' "${review_pr_skill}"
 }
@@ -130,6 +135,7 @@ frontmatter() {
   grep -Fq 'classify changed files and individual diff hunks by concern' "${review_pr_skill}"
   grep -Fq 'Build a separate, minimal Task request for every selected reviewer.' "${review_pr_skill}"
   grep -Fq 'Include only its relevant files, diff hunks, and containing-function source context' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq '`code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents.' "${review_pr_skill}"
 }
 
@@ -184,7 +190,9 @@ frontmatter() {
 }
 
 @test "review-pr local fallback is limited to a missing trusted PR number" {
+  # shellcheck disable=SC2016
   grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_skill}"
+  # shellcheck disable=SC2016
   grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_skill}"
 }
 
@@ -206,11 +214,12 @@ frontmatter() {
   local code_reviewer="${agents_dir}/code-reviewer.md"
 
   grep -Fq 'reported line is not itself a head-side changed line' "${code_reviewer}"
+  # shellcheck disable=SC2016
   grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_skill}"
 }
 
 opencode_jsonc_json() {
-  opencode_jsonc_to_json <"${opencode_jsonc}"
+  opencode_jsonc_to_json < "${opencode_jsonc}"
 }
 
 @test "external directory allow-list exposes only invoked review helpers and payload state" {
@@ -225,9 +234,9 @@ opencode_jsonc_json() {
 
   mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)
   expected_patterns=(
-    '$HOME/.config/opencode/review-state/*'
-    '$HOME/.config/opencode/scripts/review-pr-gh.sh'
-    '$HOME/.config/opencode/scripts/review-pr-submit.sh'
+    "\$HOME/.config/opencode/review-state/*"
+    "\$HOME/.config/opencode/scripts/review-pr-gh.sh"
+    "\$HOME/.config/opencode/scripts/review-pr-submit.sh"
   )
   mapfile -t expected_patterns < <(printf '%s\n' "${expected_patterns[@]}" | sort)
 
@@ -243,7 +252,7 @@ opencode_jsonc_json() {
   local negative_status negative_output negative_exists
   local model_config
 
-  command -v opencode >/dev/null || {
+  command -v opencode > /dev/null || {
     echo "opencode is required for the runtime permission regression"
     return 1
   }
