@@ -40,7 +40,7 @@ _opencode_data_has_account_db() (
   local -a dbs
   [[ -d "${data_dir}" ]] || return 1
   shopt -s nullglob
-  dbs=("${data_dir}"/opencode.db "${data_dir}"/opencode-*.db)
+  dbs=("${data_dir}"/opencode*.db)
   ((${#dbs[@]} > 0))
 )
 
