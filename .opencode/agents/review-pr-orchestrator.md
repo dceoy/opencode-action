@@ -46,7 +46,6 @@ permission:
     security-code-reviewer: allow
     test-coverage-reviewer: allow
     documentation-accuracy-reviewer: allow
-    comment-analyzer: allow
     silent-failure-hunter: allow
     type-design-analyzer: allow
     code-simplifier: allow
