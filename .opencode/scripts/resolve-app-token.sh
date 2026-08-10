@@ -31,7 +31,7 @@ opencode_decode_extraheader_token() {
   else
     return 1
   fi
-  decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null)" || decoded="$(printf '%s' "${encoded}" | base64 -D 2>/dev/null)" || return 1
+  decoded="$(printf '%s' "${encoded}" | base64 --decode 2> /dev/null)" || decoded="$(printf '%s' "${encoded}" | base64 -D 2> /dev/null)" || return 1
   case "${decoded}" in
     x-access-token:?*)
       printf '%s' "${decoded#x-access-token:}"
@@ -95,12 +95,12 @@ opencode_resolve_app_token_candidates() {
   local value line key val rest token host
 
   {
-    value="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
+    value="$(git config --local --get http.https://github.com/.extraheader 2> /dev/null || true)"
     if token="$(opencode_decode_extraheader_token "${value}")"; then
       printf '%s\n' "${token}"
     fi
 
-    value="$(git config --get-urlmatch http.extraheader https://github.com/ 2>/dev/null || true)"
+    value="$(git config --get-urlmatch http.extraheader https://github.com/ 2> /dev/null || true)"
     if token="$(opencode_decode_extraheader_token "${value}")"; then
       printf '%s\n' "${token}"
     fi
@@ -114,7 +114,7 @@ opencode_resolve_app_token_candidates() {
       if token="$(opencode_decode_extraheader_token "${val}")"; then
         printf '%s\n' "${token}"
       fi
-    done < <(git config --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
+    done < <(git config --get-regexp 'http\..*\.extraheader' 2> /dev/null || true)
 
     while IFS=$'\t' read -r _ rest; do
       [[ -z "${rest}" ]] && continue
@@ -125,7 +125,7 @@ opencode_resolve_app_token_candidates() {
       if token="$(opencode_decode_extraheader_token "${val}")"; then
         printf '%s\n' "${token}"
       fi
-    done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
+    done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2> /dev/null || true)
   } | awk '!seen[$0]++'
 }
 
@@ -179,34 +179,34 @@ opencode_verify_app_token_identity() {
   local probe_response probe_id probe_login probe_stderr probe_rc
 
   [[ -n "${repo}" && -n "${pr_number}" && -n "${token}" ]] || return 1
-  command -v gh >/dev/null 2>&1 || return 1
-  command -v jq >/dev/null 2>&1 || return 1
+  command -v gh > /dev/null 2>&1 || return 1
+  command -v jq > /dev/null 2>&1 || return 1
 
   probe_stderr="$(mktemp)"
   probe_response="$(
     printf '{}' | GH_TOKEN="${token}" GITHUB_TOKEN="${token}" gh api \
       --method POST \
       "repos/${repo}/pulls/${pr_number}/reviews" \
-      --input - 2>"${probe_stderr}"
+      --input - 2> "${probe_stderr}"
   )"
   probe_rc=$?
   if [[ "${probe_rc}" -ne 0 ]]; then
     if [[ -s "${probe_stderr}" ]]; then
-      echo "::warning::Identity-verification probe request failed for a candidate token (this is a transient/API error, not necessarily an identity mismatch): $(tr '\n' ' ' <"${probe_stderr}")" >&2
+      echo "::warning::Identity-verification probe request failed for a candidate token (this is a transient/API error, not necessarily an identity mismatch): $(tr '\n' ' ' < "${probe_stderr}")" >&2
     fi
     rm -f "${probe_stderr}"
     return 1
   fi
   rm -f "${probe_stderr}"
 
-  probe_id="$(jq -r '.id // empty' <<<"${probe_response}" 2>/dev/null)"
-  probe_login="$(jq -r '.user.login // empty' <<<"${probe_response}" 2>/dev/null)"
+  probe_id="$(jq -r '.id // empty' <<< "${probe_response}" 2> /dev/null)"
+  probe_login="$(jq -r '.user.login // empty' <<< "${probe_response}" 2> /dev/null)"
 
   if [[ -n "${probe_id}" ]]; then
     GH_TOKEN="${token}" GITHUB_TOKEN="${token}" gh api \
       --method DELETE \
       "repos/${repo}/pulls/${pr_number}/reviews/${probe_id}" \
-      >/dev/null 2>&1 \
+      > /dev/null 2>&1 \
       || echo "::warning::Failed to delete the throwaway identity-verification pending review (id ${probe_id}); it is never submitted and is only visible to the token's own author, so it is safe to ignore or delete manually." >&2
   fi
 
