@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016
 # Validate stable OpenCode agent, routing, permission, and runtime contracts.
 
 setup() {
@@ -22,6 +23,11 @@ agent_files() {
 
 frontmatter() {
   awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {exit} f' "$1"
+}
+
+frontmatter_has_key() {
+  local file="${1}" key="${2}"
+  frontmatter "${file}" | grep -qE "^${key}:"
 }
 
 frontmatter_value() {
@@ -74,7 +80,7 @@ opencode_jsonc_json() {
   local f key name base missing=()
   while IFS= read -r f; do
     for key in "${required_keys[@]}"; do
-      [ -n "$(frontmatter_value "${f}" "${key}")" ] || missing+=("${f}: missing ${key}")
+      frontmatter_has_key "${f}" "${key}" || missing+=("${f}: missing ${key}")
     done
     name="$(frontmatter_value "${f}" name)"
     base="$(basename "${f}" .md)"
