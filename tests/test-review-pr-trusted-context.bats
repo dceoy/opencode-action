@@ -112,9 +112,19 @@ assert_trusted_context_rejected() {
   write_context "octo/repo" 42 "not-a-sha"
   assert_trusted_context_rejected
 
+  write_context "octo/repo" 42 "abcdef"
+  assert_trusted_context_rejected
+
+  write_context "octo/repo" 42 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  assert_trusted_context_rejected
+
   write_context
   assert_trusted_context_rejected "octo/repo" "${fake_home}/missing-event.json"
 
+  printf '{\n' >"${event_path}"
+  assert_trusted_context_rejected
+
+  write_event
   cat >"${fake_bin}/gh" <<'EOF'
 #!/usr/bin/env bash
 exit 1
