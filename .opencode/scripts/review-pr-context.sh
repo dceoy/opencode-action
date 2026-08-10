@@ -11,8 +11,8 @@ opencode_review_event_pr_number() {
   printf '%s' "${number}"
 }
 
-opencode_review_trusted_context() {
-  local state_dir context_file repo pr_number head_sha event_pr current_head
+opencode_review_pinned_context() {
+  local state_dir context_file repo pr_number head_sha event_pr
 
   state_dir="${HOME}/.config/opencode/review-state"
   context_file="${state_dir}/context.json"
@@ -28,8 +28,27 @@ opencode_review_trusted_context() {
   event_pr="$(opencode_review_event_pr_number)" || return 1
   [[ "${event_pr}" == "${pr_number}" ]] || return 1
 
+  printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
+}
+
+opencode_review_verify_head() {
+  local repo="${1:-}" pr_number="${2:-}" head_sha="${3:-}" current_head
+
+  [[ "$#" -eq 3 ]] || return 1
+  [[ "${repo}" =~ ^[^/]+/[^/]+$ ]] || return 1
+  [[ "${pr_number}" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "${head_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]] || return 1
+
   current_head="$(gh pr view "${pr_number}" --repo "${repo}" --json headRefOid --jq .headRefOid)" || return 1
-  [[ "${current_head}" == "${head_sha}" ]] || return 1
+  [[ "${current_head}" == "${head_sha}" ]]
+}
+
+opencode_review_trusted_context() {
+  local context repo pr_number head_sha
+
+  context="$(opencode_review_pinned_context)" || return 1
+  IFS=$'\t' read -r repo pr_number head_sha <<< "${context}"
+  opencode_review_verify_head "${repo}" "${pr_number}" "${head_sha}" || return 1
 
   printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
 }
