@@ -7,6 +7,11 @@ fail() {
 }
 state_dir="${HOME}/.config/opencode/review-state"
 context_file="${state_dir}/context.json"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+trusted_context_lib="${script_dir}/review-pr-context.sh"
+[[ -f "${trusted_context_lib}" ]] || fail "Trusted review context helper is unavailable."
+# shellcheck source=/dev/null
+source "${trusted_context_lib}"
 
 load_read_token() {
   local opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
@@ -17,27 +22,6 @@ load_read_token() {
   fi
 }
 
-event_pr_number() {
-  local event_path="${GITHUB_EVENT_PATH:-}" number
-  [[ -f "${event_path}" ]] || return 1
-  number="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
-  [[ "${number}" =~ ^[1-9][0-9]*$ ]] || return 1
-  printf '%s' "${number}"
-}
-
-read_context() {
-  local pinned_repo pinned_number pinned_head current_head
-  [[ -s "${context_file}" ]] || fail "Pinned review context is unavailable."
-  pinned_repo="$(jq -r '.repository' "${context_file}")"
-  pinned_number="$(jq -r '.pr_number' "${context_file}")"
-  pinned_head="$(jq -r '.head_sha' "${context_file}")"
-  [[ "${pinned_repo}" == "${GITHUB_REPOSITORY:-}" ]] || fail "Pinned repository no longer matches the event."
-  [[ "${pinned_number}" == "$(event_pr_number)" ]] || fail "Pinned PR number no longer matches the event."
-  current_head="$(gh pr view "${pinned_number}" --repo "${pinned_repo}" --json headRefOid --jq .headRefOid)"
-  [[ "${current_head}" == "${pinned_head}" ]] || fail "PR head changed after review context was pinned."
-  printf '%s\t%s\t%s\n' "${pinned_repo}" "${pinned_number}" "${pinned_head}"
-}
-
 operation="${1:-}"
 [[ "$#" -eq 1 ]] || fail "Review helper operations take exactly one operation name and no additional arguments."
 load_read_token
@@ -46,7 +30,7 @@ case "${operation}" in
   context)
     [[ -d "${state_dir}" && ! -s "${context_file}" ]] || fail "Run prepare exactly once before pinning context."
     repo="${GITHUB_REPOSITORY:-}"
-    number="$(event_pr_number)" || fail "Trusted pull request number is unavailable."
+    number="$(opencode_review_event_pr_number)" || fail "Trusted pull request number is unavailable."
     [[ "${repo}" =~ ^[^/]+/[^/]+$ ]] || fail "Trusted repository is unavailable."
     event_path="${GITHUB_EVENT_PATH:-}"
     head_sha="$(jq -r '.pull_request.head.sha // empty' "${event_path}")"
@@ -60,15 +44,25 @@ case "${operation}" in
     cat "${context_file}"
     ;;
   metadata)
-    IFS=$'\t' read -r repo number _ < <(read_context)
-    exec gh pr view "${number}" --repo "${repo}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url
+    pinned_context="$(opencode_review_pinned_context)" ||
+      fail "Pinned review context is unavailable or invalid."
+    IFS=$'\t' read -r repo number head_sha <<< "${pinned_context}"
+    metadata="$(gh pr view "${number}" --repo "${repo}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url)" ||
+      fail "Failed to read pull request metadata."
+    metadata_head="$(jq -er '.headRefOid | select(type == "string")' <<< "${metadata}")" ||
+      fail "Pull request metadata did not include a valid head SHA."
+    [[ "${metadata_head}" == "${head_sha}" ]] || fail "Pinned PR head changed."
+    printf '%s\n' "${metadata}"
     ;;
   diff)
-    IFS=$'\t' read -r repo number _ < <(read_context)
+    trusted_context="$(opencode_review_trusted_context)" ||
+      fail "Pinned review context is unavailable or invalid, or the PR head changed."
+    IFS=$'\t' read -r repo number _ <<< "${trusted_context}"
     exec gh pr diff "${number}" --repo "${repo}"
     ;;
   validate)
-    read_context > /dev/null
+    opencode_review_trusted_context > /dev/null ||
+      fail "Pinned review context is unavailable or invalid, or the PR head changed."
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
 esac

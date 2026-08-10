@@ -32,6 +32,7 @@ opencode_prepare_config() {
   local action_path="${1}" review_only="${2:-false}" config_dir helper
   local -a required_helpers=(
     resolve-app-token.sh
+    review-pr-context.sh
     review-pr-gh.sh
     review-pr-submit.sh
   )

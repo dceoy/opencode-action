@@ -7,7 +7,6 @@ permission:
   "*": deny
   external_directory:
     "*": deny
-    "$HOME/.config/opencode/scripts/resolve-app-token.sh": allow
     "$HOME/.config/opencode/scripts/review-pr-submit.sh": allow
     "$HOME/.config/opencode/scripts/review-pr-gh.sh": allow
     "$HOME/.config/opencode/review-state/*": allow
@@ -43,11 +42,9 @@ permission:
   task:
     "*": deny
     code-reviewer: allow
-    code-quality-reviewer: allow
     performance-reviewer: allow
     security-code-reviewer: allow
     test-coverage-reviewer: allow
-    pr-test-analyzer: allow
     documentation-accuracy-reviewer: allow
     comment-analyzer: allow
     silent-failure-hunter: allow

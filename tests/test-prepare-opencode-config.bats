@@ -9,6 +9,7 @@ setup() {
   mkdir -p "${fake_action}/.opencode/scripts" "${fake_home}"
   printf '%s\n' bundled > "${fake_action}/.opencode/bundled.txt"
   printf '%s\n' resolver > "${fake_action}/.opencode/scripts/resolve-app-token.sh"
+  printf '%s\n' context > "${fake_action}/.opencode/scripts/review-pr-context.sh"
   printf '%s\n' github > "${fake_action}/.opencode/scripts/review-pr-gh.sh"
   printf '%s\n' submit > "${fake_action}/.opencode/scripts/review-pr-submit.sh"
 }
@@ -30,6 +31,7 @@ setup() {
   [ -f "${fake_home}/.config/opencode/bundled.txt" ]
   [ ! -e "${fake_home}/.config/opencode/old.txt" ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/resolve-app-token.sh")" = resolver ]
+  [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-context.sh")" = context ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-gh.sh")" = github ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-submit.sh")" = submit ]
   [ ! -e "${fake_home}/.opencode/bin" ]
@@ -75,6 +77,7 @@ setup() {
   mkdir -p "${fake_home}/.config/opencode/scripts"
   printf '%s\n' keep > "${fake_home}/.config/opencode/keep.txt"
   printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh"
+  printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/review-pr-context.sh"
   printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/review-pr-gh.sh"
   printf '%s\n' stale > "${fake_home}/.config/opencode/scripts/review-pr-submit.sh"
 
@@ -87,6 +90,7 @@ setup() {
   [ "$(cat "${fake_home}/.config/opencode/keep.txt")" = keep ]
   [ -f "${fake_home}/.config/opencode/bundled.txt" ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/resolve-app-token.sh")" = resolver ]
+  [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-context.sh")" = context ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-gh.sh")" = github ]
   [ "$(cat "${fake_home}/.config/opencode/scripts/review-pr-submit.sh")" = submit ]
   [ ! -e "${fake_home}/.config/opencode/scripts/opencode-action" ]
@@ -172,6 +176,7 @@ setup() {
   local helper
   local -a required_helpers=(
     resolve-app-token.sh
+    review-pr-context.sh
     review-pr-gh.sh
     review-pr-submit.sh
   )

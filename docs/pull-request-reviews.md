@@ -15,7 +15,7 @@ permissions:
   id-token: write
 steps:
   - name: Run OpenCode review
-    uses: dceoy/opencode-action@aa0903dd64b04afeb942c067e69d47a3b580ccd1 # v0.6.2
+    uses: dceoy/opencode-action@da47df8f9d60c12de7b76dc1ca37633b147f0241 # v0.6.4
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GITHUB_TOKEN: ${{ github.token }}
@@ -44,7 +44,7 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review runs the core quality, performance, coverage, documentation, security, and correctness reviewers. Specialty reviewers are added when relevant to the diff. Explicit aspects always force their mapped reviewers; for example, `security` forces the security reviewer and `tests` forces both test reviewers. The simplifier runs only when explicitly requested.
+A full review uses five core reviewers to cover six dimensions: correctness and code quality share the canonical code reviewer, while performance, test coverage, documentation accuracy, and security each retain a dedicated reviewer. Specialty reviewers are added when relevant to the diff. Explicit aspects always force their mapped reviewer; for example, `security` forces the security reviewer and `tests` forces the canonical test coverage reviewer. The simplifier runs only when explicitly requested.
 
 ## Finding and submission behavior
 
@@ -70,11 +70,15 @@ If no finding can be anchored, the command returns a concise Markdown fallback i
 
 When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration and externally discovered skills, removes inherited plugins and agents, and resolves the review command only from the action bundle.
 
-External-directory access is denied by default. Only the trusted review helpers and their dedicated state directory under `~/.config/opencode/` are allowed. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
+External-directory access is denied by default. Only the directly invoked trusted review helpers and their dedicated state directory under `~/.config/opencode/` are exposed to OpenCode. The helpers source the trusted-context and token-resolution libraries only from their installed sibling paths; repository-controlled files never enter that execution path. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
 
 ### Trusted pull request context
 
-The helpers derive the repository and pull request number from the GitHub Actions event and pin the pull request head SHA before analysis. The submission helper validates the event context, pinned commit, payload shape, and target endpoint. If the pull request head changes after the diff is captured, the run fails before submitting stale findings.
+One shared trusted-context helper derives the repository and pull request number from the GitHub Actions event and validates the pinned pull request head SHA for both read and write helpers. The submission helper validates the same context immediately before the write and repeats the live-head check after token verification. If the pull request head changes after the diff is captured or while the token is being resolved, the run fails before submitting stale findings.
+
+### Trusted host boundary
+
+Review isolation assumes the runner host and its administrator-controlled OpenCode state are trusted. The action clears project/caller review configuration and inherited toolkit state, but it cannot neutralize OpenCode managed configuration, macOS `ai.opencode.managed` MDM preferences, persisted authentication state, or remote/active-organization configuration associated with that state. Use trusted or ephemeral runners for review workflows. The detailed configuration-precedence cases are maintained in [Variants for custom providers](custom-providers.md#variants-for-custom-providers) rather than duplicated here.
 
 ### Token verification and precedence
 
