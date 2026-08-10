@@ -14,19 +14,19 @@ setup() {
 
 write_event() {
   local number="${1:-42}"
-  printf '{"pull_request":{"number":%s}}\n' "${number}" >"${event_path}"
+  printf '{"pull_request":{"number":%s}}\n' "${number}" > "${event_path}"
 }
 
 write_context() {
   local repo="${1:-octo/repo}" number="${2:-42}" head="${3:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
   jq -n --arg repository "${repo}" --argjson pr_number "${number}" --arg head_sha "${head}" \
     '{repository: $repository, pr_number: $pr_number, head_sha: $head_sha}' \
-    >"${fake_home}/.config/opencode/review-state/context.json"
+    > "${fake_home}/.config/opencode/review-state/context.json"
 }
 
 write_gh_head() {
   local head="${1:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
-  cat >"${fake_bin}/gh" <<EOF
+  cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
@@ -93,14 +93,14 @@ assert_trusted_context_rejected() {
   rm -f "${context_file}"
   assert_trusted_context_rejected
 
-  : >"${context_file}"
+  : > "${context_file}"
   assert_trusted_context_rejected
 
-  printf '{\n' >"${context_file}"
+  printf '{\n' > "${context_file}"
   assert_trusted_context_rejected
 
   jq -n --argjson pr_number 42 --arg head_sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-    '{repository: 7, pr_number: $pr_number, head_sha: $head_sha}' >"${context_file}"
+    '{repository: 7, pr_number: $pr_number, head_sha: $head_sha}' > "${context_file}"
   assert_trusted_context_rejected
 
   write_context "octo/repo" 0
@@ -121,11 +121,11 @@ assert_trusted_context_rejected() {
   write_context
   assert_trusted_context_rejected "octo/repo" "${fake_home}/missing-event.json"
 
-  printf '{\n' >"${event_path}"
+  printf '{\n' > "${event_path}"
   assert_trusted_context_rejected
 
   write_event
-  cat >"${fake_bin}/gh" <<'EOF'
+  cat > "${fake_bin}/gh" << 'EOF'
 #!/usr/bin/env bash
 exit 1
 EOF
@@ -137,7 +137,7 @@ EOF
   local calls="${fake_home}/gh-calls"
   write_event
   write_context
-  cat >"${fake_bin}/gh" <<EOF
+  cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'call\n' >>'${calls}'
@@ -154,8 +154,8 @@ EOF
     bash "${gh_helper}" metadata
 
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${calls}")" -eq 1 ]
-  jq -e '.headRefOid == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' <<<"${output}" >/dev/null
+  [ "$(wc -l < "${calls}")" -eq 1 ]
+  jq -e '.headRefOid == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' <<< "${output}" > /dev/null
 }
 
 @test "both review helpers source the canonical trusted context implementation" {
@@ -174,10 +174,10 @@ EOF
   mkdir -p "${installed_dir}" "${checkout}/.opencode/scripts"
   cp "${gh_helper}" "${installed_dir}/review-pr-gh.sh"
   cp "${context_lib}" "${installed_dir}/review-pr-context.sh"
-  cat >"${installed_dir}/resolve-app-token.sh" <<'EOF'
+  cat > "${installed_dir}/resolve-app-token.sh" << 'EOF'
 opencode_prepare_gh_token() { return 0; }
 EOF
-  cat >"${checkout}/.opencode/scripts/review-pr-context.sh" <<EOF
+  cat > "${checkout}/.opencode/scripts/review-pr-context.sh" << EOF
 touch '${marker}'
 opencode_review_trusted_context() { return 0; }
 opencode_review_event_pr_number() { printf '42'; }
@@ -202,7 +202,7 @@ EOF
   mkdir -p "${installed_dir}" "${checkout}/.opencode/scripts"
   cp "${submit_helper}" "${installed_dir}/review-pr-submit.sh"
   cp "${context_lib}" "${installed_dir}/review-pr-context.sh"
-  cat >"${checkout}/.opencode/scripts/review-pr-context.sh" <<EOF
+  cat > "${checkout}/.opencode/scripts/review-pr-context.sh" << EOF
 touch '${marker}'
 opencode_review_trusted_context() { return 0; }
 opencode_review_event_pr_number() { printf '42'; }

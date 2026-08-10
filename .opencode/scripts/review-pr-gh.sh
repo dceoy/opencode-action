@@ -44,25 +44,25 @@ case "${operation}" in
     cat "${context_file}"
     ;;
   metadata)
-    pinned_context="$(opencode_review_pinned_context)" ||
-      fail "Pinned review context is unavailable or invalid."
+    pinned_context="$(opencode_review_pinned_context)" \
+      || fail "Pinned review context is unavailable or invalid."
     IFS=$'\t' read -r repo number head_sha <<< "${pinned_context}"
-    metadata="$(gh pr view "${number}" --repo "${repo}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url)" ||
-      fail "Failed to read pull request metadata."
-    metadata_head="$(jq -er '.headRefOid | select(type == "string")' <<< "${metadata}")" ||
-      fail "Pull request metadata did not include a valid head SHA."
+    metadata="$(gh pr view "${number}" --repo "${repo}" --json number,title,body,baseRefName,headRefName,headRefOid,files,url)" \
+      || fail "Failed to read pull request metadata."
+    metadata_head="$(jq -er '.headRefOid | select(type == "string")' <<< "${metadata}")" \
+      || fail "Pull request metadata did not include a valid head SHA."
     [[ "${metadata_head}" == "${head_sha}" ]] || fail "Pinned PR head changed."
     printf '%s\n' "${metadata}"
     ;;
   diff)
-    trusted_context="$(opencode_review_trusted_context)" ||
-      fail "Pinned review context is unavailable or invalid, or the PR head changed."
+    trusted_context="$(opencode_review_trusted_context)" \
+      || fail "Pinned review context is unavailable or invalid, or the PR head changed."
     IFS=$'\t' read -r repo number _ <<< "${trusted_context}"
     exec gh pr diff "${number}" --repo "${repo}"
     ;;
   validate)
-    opencode_review_trusted_context > /dev/null ||
-      fail "Pinned review context is unavailable or invalid, or the PR head changed."
+    opencode_review_trusted_context > /dev/null \
+      || fail "Pinned review context is unavailable or invalid, or the PR head changed."
     ;;
   *) fail "Unsupported review-pr GitHub read operation." ;;
 esac

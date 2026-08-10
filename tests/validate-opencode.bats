@@ -56,8 +56,8 @@ permission_allow_keys() {
 }
 
 reviewer_refs() {
-  grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' "${review_pr_skill}" |
-    tr -d '`' | sort -u
+  grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' "${review_pr_skill}" \
+    | tr -d '`' | sort -u
 }
 
 routing_line() {
@@ -67,9 +67,9 @@ routing_line() {
 
 routing_reviewers() {
   local aspect="${1}"
-  routing_line "${aspect}" |
-    grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' |
-    tr -d '`' | sort -u
+  routing_line "${aspect}" \
+    | grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' \
+    | tr -d '`' | sort -u
 }
 
 opencode_jsonc_json() {
