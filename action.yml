@@ -32,8 +32,7 @@ inputs:
     required: false
     description: >-
       Model variant for provider-specific reasoning effort (e.g., high, max, minimal).
-      Empty runs every model with its default configuration.
-      A nonempty value is rejected before OpenCode starts when the bundled provider registry (.opencode/opencode.jsonc) is authoritative for the selected model and declares that model with an empty or non-matching variants object; a model the registry declares without a variants key, or a run where caller/project configuration or use-bundled-toolkit: false could redefine the model, passes the variant through with a warning that compatibility was not validated; a model absent from the registry entirely passes it through silently.
+      Empty runs every model with its default configuration. The action rejects a nonempty value only when its bundled model registry is known to be authoritative; otherwise the requested variant is passed through unchanged for OpenCode/provider validation.
     default: ''
   oidc-base-url:
     required: false
@@ -78,7 +77,8 @@ runs:
         else
           OPENCODE_VERSION="${INPUT_VERSION}"
         fi
-        echo "opencode-version=$(tr -d v <<< "${OPENCODE_VERSION}")" | tee -a "${GITHUB_OUTPUT}"
+        OPENCODE_VERSION="${OPENCODE_VERSION#v}"
+        echo "opencode-version=${OPENCODE_VERSION}" | tee -a "${GITHUB_OUTPUT}"
     - name: Detect review-only mode
       id: review_mode
       shell: bash -euo pipefail {0}

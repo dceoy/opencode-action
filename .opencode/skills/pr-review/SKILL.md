@@ -34,14 +34,13 @@ Explicit aspects select these reviewers:
 - `performance`: `performance-reviewer`
 - `security`: `security-code-reviewer`
 - `tests` or `coverage`: `test-coverage-reviewer`
-- `docs` or `documentation`: `documentation-accuracy-reviewer`
-- `comments`: `comment-analyzer`
+- `docs`, `documentation`, or `comments`: `documentation-accuracy-reviewer`
 - `errors`: `silent-failure-hunter`
 - `types`: `type-design-analyzer`
 - `simplify`: `code-simplifier`, returning behavior-preserving simplification proposals as review findings without modifying files
 - `all`, or no aspect: the core reviewers `code-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, and `security-code-reviewer`; include specialty reviewers when the supplied diff is relevant. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
 
-Requested aspects always force their mapped reviewers. The five core reviewers still cover the six documented default dimensions: correctness and code quality share the canonical `code-reviewer`, while performance, test coverage, documentation accuracy, and security remain independent passes.
+Requested aspects always force their mapped reviewers. When `comments` is requested, tell `documentation-accuracy-reviewer` to focus on changed comments and docstrings and the implementation they describe. The five core reviewers still cover the six documented default dimensions: correctness and code quality share the canonical `code-reviewer`, while performance, test coverage, documentation accuracy, and security remain independent passes.
 
 Build a separate, minimal Task request for every selected reviewer. Include only its relevant files, diff hunks, and containing-function source context, plus only the metadata needed for that specialty. Exclude unchanged files and unrelated hunks. `code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents. Reviewers have no shell access, so each subset must be self-contained. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
 

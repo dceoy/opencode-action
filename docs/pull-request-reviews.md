@@ -40,11 +40,11 @@ Use one or more keywords after `/review-pr`:
 | `/review-pr coverage`             | Test coverage                        |
 | `/review-pr documentation`        | Documentation accuracy               |
 | `/review-pr errors`               | Silent failures and error handling   |
-| `/review-pr comments`             | Comment accuracy                     |
+| `/review-pr comments`             | Comment and docstring accuracy       |
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review uses five core reviewers to cover six dimensions: correctness and code quality share the canonical code reviewer, while performance, test coverage, documentation accuracy, and security each retain a dedicated reviewer. Specialty reviewers are added when relevant to the diff. Explicit aspects always force their mapped reviewer; for example, `security` forces the security reviewer and `tests` forces the canonical test coverage reviewer. The simplifier runs only when explicitly requested.
+A full review uses five core reviewers to cover six dimensions: correctness and code quality share the canonical code reviewer, while performance, test coverage, documentation accuracy, and security each retain a dedicated reviewer. Comments and docstrings are part of the documentation-accuracy review rather than a separate reviewer pass. Explicit `comments` requests focus that reviewer on changed comments/docstrings and the implementation they describe. Specialty reviewers are added when relevant to the diff, and the simplifier runs only when explicitly requested.
 
 ## Finding and submission behavior
 
@@ -78,7 +78,7 @@ One shared trusted-context helper derives the repository and pull request number
 
 ### Trusted host boundary
 
-Review isolation assumes the runner host and its administrator-controlled OpenCode state are trusted. The action clears project/caller review configuration and inherited toolkit state, but it cannot neutralize OpenCode managed configuration, macOS `ai.opencode.managed` MDM preferences, persisted authentication state, or remote/active-organization configuration associated with that state. Use trusted or ephemeral runners for review workflows. The detailed configuration-precedence cases are maintained in [Variants for custom providers](custom-providers.md#variants-for-custom-providers) rather than duplicated here.
+Review isolation assumes the runner host and its administrator-controlled OpenCode state are trusted. The action clears project/caller review configuration and inherited toolkit state, but it does not attempt to reproduce OpenCode's full external, managed, plugin, or remote configuration discovery. Variant prevalidation therefore uses the bundled registry only when the isolated environment is conservatively known to make that registry authoritative; otherwise the requested variant is passed through unchanged. Use trusted or ephemeral runners for review workflows.
 
 ### Token verification and precedence
 

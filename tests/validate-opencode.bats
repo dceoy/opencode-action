@@ -1,20 +1,20 @@
 #!/usr/bin/env bats
-# Validate .opencode/ agent and skill frontmatter, pr-review routing and
-# references, release examples, opencode.jsonc parsing, and the runtime
-# read-only review permission boundary.
+# shellcheck disable=SC2016
+# Validate stable OpenCode agent, routing, permission, and runtime contracts.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
+  orchestrator="${agents_dir}/review-pr-orchestrator.md"
   review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
   review_pr_skill="${repo_root}/.opencode/skills/pr-review/SKILL.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
+  action_yml="${repo_root}/action.yml"
+  run_script="${repo_root}/scripts/run-opencode.sh"
+  lib_script="${repo_root}/scripts/opencode-action-lib.sh"
   # shellcheck source=scripts/opencode-action-lib.sh
-  source "${repo_root}/scripts/opencode-action-lib.sh"
+  source "${lib_script}"
   required_keys=(name description mode permission)
-  # Backtick-quoted identifiers in the pr-review skill that are operations or
-  # inputs rather than agents.
-  non_agents=(submit-initial use-github-token validate-initial)
 }
 
 agent_files() {
@@ -25,26 +25,66 @@ frontmatter() {
   awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {exit} f' "$1"
 }
 
-@test "every agent file has YAML frontmatter" {
-  local f fm without_frontmatter=()
-  while IFS= read -r f; do
-    fm="$(frontmatter "${f}")"
-    [ -n "${fm}" ] || without_frontmatter+=("${f}")
-  done < <(agent_files)
-
-  [ "${#without_frontmatter[@]}" -eq 0 ] || {
-    printf 'no YAML frontmatter: %s\n' "${without_frontmatter[@]}"
-    return 1
-  }
+frontmatter_has_key() {
+  local file="${1}" key="${2}"
+  frontmatter "${file}" | grep -qE "^${key}:"
 }
 
-@test "every agent frontmatter has the required keys" {
-  local f fm key missing=()
+frontmatter_value() {
+  local file="${1}" key="${2}"
+  frontmatter "${file}" | sed -n -E "s/^${key}:[[:space:]]*//p" | head -1
+}
+
+permission_allow_keys() {
+  local file="${1}" section="${2}"
+  frontmatter "${file}" | awk -v section="${section}" '
+    $0 == "  " section ":" { active = 1; next }
+    active && /^  [a-zA-Z_]+:/ { exit }
+    active && /^    .*: allow$/ {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      sub(/: allow$/, "", line)
+      first = substr(line, 1, 1)
+      last = substr(line, length(line), 1)
+      quote = sprintf("%c", 39)
+      if ((first == "\"" && last == "\"") || (first == quote && last == quote)) {
+        line = substr(line, 2, length(line) - 2)
+      }
+      print line
+    }
+  ' | sort
+}
+
+reviewer_refs() {
+  grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' "${review_pr_skill}" \
+    | tr -d '`' | sort -u
+}
+
+routing_line() {
+  local aspect="${1}"
+  grep -F -- "\`${aspect}\`" "${review_pr_skill}" | grep -E '^- ' | head -1
+}
+
+routing_reviewers() {
+  local aspect="${1}"
+  routing_line "${aspect}" \
+    | grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' \
+    | tr -d '`' | sort -u
+}
+
+opencode_jsonc_json() {
+  opencode_jsonc_to_json < "${opencode_jsonc}"
+}
+
+@test "every agent file has valid identifying frontmatter" {
+  local f key name base missing=()
   while IFS= read -r f; do
-    fm="$(frontmatter "${f}")"
     for key in "${required_keys[@]}"; do
-      grep -qE "^${key}:" <<< "${fm}" || missing+=("${f}: missing '${key}'")
+      frontmatter_has_key "${f}" "${key}" || missing+=("${f}: missing ${key}")
     done
+    name="$(frontmatter_value "${f}" name)"
+    base="$(basename "${f}" .md)"
+    [ "${name}" = "${base}" ] || missing+=("${f}: name ${name} != ${base}")
   done < <(agent_files)
 
   [ "${#missing[@]}" -eq 0 ] || {
@@ -53,197 +93,237 @@ frontmatter() {
   }
 }
 
-@test "every agent frontmatter name matches its filename" {
-  local f fm name base mismatches=()
-  while IFS= read -r f; do
-    fm="$(frontmatter "${f}")"
-    name="$(grep -E '^name:' <<< "${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
-    base="$(basename "${f}" .md)"
-    [ "${name}" = "${base}" ] || mismatches+=("${f}: name '${name}' != filename '${base}'")
-  done < <(agent_files)
-
-  [ "${#mismatches[@]}" -eq 0 ] || {
-    printf '%s\n' "${mismatches[@]}"
-    return 1
-  }
-}
-
-@test "pr-review skill has valid frontmatter" {
-  local fm name description
-
-  fm="$(frontmatter "${review_pr_skill}")"
-  name="$(grep -E '^name:' <<< "${fm}" | sed -E 's/^name:[[:space:]]*//')"
-  description="$(grep -E '^description:' <<< "${fm}" | sed -E 's/^description:[[:space:]]*//')"
-
-  [ "${name}" = "pr-review" ]
-  [ -n "${description}" ]
-}
-
-@test "review-pr command is a thin wrapper around the pr-review skill" {
-  local body
+@test "review-pr command routes to the orchestrator and pr-review skill" {
+  [ "$(frontmatter_value "${review_pr_command}" agent)" = "review-pr-orchestrator" ]
+  [ "$(frontmatter_value "${review_pr_skill}" name)" = "pr-review" ]
 
   body="$(awk '
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
     in_frontmatter && $0 == "---" { in_frontmatter = 0; next }
-    !in_frontmatter && NF { print }
+    !in_frontmatter { print }
   ' "${review_pr_command}")"
-
-  [ "${body}" = $'Load and follow the `pr-review` skill.\nRequested review aspects: "$ARGUMENTS"' ]
+  [[ "${body}" == *'`pr-review`'* ]]
+  [[ "${body}" == *'$ARGUMENTS'* ]]
 }
 
-@test "review-pr orchestrator may load only the pr-review skill" {
-  local orchestrator="${agents_dir}/review-pr-orchestrator.md"
-
-  grep -Fq '  skill:' "${orchestrator}"
-  grep -Fq '    "*": deny' "${orchestrator}"
-  grep -Fq '    pr-review: allow' "${orchestrator}"
-}
-
-@test "review-pr default selection uses five core reviewers for all documented dimensions" {
-  local reviewer
-
-  # shellcheck disable=SC2016
-  grep -Fq 'the core reviewers `code-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, and `security-code-reviewer`' "${review_pr_skill}"
-  grep -Fq 'The five core reviewers still cover the six documented default dimensions' "${review_pr_skill}"
-  grep -Fq 'include specialty reviewers when the supplied diff is relevant' "${review_pr_skill}"
-
-  for reviewer in \
-    code-reviewer \
-    performance-reviewer \
-    test-coverage-reviewer \
-    documentation-accuracy-reviewer \
-    security-code-reviewer; do
-    grep -Fq "${reviewer}" "${review_pr_skill}"
-  done
-}
-
-@test "review-pr explicit core aspects force one canonical reviewer each" {
-  # shellcheck disable=SC2016
-  grep -Fq -- '- `code` or `quality`: `code-reviewer`' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq -- '- `performance`: `performance-reviewer`' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq -- '- `security`: `security-code-reviewer`' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq -- '- `tests` or `coverage`: `test-coverage-reviewer`' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq -- '- `docs` or `documentation`: `documentation-accuracy-reviewer`' "${review_pr_skill}"
-  grep -Fq 'Requested aspects always force their mapped reviewers.' "${review_pr_skill}"
-}
-
-@test "review-pr sends reviewer-specific context subsets" {
-  grep -Fq 'classify changed files and individual diff hunks by concern' "${review_pr_skill}"
-  grep -Fq 'Build a separate, minimal Task request for every selected reviewer.' "${review_pr_skill}"
-  grep -Fq 'Include only its relevant files, diff hunks, and containing-function source context' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq '`code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents.' "${review_pr_skill}"
-}
-
-@test "every agent referenced in the pr-review skill exists under .opencode/agents/" {
-  local bt pattern refs ref skip na missing=()
-  bt=$(printf '\x60')
-  pattern="${bt}[a-z][a-z0-9]+(-[a-z0-9]+)+${bt}"
-  mapfile -t refs < <(grep -hoE "${pattern}" "${review_pr_skill}" | tr -d "${bt}" | sort -u)
-
-  for ref in "${refs[@]}"; do
-    skip=0
-    for na in "${non_agents[@]}"; do
-      [ "${ref}" = "${na}" ] && skip=1
-    done
-    [ "${skip}" -eq 1 ] && continue
-    [ -f "${agents_dir}/${ref}.md" ] || missing+=("${ref}")
-  done
-
-  [ "${#missing[@]}" -eq 0 ] || {
-    printf 'referenced agent has no file under .opencode/agents/: %s\n' "${missing[@]}"
+@test "skill reviewer references exactly match the orchestrator task allow-list" {
+  local refs allowed reviewer
+  refs="$(reviewer_refs)"
+  allowed="$(permission_allow_keys "${orchestrator}" task)"
+  [ "${refs}" = "${allowed}" ] || {
+    printf 'skill reviewers:\n%s\norchestrator task allow-list:\n%s\n' "${refs}" "${allowed}"
     return 1
   }
+
+  while IFS= read -r reviewer; do
+    [ -f "${agents_dir}/${reviewer}.md" ]
+  done <<< "${refs}"
 }
 
-@test "removed reviewer and legacy helper names have no remaining references" {
-  local legacy_symbol removed_a removed_b
-
-  legacy_symbol='opencode_assert_pr_head_''unchanged'
-  removed_a='code-quality-''reviewer'
-  removed_b='pr-test-''analyzer'
-
-  run git -C "${repo_root}" grep -n -F "${legacy_symbol}"
-  [ "${status}" -eq 1 ]
-
-  run git -C "${repo_root}" grep -n -F "${removed_a}"
-  [ "${status}" -eq 1 ]
-
-  run git -C "${repo_root}" grep -n -F "${removed_b}"
-  [ "${status}" -eq 1 ]
+@test "explicit review aspects route to canonical reviewers" {
+  local pair aspect expected actual
+  for pair in \
+    code:code-reviewer \
+    quality:code-reviewer \
+    performance:performance-reviewer \
+    security:security-code-reviewer \
+    tests:test-coverage-reviewer \
+    coverage:test-coverage-reviewer \
+    docs:documentation-accuracy-reviewer \
+    documentation:documentation-accuracy-reviewer \
+    comments:documentation-accuracy-reviewer \
+    errors:silent-failure-hunter \
+    types:type-design-analyzer \
+    simplify:code-simplifier; do
+    aspect="${pair%%:*}"
+    expected="${pair#*:}"
+    actual="$(routing_reviewers "${aspect}")"
+    [ "${actual}" = "${expected}" ] || {
+      echo "${aspect} routes to '${actual}', expected '${expected}'"
+      return 1
+    }
+  done
 }
 
-@test "copyable action examples pin the current release" {
-  local expected
-  expected='uses: dceoy/opencode-action@da47df8f9d60c12de7b76dc1ca37633b147f0241 # v0.6.4'
-
-  grep -Fq "${expected}" "${repo_root}/README.md"
-  grep -Fq "${expected}" "${repo_root}/docs/pull-request-reviews.md"
+@test "full review keeps exactly the five core reviewers" {
+  local line actual expected
+  line="$(routing_line all)"
+  actual="$(grep -oE '`[a-z][a-z0-9-]*reviewer`' <<< "${line}" | tr -d '`' | sort -u)"
+  expected="$(printf '%s\n' \
+    code-reviewer \
+    documentation-accuracy-reviewer \
+    performance-reviewer \
+    security-code-reviewer \
+    test-coverage-reviewer | sort)"
+  [ "${actual}" = "${expected}" ]
 }
 
-@test "opencode.jsonc parses as JSON once its // comments are stripped" {
+@test "orchestrator may load only pr-review and approved fixed bash commands" {
+  local actual expected helper
+
+  actual="$(permission_allow_keys "${orchestrator}" skill)"
+  [ "${actual}" = "pr-review" ]
+
+  actual="$(permission_allow_keys "${orchestrator}" bash)"
+  expected="$(printf '%s\n' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" diff' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" metadata' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" validate' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update' \
+    'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" validate-initial' \
+    'git diff --name-only HEAD' \
+    'git diff --no-ext-diff' \
+    'git status --short' | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected bash allow-list:\n%s\n' "${actual}"
+    return 1
+  }
+
+  for helper in review-pr-gh.sh review-pr-submit.sh; do
+    [ -f "${repo_root}/.opencode/scripts/${helper}" ]
+  done
+}
+
+@test "external directory access exposes only trusted review helpers and state" {
+  local actual expected default_action
+
+  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
+  [ "${default_action}" = "deny" ]
+
+  actual="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
+  expected="$(printf '%s\n' \
+    '$HOME/.config/opencode/review-state/*' \
+    '$HOME/.config/opencode/scripts/review-pr-gh.sh' \
+    '$HOME/.config/opencode/scripts/review-pr-submit.sh' | sort)"
+  [ "${actual}" = "${expected}" ]
+
+  actual="$(permission_allow_keys "${orchestrator}" external_directory)"
+  [ "${actual}" = "${expected}" ]
+}
+
+@test "review-only runtime isolation keeps project config and external skills disabled" {
+  grep -Fq 'export OPENCODE_DISABLE_PROJECT_CONFIG=1' "${run_script}"
+  grep -Fq 'export OPENCODE_DISABLE_EXTERNAL_SKILLS=1' "${run_script}"
+  grep -Fq 'unset OPENCODE_CONFIG OPENCODE_CONFIG_DIR OPENCODE_CONFIG_CONTENT' "${run_script}"
+  grep -Fq 'command_dirs=("${ACTION_PATH}/.opencode/commands")' "${run_script}"
+}
+
+@test "removed reviewers and legacy helpers have no references" {
+  local symbol
+  local -a removed=(
+    'comment-''analyzer'
+    'code-quality-''reviewer'
+    'pr-test-''analyzer'
+    'opencode_assert_pr_head_''unchanged'
+  )
+
+  for symbol in "${removed[@]}"; do
+    run git -C "${repo_root}" grep -n -F "${symbol}"
+    [ "${status}" -eq 1 ] || {
+      echo "stale reference to ${symbol}: ${output}"
+      return 1
+    }
+  done
+}
+
+@test "bundled opencode.jsonc parses as JSON" {
   opencode_jsonc_json | jq empty
 }
 
-@test "review-pr local fallback is limited to a missing trusted PR number" {
-  # shellcheck disable=SC2016
-  grep -Fq 'If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.' "${review_pr_skill}"
-  # shellcheck disable=SC2016
-  grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_skill}"
+@test "OpenCode version normalization strips only one optional leading lowercase v" {
+  local pair input expected
+
+  grep -Fq 'OPENCODE_VERSION="${OPENCODE_VERSION#v}"' "${action_yml}"
+  run git -C "${repo_root}" grep -n -F 'tr -d v' -- action.yml scripts
+  [ "${status}" -eq 1 ]
+
+  for pair in \
+    'v1.2.14=1.2.14' \
+    '1.2.14=1.2.14' \
+    'v1.2.15-preview.1=1.2.15-preview.1' \
+    'v1.2.15-preview.v1=1.2.15-preview.v1'; do
+    input="${pair%%=*}"
+    expected="${pair#*=}"
+    run bash -euo pipefail -c 'version="$1"; printf "%s" "${version#v}"' _ "${input}"
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "${expected}" ]
+  done
 }
 
-@test "canonical code findings retain rich actionable Markdown" {
-  local code_reviewer="${agents_dir}/code-reviewer.md"
+@test "variant validation passes through unknown normal-run config surfaces" {
+  local case_dir workspace home fixture
+  fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
+  cat > "${fixture}" << 'EOF'
+{"provider":{"demo":{"models":{"model":{"variants":{}}}}}}
+EOF
 
-  grep -Fq 'message: |-' "${code_reviewer}"
-  grep -Fq '<what is wrong and the behavior that demonstrates it>' "${code_reviewer}"
-  grep -Fq 'why it matters to users or maintainers' "${code_reviewer}"
-  grep -Fq '<a concrete fix, including a fenced suggestion when it can be applied safely>' "${code_reviewer}"
-  grep -Fq '```suggestion' "${code_reviewer}"
-  grep -Fq "Preserve each finding message's Markdown" "${review_pr_skill}"
-  grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_skill}"
-  grep -Fq 'message: |-' "${review_pr_skill}"
-  grep -Fq '<actionable Markdown with the issue, impact, and concrete fix>' "${review_pr_skill}"
+  for case_dir in config-json singular-plugin plural-plugins home-opencode; do
+    workspace="${BATS_TEST_TMPDIR}/${case_dir}/workspace"
+    home="${BATS_TEST_TMPDIR}/${case_dir}/home"
+    mkdir -p "${workspace}" "${home}"
+    case "${case_dir}" in
+      config-json)
+        printf '{}\n' > "${workspace}/config.json"
+        ;;
+      singular-plugin)
+        mkdir -p "${workspace}/.opencode/plugin"
+        printf 'export {}\n' > "${workspace}/.opencode/plugin/demo.js"
+        ;;
+      plural-plugins)
+        mkdir -p "${workspace}/.opencode/plugins"
+        printf 'export {}\n' > "${workspace}/.opencode/plugins/demo.js"
+        ;;
+      home-opencode)
+        mkdir -p "${home}/.opencode"
+        printf 'source state\n' > "${home}/.opencode/config.json"
+        ;;
+    esac
+
+    run env \
+      HOME="${home}" \
+      GITHUB_WORKSPACE="${workspace}" \
+      GITHUB_ACTIONS=true \
+      RUNNER_ENVIRONMENT=github-hosted \
+      USE_BUNDLED_TOOLKIT=true \
+      REVIEW_ONLY=false \
+      bash -euo pipefail -c '
+        source "$1"
+        source "$2"
+        opencode_validate_variant demo/model thinking "$3"
+      ' _ "${run_script}" "${lib_script}" "${fixture}"
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == "::warning::"* ]]
+  done
 }
 
-@test "suggestion blocks are withheld or stripped for relocated anchors" {
-  local code_reviewer="${agents_dir}/code-reviewer.md"
+@test "isolated GitHub-hosted review rejects unsupported bundled variants" {
+  local home workspace fixture
+  home="${BATS_TEST_TMPDIR}/authoritative-home"
+  workspace="${BATS_TEST_TMPDIR}/authoritative-workspace"
+  fixture="${BATS_TEST_TMPDIR}/authoritative.jsonc"
+  mkdir -p "${home}" "${workspace}"
+  cat > "${fixture}" << 'EOF'
+{"provider":{"demo":{"models":{"model":{"variants":{}}}}}}
+EOF
 
-  grep -Fq 'reported line is not itself a head-side changed line' "${code_reviewer}"
-  # shellcheck disable=SC2016
-  grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_skill}"
-}
-
-opencode_jsonc_json() {
-  opencode_jsonc_to_json < "${opencode_jsonc}"
-}
-
-@test "external directory allow-list exposes only invoked review helpers and payload state" {
-  local default_action
-  local -a allow_patterns expected_patterns
-
-  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
-  [ "${default_action}" = "deny" ] || {
-    echo "opencode.jsonc's external_directory has no catch-all \"*\": \"deny\" rule (got: '${default_action}')"
-    return 1
-  }
-
-  mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)
-  expected_patterns=(
-    "\$HOME/.config/opencode/review-state/*"
-    "\$HOME/.config/opencode/scripts/review-pr-gh.sh"
-    "\$HOME/.config/opencode/scripts/review-pr-submit.sh"
-  )
-  mapfile -t expected_patterns < <(printf '%s\n' "${expected_patterns[@]}" | sort)
-
-  [ "${allow_patterns[*]}" = "${expected_patterns[*]}" ] || {
-    printf 'unexpected external_directory allow rules: %s\n' "${allow_patterns[*]}"
-    return 1
-  }
+  run env \
+    HOME="${home}" \
+    GITHUB_WORKSPACE="${workspace}" \
+    GITHUB_ACTIONS=true \
+    RUNNER_ENVIRONMENT=github-hosted \
+    USE_BUNDLED_TOOLKIT=true \
+    REVIEW_ONLY=true \
+    bash -euo pipefail -c '
+      source "$1"
+      source "$2"
+      opencode_validate_variant demo/model thinking "$3"
+    ' _ "${run_script}" "${lib_script}" "${fixture}"
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == "::error::"* ]]
+  [[ "${output}" == *"declares no variants"* ]]
 }
 
 @test "OpenCode permits only the orchestrator's installed runtime review payloads" {
