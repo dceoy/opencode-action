@@ -87,7 +87,7 @@ setup() {
 
 @test "authoritative review validation accepts a declared bundled variant" {
   fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
-  cat > "${fixture}" <<'EOF'
+  cat > "${fixture}" << 'EOF'
 {"provider":{"demo":{"models":{"nested/model":{"variants":{"low":{},"high":{}}}}}}}
 EOF
 
@@ -103,7 +103,7 @@ EOF
 
 @test "authoritative review validation rejects an undeclared bundled variant" {
   fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
-  cat > "${fixture}" <<'EOF'
+  cat > "${fixture}" << 'EOF'
 {"provider":{"demo":{"models":{"nested/model":{"variants":{"low":{},"high":{}}}}}}}
 EOF
 
@@ -143,7 +143,7 @@ EOF
 
 @test "authoritative review validation warns when a bundled model omits variants metadata" {
   fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
-  cat > "${fixture}" <<'EOF'
+  cat > "${fixture}" << 'EOF'
 {"provider":{"demo":{"models":{"legacy-model":{"name":"legacy-model"}}}}}
 EOF
 
@@ -190,7 +190,7 @@ EOF
     '#!/usr/bin/env bash' \
     'printf "%s\n" "$*" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
   chmod +x "${fake_bin}/opencode"
-  cat > "${fake_action}/.opencode/opencode.jsonc" <<'EOF'
+  cat > "${fake_action}/.opencode/opencode.jsonc" << 'EOF'
 {"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{"variants":{}}}}}}
 EOF
 
@@ -223,7 +223,7 @@ EOF
     '#!/usr/bin/env bash' \
     'printf "%s\n" "$*" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
   chmod +x "${fake_bin}/opencode"
-  cat > "${fake_action}/.opencode/opencode.jsonc" <<'EOF'
+  cat > "${fake_action}/.opencode/opencode.jsonc" << 'EOF'
 {"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{"variants":{}}}}}}
 EOF
 
@@ -305,7 +305,7 @@ EOF
 @test "review-only run configuration isolates bundled command resolution" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}/.opencode/commands"
-  cat > "${workspace}/.opencode/commands/review-pr.md" <<'EOF'
+  cat > "${workspace}/.opencode/commands/review-pr.md" << 'EOF'
 ---
 description: untrusted project command
 agent: plan
@@ -343,7 +343,7 @@ EOF
 @test "review-only runtime loads the bundled skill and excludes external skills" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}/.agents/skills/untrusted-review"
-  cat > "${workspace}/.agents/skills/untrusted-review/SKILL.md" <<'EOF'
+  cat > "${workspace}/.agents/skills/untrusted-review/SKILL.md" << 'EOF'
 ---
 name: untrusted-review
 description: untrusted project skill
@@ -388,7 +388,7 @@ EOF
 @test "normal run configuration falls back to the bundled toolkit's commands" {
   workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${workspace}" "${fake_action}/.opencode/commands"
-  cat > "${fake_action}/.opencode/commands/inspect.md" <<'EOF'
+  cat > "${fake_action}/.opencode/commands/inspect.md" << 'EOF'
 ---
 description: bundled inspect command
 agent: plan
@@ -739,7 +739,7 @@ EOF
   prompt_file="${BATS_TEST_TMPDIR}/success-prompt"
   config_file="${BATS_TEST_TMPDIR}/success-config"
   mkdir -p "${fake_bin}" "${workspace}/.opencode/commands"
-  cat > "${workspace}/.opencode/commands/inspect.md" <<'EOF'
+  cat > "${workspace}/.opencode/commands/inspect.md" << 'EOF'
 ---
 description: inspect with the plan agent
 agent: plan
@@ -747,12 +747,12 @@ agent: plan
 
 Inspect securely: $ARGUMENTS
 EOF
-  cat > "${fake_bin}/timeout" <<'EOF'
+  cat > "${fake_bin}/timeout" << 'EOF'
 #!/usr/bin/env bash
 shift
 exec "$@"
 EOF
-  cat > "${fake_bin}/opencode" <<'EOF'
+  cat > "${fake_bin}/opencode" << 'EOF'
 #!/usr/bin/env bash
 printf 'opencode %s\n' "$*" >"${INVOCATION_FILE}"
 printf '%s' "${PROMPT}" >"${PROMPT_FILE}"
