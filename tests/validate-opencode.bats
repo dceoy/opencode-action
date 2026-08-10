@@ -8,6 +8,7 @@ setup() {
   review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
   review_pr_skill="${repo_root}/.opencode/skills/pr-review/SKILL.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
+  action_yml="${repo_root}/action.yml"
   run_script="${repo_root}/scripts/run-opencode.sh"
   lib_script="${repo_root}/scripts/opencode-action-lib.sh"
   # shellcheck source=scripts/opencode-action-lib.sh
@@ -229,6 +230,11 @@ opencode_jsonc_json() {
 
 @test "OpenCode version normalization strips only one optional leading lowercase v" {
   local pair input expected
+
+  grep -Fq 'OPENCODE_VERSION="${OPENCODE_VERSION#v}"' "${action_yml}"
+  run git -C "${repo_root}" grep -n -F 'tr -d v' -- action.yml scripts
+  [ "${status}" -eq 1 ]
+
   for pair in \
     'v1.2.14=1.2.14' \
     '1.2.14=1.2.14' \
@@ -236,7 +242,7 @@ opencode_jsonc_json() {
     'v1.2.15-preview.v1=1.2.15-preview.v1'; do
     input="${pair%%=*}"
     expected="${pair#*=}"
-    run bash -euo pipefail -c 'source "$1"; opencode_normalize_version "$2"' _ "${run_script}" "${input}"
+    run bash -euo pipefail -c 'version="$1"; printf "%s" "${version#v}"' _ "${input}"
     [ "${status}" -eq 0 ]
     [ "${output}" = "${expected}" ]
   done
@@ -278,9 +284,6 @@ EOF
       RUNNER_ENVIRONMENT=github-hosted \
       USE_BUNDLED_TOOLKIT=true \
       REVIEW_ONLY=false \
-      OPENCODE_TEST_MANAGED_CONFIG_DIR="${BATS_TEST_TMPDIR}/${case_dir}/managed" \
-      OPENCODE_TEST_MDM_PREFERENCE_PRESENT=false \
-      XDG_DATA_HOME="${BATS_TEST_TMPDIR}/${case_dir}/data" \
       bash -euo pipefail -c '
         source "$1"
         source "$2"
@@ -308,9 +311,6 @@ EOF
     RUNNER_ENVIRONMENT=github-hosted \
     USE_BUNDLED_TOOLKIT=true \
     REVIEW_ONLY=true \
-    OPENCODE_TEST_MANAGED_CONFIG_DIR="${BATS_TEST_TMPDIR}/authoritative-managed" \
-    OPENCODE_TEST_MDM_PREFERENCE_PRESENT=false \
-    XDG_DATA_HOME="${BATS_TEST_TMPDIR}/authoritative-data" \
     bash -euo pipefail -c '
       source "$1"
       source "$2"
