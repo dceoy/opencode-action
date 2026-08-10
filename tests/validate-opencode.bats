@@ -256,7 +256,7 @@ opencode_jsonc_json() {
 @test "variant validation passes through unknown normal-run config surfaces" {
   local case_dir workspace home fixture
   fixture="${BATS_TEST_TMPDIR}/opencode.jsonc"
-  cat > "${fixture}" <<'EOF'
+  cat > "${fixture}" << 'EOF'
 {"provider":{"demo":{"models":{"model":{"variants":{}}}}}}
 EOF
 
@@ -305,7 +305,7 @@ EOF
   workspace="${BATS_TEST_TMPDIR}/authoritative-workspace"
   fixture="${BATS_TEST_TMPDIR}/authoritative.jsonc"
   mkdir -p "${home}" "${workspace}"
-  cat > "${fixture}" <<'EOF'
+  cat > "${fixture}" << 'EOF'
 {"provider":{"demo":{"models":{"model":{"variants":{}}}}}}
 EOF
 
