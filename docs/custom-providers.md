@@ -90,7 +90,7 @@ with:
 
 Replace or extend `models` with model IDs available to the Sakura AI Engine account.
 
-Leave the action's `variant` input empty for Sakura models unless the effective OpenCode configuration explicitly adds a supported variant. The bundled Sakura entries declare no variants.
+Leave the action's `variant` input empty for Sakura models unless the effective OpenCode configuration explicitly adds a supported variant. The bundled Sakura entries declare no supported variants; their `variants` objects are empty.
 
 ## Variants for custom providers
 
