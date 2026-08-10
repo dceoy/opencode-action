@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016
 
 @test "isolated review passes variants through when persisted auth survives isolation" {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
