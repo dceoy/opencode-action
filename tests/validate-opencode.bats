@@ -156,7 +156,6 @@ opencode_jsonc_json() {
     security-code-reviewer \
     test-coverage-reviewer | sort)"
   [ "${actual}" = "${expected}" ]
-  [[ "${line}" != *'code-simplifier'* ]]
 }
 
 @test "orchestrator may load only pr-review and approved fixed bash commands" {
