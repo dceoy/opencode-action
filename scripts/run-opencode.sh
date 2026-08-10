@@ -2,11 +2,6 @@
 # Resolve action inputs into an OpenCode invocation. Functions are sourceable
 # so prompt/config/timeout/error behavior can be tested without the service.
 
-opencode_normalize_version() {
-  local version="${1:-}"
-  printf '%s' "${version#v}"
-}
-
 opencode_select_timeout_command() {
   local timeout_minutes="${1}"
   OPENCODE_TIMEOUT_COMMAND=()
@@ -31,210 +26,31 @@ opencode_report_error() {
   _opencode_report_annotation error "${1}"
 }
 
-_opencode_config_defines_model() {
-  local content="${1}" provider="${2}" model_id="${3}" json rc
-  json="$(opencode_jsonc_to_json <<< "${content}" 2> /dev/null)" || return 1
-  set +e
-  jq -e --arg provider "${provider}" --arg model "${model_id}" \
-    '(.provider[$provider].models // {}) | has($model)' \
-    <<< "${json}" > /dev/null 2>&1
-  rc=$?
-  set -e
-  return "${rc}"
-}
-
-_opencode_config_declares_plugin() {
-  local content="${1}" json rc
-  json="$(opencode_jsonc_to_json <<< "${content}" 2> /dev/null)" || return 1
-  set +e
-  jq -e '(.plugin // []) | length > 0' <<< "${json}" > /dev/null 2>&1
-  rc=$?
-  set -e
-  return "${rc}"
-}
-
-_opencode_dir_has_files() {
-  local dir="${1}"
-  [[ -d "${dir}" ]] || return 1
-  [[ -n "$(find "${dir}" -type f -print -quit 2> /dev/null)" ]]
-}
-
-_opencode_home_state_has_config_files() {
-  local state_dir="${HOME}/.opencode" file relative
-  [[ -d "${state_dir}" ]] || return 1
-  while IFS= read -r file; do
-    relative="${file#"${state_dir}/"}"
-    [[ "${relative}" == bin/* ]] || return 0
-  done < <(find "${state_dir}" -type f -print 2> /dev/null)
-  return 1
-}
-
-_opencode_global_config_differs_from_bundle() {
-  local bundled_config_file="${1}" global_dir source_dir file relative source
-  global_dir="${HOME}/.config/opencode"
-  source_dir="$(dirname "${bundled_config_file}")"
-  [[ -d "${global_dir}" ]] || return 1
-
-  while IFS= read -r file; do
-    relative="${file#"${global_dir}/"}"
-    source="${source_dir}/${relative}"
-    if [[ ! -f "${source}" ]] || ! cmp -s "${file}" "${source}" 2> /dev/null; then
-      return 0
-    fi
-  done < <(find "${global_dir}" -type f -print 2> /dev/null)
-  return 1
-}
-
-# Resolve OpenCode's managed configuration directory only to recognize
-# host-controlled state that lies outside review-only isolation. This helper is
-# intentionally not used to reproduce config precedence or enumerate files.
-_opencode_managed_config_dir() {
-  if [[ -n "${OPENCODE_TEST_MANAGED_CONFIG_DIR:-}" ]]; then
-    printf '%s' "${OPENCODE_TEST_MANAGED_CONFIG_DIR}"
-    return 0
-  fi
-  case "$(uname -s 2> /dev/null)" in
-    Darwin)
-      printf '%s' "/Library/Application Support/opencode"
-      ;;
-    MINGW* | MSYS* | CYGWIN*)
-      printf '%s' "${ProgramData:-C:/ProgramData}/opencode"
-      ;;
-    *)
-      printf '%s' "/etc/opencode"
-      ;;
-  esac
-}
-
-_opencode_mdm_preference_present() {
-  if [[ -n "${OPENCODE_TEST_MDM_PREFERENCE_PRESENT:-}" ]]; then
-    [[ "${OPENCODE_TEST_MDM_PREFERENCE_PRESENT}" == "true" ]]
-    return
-  fi
-  [[ "$(uname -s 2> /dev/null)" == "Darwin" ]] || return 1
-  command -v defaults > /dev/null 2>&1 || return 1
-  [[ -n "$(defaults read ai.opencode.managed 2> /dev/null)" ]]
-}
-
-# Print a reason and return success when the bundled registry cannot be proven
-# authoritative. The decision is deliberately conservative and does not try to
-# mirror OpenCode's config/plugin discovery order:
-#
-# - normal runs pass through whenever a real project checkout is present;
-# - review-only runs may validate only after the action's isolation has removed
-#   project/caller config, and only on GitHub-hosted runners;
-# - any detected host state outside that isolation also forces passthrough.
-#
-# Checks of a few familiar paths below exist only to make warnings actionable
-# and preserve focused unit coverage. They are not an allow-list of OpenCode
-# configuration sources: unknown project/config files also force passthrough.
+# Print a reason and return success when the bundled model registry is not a
+# deterministic authority for variant metadata. Normal runs deliberately do
+# not inspect or enumerate OpenCode project/global/plugin configuration: they
+# pass variants through. Review-only runs can validate only after the action's
+# fresh isolation on a GitHub-hosted runner has removed caller/project state.
 _opencode_variant_passthrough_reason() {
-  local provider="${1}" model_id="${2}" bundled_config_file="${3}"
-  local workspace project_file project_content relative managed_config_dir data_dir
-
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     printf "use-bundled-toolkit is false, so the bundled model registry is not installed"
     return 0
   fi
-
-  managed_config_dir="$(_opencode_managed_config_dir)"
-  if _opencode_dir_has_files "${managed_config_dir}"; then
-    printf "host-managed OpenCode configuration exists outside the action's isolated config directory"
+  if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
+    printf "normal OpenCode runs may load external provider/model configuration that the action does not mirror"
     return 0
   fi
-  if _opencode_mdm_preference_present; then
-    printf "the host applies macOS MDM-managed OpenCode preferences outside the action's isolated config directory"
+  if [[ "${GITHUB_ACTIONS:-false}" != "true" || "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]]; then
+    printf "the review is not running in the action's isolated GitHub-hosted environment"
     return 0
   fi
-  data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencode"
-  if [[ -f "${data_dir}/auth.json" ]]; then
-    printf "a persisted OpenCode auth state exists at '%s', so remote or organization configuration may affect provider/model metadata" \
-      "${data_dir}/auth.json"
-    return 0
-  fi
-
-  if [[ "${RUNNER_ENVIRONMENT:-}" == "self-hosted" ]] || \
-    { [[ "${GITHUB_ACTIONS:-false}" == "true" ]] && [[ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]]; }; then
-    printf "the run is not on a GitHub-hosted runner, so host-controlled OpenCode configuration cannot be ruled out without mirroring upstream discovery"
-    return 0
-  fi
-
-  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
-    return 1
-  fi
-
-  if [[ -n "${OPENCODE_CONFIG:-}" || -n "${OPENCODE_CONFIG_DIR:-}" ]]; then
-    printf "the workflow sets OPENCODE_CONFIG or OPENCODE_CONFIG_DIR, so external provider/model metadata may be loaded"
-    return 0
-  fi
-
-  if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
-    if _opencode_config_defines_model "${OPENCODE_CONFIG_CONTENT}" "${provider}" "${model_id}"; then
-      printf "OPENCODE_CONFIG_CONTENT redefines '%s/%s'" "${provider}" "${model_id}"
-      return 0
-    fi
-    if _opencode_config_declares_plugin "${OPENCODE_CONFIG_CONTENT}"; then
-      printf "OPENCODE_CONFIG_CONTENT declares a plugin, which can mutate provider/model metadata before OpenCode validates it"
-      return 0
-    fi
-  fi
-
-  workspace="${GITHUB_WORKSPACE:-${PWD}}"
-  for relative in opencode.json opencode.jsonc .opencode/opencode.json .opencode/opencode.jsonc; do
-    project_file="${workspace}/${relative}"
-    if [[ -f "${project_file}" ]]; then
-      project_content="$(cat "${project_file}")"
-      if _opencode_config_defines_model "${project_content}" "${provider}" "${model_id}"; then
-        printf "the repository's %s redefines '%s/%s'" "${relative}" "${provider}" "${model_id}"
-        return 0
-      fi
-      if _opencode_config_declares_plugin "${project_content}"; then
-        printf "the repository's %s declares a plugin, which can mutate provider/model metadata before OpenCode validates it" \
-          "${relative}"
-        return 0
-      fi
-    fi
-  done
-  if _opencode_dir_has_files "${workspace}/.opencode/plugins"; then
-    printf "the repository's .opencode/plugins directory is not empty, so project plugin metadata may affect the model registry"
-    return 0
-  fi
-  if _opencode_dir_has_files "${workspace}"; then
-    printf "the project checkout contains files, and normal OpenCode runs may load project or plugin metadata from sources the action intentionally does not enumerate"
-    return 0
-  fi
-
-  if [[ "${XDG_CONFIG_HOME:-${HOME}/.config}" != "${HOME}/.config" ]]; then
-    printf "XDG_CONFIG_HOME points outside the directory where the action installs its bundled OpenCode configuration"
-    return 0
-  fi
-  if _opencode_dir_has_files "${HOME}/.config/opencode/plugins"; then
-    printf "'${HOME}/.config/opencode/plugins' is not empty, so global plugin metadata may affect the model registry"
-    return 0
-  fi
-  if [[ -f "${HOME}/.config/opencode/opencode.jsonc" ]] && \
-    ! cmp -s "${HOME}/.config/opencode/opencode.jsonc" "${bundled_config_file}" 2> /dev/null; then
-    printf "the installed OpenCode config at '%s' differs from the bundled registry, so a pre-existing config may be authoritative" \
-      "${HOME}/.config/opencode/opencode.jsonc"
-    return 0
-  fi
-  if _opencode_global_config_differs_from_bundle "${bundled_config_file}"; then
-    printf "the installed OpenCode config directory contains external state not present in the bundled toolkit"
-    return 0
-  fi
-  if _opencode_home_state_has_config_files; then
-    printf "'%s/.opencode' contains state other than the action-installed binary, so external OpenCode configuration may be active" "${HOME}"
-    return 0
-  fi
-
   return 1
 }
 
 # Reject a variant the bundled model registry does not declare only when that
-# registry is known to be authoritative. An empty variant is always allowed.
-# Models absent from the registry pass through silently; models present without
-# a variants key pass through with a warning. Nothing is substituted or
-# normalized.
+# registry is authoritative. An empty variant is always allowed. Models absent
+# from the registry pass through silently; models present without a variants
+# key pass through with a warning. Nothing is substituted or normalized.
 opencode_validate_variant() {
   local model="${1:-}" variant="${2:-}" bundled_config_file="${3:-}"
   local provider model_id candidate passthrough_reason bundled_json result jq_rc
@@ -245,7 +61,7 @@ opencode_validate_variant() {
   provider="${model%%/*}"
   model_id="${model#*/}"
 
-  passthrough_reason="$(_opencode_variant_passthrough_reason "${provider}" "${model_id}" "${bundled_config_file}")" || true
+  passthrough_reason="$(_opencode_variant_passthrough_reason)" || true
   if [[ -n "${passthrough_reason}" ]]; then
     _opencode_report_annotation warning \
       "Model '${model}' variant compatibility was not validated (${passthrough_reason}), so variant '${variant}' was passed through to OpenCode. If the provider rejects the request, rerun with an empty variant."
