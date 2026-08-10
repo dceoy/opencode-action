@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
-# Validate .opencode/ agent and skill frontmatter, pr-review references, that
-# opencode.jsonc parses, and that its external_directory permission allow-lists
-# the resolver path the skill actually sources and the runtime review-state
-# directory pattern.
+# Validate .opencode/ agent and skill frontmatter, pr-review routing and
+# references, release examples, opencode.jsonc parsing, and the runtime
+# read-only review permission boundary.
 
 setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
@@ -13,9 +12,9 @@ setup() {
   # shellcheck source=scripts/opencode-action-lib.sh
   source "${repo_root}/scripts/opencode-action-lib.sh"
   required_keys=(name description mode permission)
-  # Backtick-quoted identifiers in the pr-review skill that are skills, toolkits, or
-  # config inputs rather than agents.
-  non_agents=(pr-feedback-triage pr-review-toolkit submit-initial use-github-token validate-initial)
+  # Backtick-quoted identifiers in the pr-review skill that are operations or
+  # inputs rather than agents.
+  non_agents=(submit-initial use-github-token validate-initial)
 }
 
 agent_files() {
@@ -44,7 +43,7 @@ frontmatter() {
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
     for key in "${required_keys[@]}"; do
-      grep -qE "^${key}:" <<< "${fm}" || missing+=("${f}: missing '${key}'")
+      grep -qE "^${key}:" <<<"${fm}" || missing+=("${f}: missing '${key}'")
     done
   done < <(agent_files)
 
@@ -58,7 +57,7 @@ frontmatter() {
   local f fm name base mismatches=()
   while IFS= read -r f; do
     fm="$(frontmatter "${f}")"
-    name="$(grep -E '^name:' <<< "${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
+    name="$(grep -E '^name:' <<<"${fm}" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*$//')"
     base="$(basename "${f}" .md)"
     [ "${name}" = "${base}" ] || mismatches+=("${f}: name '${name}' != filename '${base}'")
   done < <(agent_files)
@@ -73,8 +72,8 @@ frontmatter() {
   local fm name description
 
   fm="$(frontmatter "${review_pr_skill}")"
-  name="$(grep -E '^name:' <<< "${fm}" | sed -E 's/^name:[[:space:]]*//')"
-  description="$(grep -E '^description:' <<< "${fm}" | sed -E 's/^description:[[:space:]]*//')"
+  name="$(grep -E '^name:' <<<"${fm}" | sed -E 's/^name:[[:space:]]*//')"
+  description="$(grep -E '^description:' <<<"${fm}" | sed -E 's/^description:[[:space:]]*//')"
 
   [ "${name}" = "pr-review" ]
   [ -n "${description}" ]
@@ -100,31 +99,33 @@ frontmatter() {
   grep -Fq '    pr-review: allow' "${orchestrator}"
 }
 
-@test "review-pr default selection names the core six reviewers" {
+@test "review-pr default selection uses five core reviewers for all documented dimensions" {
   local reviewer
 
   # shellcheck disable=SC2016
-  grep -Fq 'the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`' "${review_pr_skill}"
+  grep -Fq 'the core reviewers `code-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, and `security-code-reviewer`' "${review_pr_skill}"
+  grep -Fq 'The five core reviewers still cover the six documented default dimensions' "${review_pr_skill}"
   grep -Fq 'include specialty reviewers when the supplied diff is relevant' "${review_pr_skill}"
 
   for reviewer in \
-    code-quality-reviewer \
+    code-reviewer \
     performance-reviewer \
     test-coverage-reviewer \
     documentation-accuracy-reviewer \
-    security-code-reviewer \
-    code-reviewer; do
+    security-code-reviewer; do
     grep -Fq "${reviewer}" "${review_pr_skill}"
   done
 }
 
-@test "review-pr explicit core aspects force their documented reviewers" {
+@test "review-pr explicit core aspects force one canonical reviewer each" {
+  # shellcheck disable=SC2016
+  grep -Fq -- '- `code` or `quality`: `code-reviewer`' "${review_pr_skill}"
   # shellcheck disable=SC2016
   grep -Fq -- '- `performance`: `performance-reviewer`' "${review_pr_skill}"
   # shellcheck disable=SC2016
   grep -Fq -- '- `security`: `security-code-reviewer`' "${review_pr_skill}"
   # shellcheck disable=SC2016
-  grep -Fq -- '- `tests` or `coverage`: `test-coverage-reviewer`, `pr-test-analyzer`' "${review_pr_skill}"
+  grep -Fq -- '- `tests` or `coverage`: `test-coverage-reviewer`' "${review_pr_skill}"
   # shellcheck disable=SC2016
   grep -Fq -- '- `docs` or `documentation`: `documentation-accuracy-reviewer`' "${review_pr_skill}"
   grep -Fq 'Requested aspects always force their mapped reviewers.' "${review_pr_skill}"
@@ -159,6 +160,31 @@ frontmatter() {
   }
 }
 
+@test "removed reviewer and legacy helper names have no remaining references" {
+  local legacy_symbol removed_a removed_b
+
+  legacy_symbol='opencode_assert_pr_head_''unchanged'
+  removed_a='code-quality-''reviewer'
+  removed_b='pr-test-''analyzer'
+
+  run git -C "${repo_root}" grep -n -F "${legacy_symbol}"
+  [ "${status}" -eq 1 ]
+
+  run git -C "${repo_root}" grep -n -F "${removed_a}"
+  [ "${status}" -eq 1 ]
+
+  run git -C "${repo_root}" grep -n -F "${removed_b}"
+  [ "${status}" -eq 1 ]
+}
+
+@test "copyable action examples pin the current release" {
+  local expected
+  expected='uses: dceoy/opencode-action@da47df8f9d60c12de7b76dc1ca37633b147f0241 # v0.6.4'
+
+  grep -Fq "${expected}" "${repo_root}/README.md"
+  grep -Fq "${expected}" "${repo_root}/docs/pull-request-reviews.md"
+}
+
 @test "opencode.jsonc parses as JSON once its // comments are stripped" {
   opencode_jsonc_json | jq empty
 }
@@ -170,14 +196,14 @@ frontmatter() {
   grep -Fq 'Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.' "${review_pr_skill}"
 }
 
-@test "code-quality findings retain rich actionable Markdown" {
-  local quality_reviewer="${agents_dir}/code-quality-reviewer.md"
+@test "canonical code findings retain rich actionable Markdown" {
+  local code_reviewer="${agents_dir}/code-reviewer.md"
 
-  grep -Fq 'message: |-' "${quality_reviewer}"
-  grep -Fq '<what is wrong and the behavior that demonstrates it>' "${quality_reviewer}"
-  grep -Fq 'why it matters to users or maintainers' "${quality_reviewer}"
-  grep -Fq '<a concrete fix, including a fenced suggestion when it can be applied safely>' "${quality_reviewer}"
-  grep -Fq '```suggestion' "${quality_reviewer}"
+  grep -Fq 'message: |-' "${code_reviewer}"
+  grep -Fq '<what is wrong and the behavior that demonstrates it>' "${code_reviewer}"
+  grep -Fq 'why it matters to users or maintainers' "${code_reviewer}"
+  grep -Fq '<a concrete fix, including a fenced suggestion when it can be applied safely>' "${code_reviewer}"
+  grep -Fq '```suggestion' "${code_reviewer}"
   grep -Fq "Preserve each finding message's Markdown" "${review_pr_skill}"
   grep -Fq 'followed by a blank line and the unmodified finding message' "${review_pr_skill}"
   grep -Fq 'message: |-' "${review_pr_skill}"
@@ -185,26 +211,20 @@ frontmatter() {
 }
 
 @test "suggestion blocks are withheld or stripped for relocated anchors" {
-  local quality_reviewer="${agents_dir}/code-quality-reviewer.md"
+  local code_reviewer="${agents_dir}/code-reviewer.md"
 
-  grep -Fq 'reported line is not itself a head-side changed' "${quality_reviewer}"
+  grep -Fq 'reported line is not itself a head-side changed line' "${code_reviewer}"
   # shellcheck disable=SC2016
   grep -Fq 'strip any `suggestion` block from its message before submission' "${review_pr_skill}"
 }
 
 opencode_jsonc_json() {
-  opencode_jsonc_to_json < "${opencode_jsonc}"
+  opencode_jsonc_to_json <"${opencode_jsonc}"
 }
 
-@test "pr-review skill sources the resolver from a path opencode.jsonc allow-lists under external_directory" {
-  local resolver_suffix resolver_path default_action allow_patterns pattern expanded matched=0
-
-  resolver_suffix="$(grep -oE 'opencode_app_token_lib="\$\{HOME\}/[^"]+"' "${review_pr_skill}" | head -1 | sed -E 's/^opencode_app_token_lib="\$\{HOME\}\/(.*)"$/\1/')"
-  [ -n "${resolver_suffix}" ] || {
-    echo "pr-review skill does not set opencode_app_token_lib to a \${HOME}-relative path"
-    return 1
-  }
-  resolver_path="${HOME}/${resolver_suffix}"
+@test "external directory allow-list exposes only invoked review helpers and payload state" {
+  local default_action
+  local -a allow_patterns expected_patterns
 
   default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
   [ "${default_action}" = "deny" ] || {
@@ -212,21 +232,16 @@ opencode_jsonc_json() {
     return 1
   }
 
-  mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key')
-  [ "${#allow_patterns[@]}" -gt 0 ] || {
-    echo "opencode.jsonc's external_directory has no narrow allow rule"
-    return 1
-  }
+  mapfile -t allow_patterns < <(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)
+  expected_patterns=(
+    '$HOME/.config/opencode/review-state/*'
+    '$HOME/.config/opencode/scripts/review-pr-gh.sh'
+    '$HOME/.config/opencode/scripts/review-pr-submit.sh'
+  )
+  mapfile -t expected_patterns < <(printf '%s\n' "${expected_patterns[@]}" | sort)
 
-  for pattern in "${allow_patterns[@]}"; do
-    expanded="${pattern/#\$HOME/${HOME}}"
-    expanded="${expanded/#~/${HOME}}"
-    # shellcheck disable=SC2053
-    [[ "${resolver_path}" == ${expanded} ]] && matched=1
-  done
-
-  [ "${matched}" -eq 1 ] || {
-    echo "no external_directory allow pattern (${allow_patterns[*]}) matches the resolver path ${resolver_path} that the pr-review skill sources"
+  [ "${allow_patterns[*]}" = "${expected_patterns[*]}" ] || {
+    printf 'unexpected external_directory allow rules: %s\n' "${allow_patterns[*]}"
     return 1
   }
 }
@@ -237,7 +252,7 @@ opencode_jsonc_json() {
   local negative_status negative_output negative_exists
   local model_config
 
-  command -v opencode > /dev/null || {
+  command -v opencode >/dev/null || {
     echo "opencode is required for the runtime permission regression"
     return 1
   }

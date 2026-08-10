@@ -5,6 +5,7 @@ fail() {
   echo "::error::$*" >&2
   exit 1
 }
+
 state_dir="${HOME}/.config/opencode/review-state"
 context_file="${state_dir}/context.json"
 initial_payload="${state_dir}/initial.json"
@@ -13,6 +14,11 @@ update_payload="${state_dir}/update.json"
 review_id_file="${state_dir}/review_id"
 session_file="${HOME}/.config/opencode/review-session-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 submission_attempt_file="${state_dir}/submission-attempted"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+trusted_context_lib="${script_dir}/review-pr-context.sh"
+[[ -f "${trusted_context_lib}" ]] || fail "Trusted review context helper is unavailable."
+# shellcheck source=/dev/null
+source "${trusted_context_lib}"
 
 load_token_lib() {
   local opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"
@@ -21,59 +27,44 @@ load_token_lib() {
   source "${opencode_app_token_lib}"
 }
 
-trusted_context() {
-  local repo pr_number head_sha event_path event_pr current_head
-  [[ -s "${context_file}" ]] || return 1
-  repo="$(jq -r '.repository' "${context_file}")"
-  pr_number="$(jq -r '.pr_number' "${context_file}")"
-  head_sha="$(jq -r '.head_sha' "${context_file}")"
-  event_path="${GITHUB_EVENT_PATH:-}"
-  [[ "${repo}" == "${GITHUB_REPOSITORY:-}" && -f "${event_path}" ]] || return 1
-  event_pr="$(jq -r '.pull_request.number // .issue.number // empty' "${event_path}")"
-  [[ "${event_pr}" == "${pr_number}" ]] || return 1
-  current_head="$(gh pr view "${pr_number}" --repo "${repo}" --json headRefOid --jq .headRefOid)"
-  [[ "${current_head}" == "${head_sha}" ]] || return 1
-  printf '%s\t%s\t%s\n' "${repo}" "${pr_number}" "${head_sha}"
-}
-
 validate_initial_payload() {
   local comment_count index
-  jq -e . "${initial_payload}" > /dev/null 2>&1 \
+  jq -e . "${initial_payload}" >/dev/null 2>&1 \
     || fail "Invalid initial review payload: expected valid JSON."
-  jq -e 'type == "object"' "${initial_payload}" > /dev/null \
+  jq -e 'type == "object"' "${initial_payload}" >/dev/null \
     || fail "Invalid initial review payload: top level must be an object."
-  jq -e 'keys == ["body", "comments"]' "${initial_payload}" > /dev/null \
+  jq -e 'keys == ["body", "comments"]' "${initial_payload}" >/dev/null \
     || fail "Invalid initial review payload: top level must contain exactly body and comments."
-  jq -e '.body | type == "string" and length > 0' "${initial_payload}" > /dev/null \
+  jq -e '.body | type == "string" and length > 0' "${initial_payload}" >/dev/null \
     || fail "Invalid initial review payload: body must be a nonempty string."
-  jq -e '.comments | type == "array" and length > 0' "${initial_payload}" > /dev/null \
+  jq -e '.comments | type == "array" and length > 0' "${initial_payload}" >/dev/null \
     || fail "Invalid initial review payload: comments must be a nonempty array."
 
   comment_count="$(jq '.comments | length' "${initial_payload}")"
   for ((index = 0; index < comment_count; index++)); do
-    jq -e --argjson index "${index}" '.comments[$index] | type == "object"' "${initial_payload}" > /dev/null \
+    jq -e --argjson index "${index}" '.comments[$index] | type == "object"' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} must be an object."
-    jq -e --argjson index "${index}" '.comments[$index].body | type == "string" and length > 0' "${initial_payload}" > /dev/null \
+    jq -e --argjson index "${index}" '.comments[$index].body | type == "string" and length > 0' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} body must be a nonempty string."
     jq -e --argjson index "${index}" '
       .comments[$index].body
       | test("^\\*\\*(critical|important|suggestion) · [^*\\r\\n]+\\*\\*\\n\\n."; "s")
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} body must begin with a severity and reviewer source."
-    jq -e --argjson index "${index}" '.comments[$index].path | type == "string" and length > 0' "${initial_payload}" > /dev/null \
+    jq -e --argjson index "${index}" '.comments[$index].path | type == "string" and length > 0' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} path must be a nonempty string."
     jq -e --argjson index "${index}" '
       .comments[$index].line | type == "number" and floor == . and . > 0
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} line must be a positive integer."
     jq -e --argjson index "${index}" '
       .comments[$index].side == "LEFT" or .comments[$index].side == "RIGHT"
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} side must be LEFT or RIGHT."
     jq -e --argjson index "${index}" '
       .comments[$index] as $comment
       | ($comment | has("start_line")) == ($comment | has("start_side"))
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} must include both start_line and start_side or neither."
     jq -e --argjson index "${index}" '
       .comments[$index] as $comment
@@ -84,7 +75,7 @@ validate_initial_payload() {
         else
           true
         end
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} range must use positive ordered lines on the same side."
     jq -e --argjson index "${index}" '
       .comments[$index] as $comment
@@ -93,7 +84,7 @@ validate_initial_payload() {
         else
           ($comment | keys == ["body", "line", "path", "side"])
         end
-    ' "${initial_payload}" > /dev/null \
+    ' "${initial_payload}" >/dev/null \
       || fail "Invalid initial review payload: comment ${index} contains unsupported or missing fields."
   done
 }
@@ -106,17 +97,17 @@ case "${operation}" in
     mkdir -p "${HOME}/.config/opencode"
     if ! (
       set -o noclobber
-      : > "${session_file}"
-    ) 2> /dev/null; then
+      : >"${session_file}"
+    ) 2>/dev/null; then
       fail "Review submission state was already prepared for this run."
     fi
     rm -rf "${state_dir}"
     (
       umask 077
       mkdir -p "${state_dir}"
-      : > "${context_file}"
-      : > "${initial_payload}"
-      : > "${update_payload}"
+      : >"${context_file}"
+      : >"${initial_payload}"
+      : >"${update_payload}"
     )
     ;;
   validate-initial)
@@ -127,7 +118,7 @@ case "${operation}" in
     validate_initial_payload
     validated_payload_tmp="$(mktemp "${state_dir}/validated-initial.XXXXXX.json")"
     trap 'rm -f "${validated_payload_tmp}"' EXIT
-    jq -cS . "${initial_payload}" > "${validated_payload_tmp}"
+    jq -cS . "${initial_payload}" >"${validated_payload_tmp}"
     mv "${validated_payload_tmp}" "${validated_payload}"
     trap - EXIT
     ;;
@@ -141,38 +132,38 @@ case "${operation}" in
       || fail "Initial review payload changed after validation; submission must stop."
     if ! (
       set -o noclobber
-      : > "${submission_attempt_file}"
-    ) 2> /dev/null; then
+      : >"${submission_attempt_file}"
+    ) 2>/dev/null; then
       fail "Initial review submission was already attempted for this run."
     fi
     rm -f "${validated_payload}"
     load_token_lib
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
-    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
-    IFS=$'\t' read -r repo pr_number head_sha <<< "${context}"
+    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
+    IFS=$'\t' read -r repo pr_number head_sha <<<"${context}"
     request="$(mktemp "${TMPDIR:-/tmp}/opencode-pr-review.XXXXXX.json")"
     trap 'rm -f "${request}"' EXIT
-    jq --arg commit_id "${head_sha}" '. + {commit_id: $commit_id, event: "COMMENT"}' <<< "${current_payload}" > "${request}"
+    jq --arg commit_id "${head_sha}" '. + {commit_id: $commit_id, event: "COMMENT"}' <<<"${current_payload}" >"${request}"
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
-    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
+    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
     response="$(gh api --method POST "repos/${repo}/pulls/${pr_number}/reviews" --input "${request}")"
-    review_id="$(jq -r '.id // empty' <<< "${response}")"
+    review_id="$(jq -r '.id // empty' <<<"${response}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Review ID was not returned."
-    printf '%s' "${review_id}" > "${review_id_file}"
+    printf '%s' "${review_id}" >"${review_id_file}"
     printf '%s\n' "${response}"
     ;;
   update)
     load_token_lib
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
-    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
-    IFS=$'\t' read -r repo pr_number _ <<< "${context}"
-    jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" > /dev/null \
+    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed."
+    IFS=$'\t' read -r repo pr_number _ <<<"${context}"
+    jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "${update_payload}" >/dev/null \
       || fail "Invalid review update payload."
     [[ -f "${review_id_file}" ]] || fail "This run has no recorded review ID."
     review_id="$(cat "${review_id_file}")"
     [[ "${review_id}" =~ ^[1-9][0-9]*$ ]] || fail "Recorded review ID is invalid."
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}"
-    context="$(trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
+    context="$(opencode_review_trusted_context)" || fail "Pinned PR context is unavailable or the PR head changed during token verification."
     gh api --method PUT "repos/${repo}/pulls/${pr_number}/reviews/${review_id}" --input "${update_payload}" \
       || fail "Failed to submit the review update."
     ;;

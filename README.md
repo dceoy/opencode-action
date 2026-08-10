@@ -37,7 +37,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@aa0903dd64b04afeb942c067e69d47a3b580ccd1 # v0.6.2
+        uses: dceoy/opencode-action@da47df8f9d60c12de7b76dc1ca37633b147f0241 # v0.6.4
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -95,8 +95,8 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 ## Pull request reviews
 
-Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its backward-compatible command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees; see [Pull request reviews](docs/pull-request-reviews.md#review-isolation).
+Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its thin compatibility command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees; see [Pull request reviews](docs/pull-request-reviews.md#review-isolation).
 
-The default review runs the core quality, performance, coverage, documentation, security, and correctness reviewers; specialty reviewers beyond that set are added only when the diff matches their documented concern or an aspect such as `security`, `tests`, `docs`, or `performance` explicitly requests them. Provider request and chunk timeouts and the action's `timeout-minutes` watchdog are safety limits; they do not replace bounded request context or guarantee that a provider gateway or inference request will remain open.
+The default review uses five core reviewers to cover correctness and code quality, performance, test coverage, documentation accuracy, and security. Specialty reviewers beyond that set are added only when the diff matches their documented concern or an aspect such as `security`, `tests`, `docs`, or `performance` explicitly requests them. Provider request and chunk timeouts and the action's `timeout-minutes` watchdog are safety limits; they do not replace bounded request context or guarantee that a provider gateway or inference request will remain open.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.

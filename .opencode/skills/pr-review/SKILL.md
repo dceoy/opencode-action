@@ -9,7 +9,7 @@ This is a strictly read-only repository review. Analyze and report only. Do not 
 
 Do not run repository-wide QA scripts, formatters, auto-fixing linters, generators, dependency installers, or anything that can create caches, reports, snapshots, lockfiles, coverage output, scan output, or configuration exports in the checkout.
 
-Every helper this skill invokes — the read-only `gh` wrapper, the constrained submission helper, and the App-token resolver they source — lives only at its `${HOME}/.config/opencode/scripts/` path, installed there by the action before the reviewed repository is ever checked out. Never invoke any of them by a repository-relative path such as `.opencode/scripts/...`: the checkout under review is untrusted input, and a repository-relative path would let a malicious PR that edits or adds a same-named file substitute its own script for the trusted one. These helper paths and the dedicated `${HOME}/.config/opencode/review-state/` directory are the sole allow-listed external locations. Despite the directory-level external access required by OpenCode, use the edit tool only for `initial.json` and `update.json` as instructed below. The helpers use `opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"` for authentication.
+Every helper this skill invokes — the read-only `gh` wrapper and the constrained submission helper — lives only at its `${HOME}/.config/opencode/scripts/` path, installed there by the action before the reviewed repository is ever checked out. Their source-only trusted-context and App-token libraries are installed as sibling files and loaded internally by those helpers. Never invoke or source any of them by a repository-relative path such as `.opencode/scripts/...`: the checkout under review is untrusted input, and a repository-relative path would let a malicious PR that edits or adds a same-named file substitute its own script for the trusted one. The directly invoked helper paths and the dedicated `${HOME}/.config/opencode/review-state/` directory are the sole allow-listed external locations. Despite the directory-level external access required by OpenCode, use the edit tool only for `initial.json` and `update.json` as instructed below. The helpers load authentication only from `opencode_app_token_lib="${HOME}/.config/opencode/scripts/resolve-app-token.sh"`.
 
 ## 1. Establish the trusted context
 
@@ -30,19 +30,18 @@ Capture the full diff, changed-file list, PR title/body, base and head branch na
 
 Explicit aspects select these reviewers:
 
-- `code`: `code-reviewer`, `code-quality-reviewer`
-- `quality`: `code-quality-reviewer`
+- `code` or `quality`: `code-reviewer`
 - `performance`: `performance-reviewer`
 - `security`: `security-code-reviewer`
-- `tests` or `coverage`: `test-coverage-reviewer`, `pr-test-analyzer`
+- `tests` or `coverage`: `test-coverage-reviewer`
 - `docs` or `documentation`: `documentation-accuracy-reviewer`
 - `comments`: `comment-analyzer`
 - `errors`: `silent-failure-hunter`
 - `types`: `type-design-analyzer`
 - `simplify`: `code-simplifier`, returning behavior-preserving simplification proposals as review findings without modifying files
-- `all`, or no aspect: the core reviewers `code-quality-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, `security-code-reviewer`, and `code-reviewer`; include specialty reviewers when the supplied diff is relevant. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
+- `all`, or no aspect: the core reviewers `code-reviewer`, `performance-reviewer`, `test-coverage-reviewer`, `documentation-accuracy-reviewer`, and `security-code-reviewer`; include specialty reviewers when the supplied diff is relevant. Run `code-simplifier` only when `simplify` is explicitly requested; never include it in `all`.
 
-Requested aspects always force their mapped reviewers.
+Requested aspects always force their mapped reviewers. The five core reviewers still cover the six documented default dimensions: correctness and code quality share the canonical `code-reviewer`, while performance, test coverage, documentation accuracy, and security remain independent passes.
 
 Build a separate, minimal Task request for every selected reviewer. Include only its relevant files, diff hunks, and containing-function source context, plus only the metadata needed for that specialty. Exclude unchanged files and unrelated hunks. `code-reviewer` may receive the complete changed-file list, but do not include unrelated full-file contents. Reviewers have no shell access, so each subset must be self-contained. Tell each reviewer to inspect changed lines and their containing functions only, return high-confidence findings only, and use:
 

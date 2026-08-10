@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Resolve and verify the OpenCode GitHub App installation token from git
-# credential configuration so direct `gh api` PR review submissions are
-# authored by opencode-agent[bot] instead of falling back to
-# github-actions[bot] or a PAT-backed identity.
+# credential configuration so structured PR review submissions are authored by
+# opencode-agent[bot] instead of falling back to github-actions[bot] or a
+# PAT-backed identity.
 #
-# Intended to be sourced (not executed) from the bundled /review-pr command.
-# Never echoes tokens, decoded basic-auth headers, or other credential
-# material; only exports resolved tokens into GH_TOKEN/GITHUB_TOKEN.
+# Intended to be sourced by the trusted PR review helpers installed under
+# ~/.config/opencode/scripts/. Never echoes tokens, decoded basic-auth headers,
+# or other credential material; only exports resolved tokens into
+# GH_TOKEN/GITHUB_TOKEN.
 
 # The GitHub bot login every OpenCode-authored structured PR review write
 # must match once use-github-token is false.
@@ -30,7 +31,7 @@ opencode_decode_extraheader_token() {
   else
     return 1
   fi
-  decoded="$(printf '%s' "${encoded}" | base64 --decode 2> /dev/null)" || decoded="$(printf '%s' "${encoded}" | base64 -D 2> /dev/null)" || return 1
+  decoded="$(printf '%s' "${encoded}" | base64 --decode 2>/dev/null)" || decoded="$(printf '%s' "${encoded}" | base64 -D 2>/dev/null)" || return 1
   case "${decoded}" in
     x-access-token:?*)
       printf '%s' "${decoded#x-access-token:}"
@@ -94,12 +95,12 @@ opencode_resolve_app_token_candidates() {
   local value line key val rest token host
 
   {
-    value="$(git config --local --get http.https://github.com/.extraheader 2> /dev/null || true)"
+    value="$(git config --local --get http.https://github.com/.extraheader 2>/dev/null || true)"
     if token="$(opencode_decode_extraheader_token "${value}")"; then
       printf '%s\n' "${token}"
     fi
 
-    value="$(git config --get-urlmatch http.extraheader https://github.com/ 2> /dev/null || true)"
+    value="$(git config --get-urlmatch http.extraheader https://github.com/ 2>/dev/null || true)"
     if token="$(opencode_decode_extraheader_token "${value}")"; then
       printf '%s\n' "${token}"
     fi
@@ -113,7 +114,7 @@ opencode_resolve_app_token_candidates() {
       if token="$(opencode_decode_extraheader_token "${val}")"; then
         printf '%s\n' "${token}"
       fi
-    done < <(git config --get-regexp 'http\..*\.extraheader' 2> /dev/null || true)
+    done < <(git config --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
 
     while IFS=$'\t' read -r _ rest; do
       [[ -z "${rest}" ]] && continue
@@ -124,7 +125,7 @@ opencode_resolve_app_token_candidates() {
       if token="$(opencode_decode_extraheader_token "${val}")"; then
         printf '%s\n' "${token}"
       fi
-    done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2> /dev/null || true)
+    done < <(git config --show-origin --get-regexp 'http\..*\.extraheader' 2>/dev/null || true)
   } | awk '!seen[$0]++'
 }
 
@@ -178,41 +179,41 @@ opencode_verify_app_token_identity() {
   local probe_response probe_id probe_login probe_stderr probe_rc
 
   [[ -n "${repo}" && -n "${pr_number}" && -n "${token}" ]] || return 1
-  command -v gh > /dev/null 2>&1 || return 1
-  command -v jq > /dev/null 2>&1 || return 1
+  command -v gh >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
 
   probe_stderr="$(mktemp)"
   probe_response="$(
     printf '{}' | GH_TOKEN="${token}" GITHUB_TOKEN="${token}" gh api \
       --method POST \
       "repos/${repo}/pulls/${pr_number}/reviews" \
-      --input - 2> "${probe_stderr}"
+      --input - 2>"${probe_stderr}"
   )"
   probe_rc=$?
   if [[ "${probe_rc}" -ne 0 ]]; then
     if [[ -s "${probe_stderr}" ]]; then
-      echo "::warning::Identity-verification probe request failed for a candidate token (this is a transient/API error, not necessarily an identity mismatch): $(tr '\n' ' ' < "${probe_stderr}")" >&2
+      echo "::warning::Identity-verification probe request failed for a candidate token (this is a transient/API error, not necessarily an identity mismatch): $(tr '\n' ' ' <"${probe_stderr}")" >&2
     fi
     rm -f "${probe_stderr}"
     return 1
   fi
   rm -f "${probe_stderr}"
 
-  probe_id="$(jq -r '.id // empty' <<< "${probe_response}" 2> /dev/null)"
-  probe_login="$(jq -r '.user.login // empty' <<< "${probe_response}" 2> /dev/null)"
+  probe_id="$(jq -r '.id // empty' <<<"${probe_response}" 2>/dev/null)"
+  probe_login="$(jq -r '.user.login // empty' <<<"${probe_response}" 2>/dev/null)"
 
   if [[ -n "${probe_id}" ]]; then
     GH_TOKEN="${token}" GITHUB_TOKEN="${token}" gh api \
       --method DELETE \
       "repos/${repo}/pulls/${pr_number}/reviews/${probe_id}" \
-      > /dev/null 2>&1 \
+      >/dev/null 2>&1 \
       || echo "::warning::Failed to delete the throwaway identity-verification pending review (id ${probe_id}); it is never submitted and is only visible to the token's own author, so it is safe to ignore or delete manually." >&2
   fi
 
   [[ -n "${probe_login}" && "${probe_login}" == "${OPENCODE_REVIEW_BOT_LOGIN}" ]]
 }
 
-# Policy gate for structured PR review submission (create/update/retry).
+# Policy gate for structured PR review writes.
 # $1: the workflow's use-github-token input value ("true"/"false"/empty).
 # $2: "<owner>/<repo>", required to verify a candidate token.
 # $3: pull request number, required to verify a candidate token.
@@ -234,34 +235,6 @@ opencode_verify_app_token_identity() {
 #   GH_TOKEN/GITHUB_TOKEN or an unverified candidate, since either could
 #   make the review appear as github-actions[bot] or another identity
 #   instead of opencode-agent[bot].
-# Guard against submitting a stale review. The PR head SHA is pinned once
-# when the diff is gathered for analysis; immediately before the initial
-# structured review POST this re-fetches the current head SHA and fails,
-# WITHOUT submitting anything, when the head moved. Deliberately no retry:
-# findings were produced against the pinned SHA and must never be re-anchored
-# to or submitted against a newer commit.
-#
-# $1: "<owner>/<repo>"
-# $2: pull request number
-# $3: the pinned head SHA the review findings were produced against
-opencode_assert_pr_head_unchanged() {
-  local repo="${1:-}" pr_number="${2:-}" pinned_sha="${3:-}" current_sha
-
-  [[ -n "${repo}" && -n "${pr_number}" && -n "${pinned_sha}" ]] || {
-    echo "::error::opencode_assert_pr_head_unchanged requires <owner>/<repo>, PR number, and the pinned head SHA." >&2
-    return 1
-  }
-  current_sha="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha' 2> /dev/null)" || {
-    echo "::error::Failed to fetch the current head SHA for ${repo}#${pr_number}; refusing to submit a review that may be stale." >&2
-    return 1
-  }
-  if [[ -z "${current_sha}" || "${current_sha}" != "${pinned_sha}" ]]; then
-    echo "::error::PR ${repo}#${pr_number} head moved from pinned ${pinned_sha} to ${current_sha:-unknown} since the diff was analyzed; refusing to submit a stale review. Re-run the review against the new head." >&2
-    return 1
-  fi
-  return 0
-}
-
 opencode_require_app_token_for_review() {
   local use_github_token="${1:-false}" repo="${2:-}" pr_number="${3:-}"
   local token tried=0

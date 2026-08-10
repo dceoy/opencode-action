@@ -22,7 +22,6 @@ git ls-files -z -- '.github/workflows/*.yml' \
   | xargs -0 -t actionlint
 checkov --framework=all --output=github_failed_only --directory=.
 
-# Bats regression suites: OpenCode agent frontmatter/review-pr references,
-# and PR review token resolution.
+# All tracked Bats regression suites.
 git ls-files -z -- '*.bats' \
   | xargs -0 -t bats
