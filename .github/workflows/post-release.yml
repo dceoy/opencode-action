@@ -20,8 +20,6 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -30,7 +28,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Update README
-        id: update
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -41,40 +38,13 @@ jobs:
             exit 1
           fi
           sed -E -i "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha} # ${RELEASE_TAG}|" README.md
-          if git diff --quiet -- README.md; then
-            echo 'changed=false' >> "${GITHUB_OUTPUT}"
-          else
-            echo 'changed=true' >> "${GITHUB_OUTPUT}"
-            echo "release_sha=${release_sha}" >> "${GITHUB_OUTPUT}"
-          fi
       - name: Create pull request
-        if: steps.update.outputs.changed == 'true'
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          RELEASE_ID: ${{ github.event.release.id }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_SHA: ${{ steps.update.outputs.release_sha }}
-        run: |
-          branch="automation/readme-${RELEASE_ID}"
-          existing_pr="$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')"
-          if [[ -n "${existing_pr}" ]]; then
-            echo "PR #${existing_pr} already exists for ${RELEASE_TAG}."
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "${branch}"
-          git add README.md
-          git commit -m "Update README for ${RELEASE_TAG}"
-          gh auth setup-git
-          remote_sha="$(git ls-remote --heads origin "refs/heads/${branch}" | awk '{print $1}')"
-          if [[ -n "${remote_sha}" ]]; then
-            git push --force-with-lease="refs/heads/${branch}:${remote_sha}" origin "HEAD:refs/heads/${branch}"
-          else
-            git push --set-upstream origin "${branch}"
-          fi
-          gh pr create \
-            --base "${DEFAULT_BRANCH}" \
-            --head "${branch}" \
-            --title "Update README for ${RELEASE_TAG}" \
-            --body "Pin the README action example to ${RELEASE_TAG} (${RELEASE_SHA})."
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
+          commit-message: Update README for ${{ github.event.release.tag_name }}
+          title: Update README for ${{ github.event.release.tag_name }}
+          branch: github-actions/readme
+          base: ${{ github.event.repository.default_branch }}
+          body: Update the README action pin for ${{ github.event.release.tag_name }}.
+          delete-branch: true
