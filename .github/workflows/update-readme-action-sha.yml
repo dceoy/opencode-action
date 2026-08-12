@@ -5,6 +5,9 @@ on:
     types:
       - released
 permissions: {}
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
 jobs:
   update-readme-action-sha:
     permissions:
@@ -47,13 +50,23 @@ jobs:
           RELEASE_SHA: ${{ steps.update.outputs.release_sha }}
         run: |
           branch="automation/update-readme-action-sha-${RELEASE_ID}"
+          existing_pr="$(gh pr list --head "${branch}" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "${existing_pr}" ]]; then
+            echo "PR #${existing_pr} already exists for ${RELEASE_TAG}."
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "${branch}"
           git add README.md
           git commit -m "Update README action SHA for ${RELEASE_TAG}"
           gh auth setup-git
-          git push --set-upstream origin "${branch}"
+          remote_sha="$(git ls-remote --heads origin "refs/heads/${branch}" | awk '{print $1}')"
+          if [[ -n "${remote_sha}" ]]; then
+            git push --force-with-lease="refs/heads/${branch}:${remote_sha}" origin "HEAD:refs/heads/${branch}"
+          else
+            git push --set-upstream origin "${branch}"
+          fi
           gh pr create \
             --base "${DEFAULT_BRANCH}" \
             --head "${branch}" \
