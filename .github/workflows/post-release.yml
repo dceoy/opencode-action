@@ -15,7 +15,6 @@ jobs:
       contents: write
     uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
   readme:
-    if: github.event_name == 'release'
     permissions:
       contents: write
       pull-requests: write
@@ -27,9 +26,20 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Set release
+        id: release
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+        run: |
+          tag="${EVENT_TAG}"
+          if [[ -z "${tag}" ]]; then
+            tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
       - name: Update README
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
           match_count="$(grep -Ec 'uses: dceoy/opencode-action@[0-9a-f]{40}' README.md || true)"
@@ -42,9 +52,9 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
-          commit-message: Update README for ${{ github.event.release.tag_name }}
-          title: Update README for ${{ github.event.release.tag_name }}
+          commit-message: Update README for ${{ steps.release.outputs.tag }}
+          title: Update README for ${{ steps.release.outputs.tag }}
           branch: github-actions/readme
           base: ${{ github.event.repository.default_branch }}
-          body: Update the README action pin for ${{ github.event.release.tag_name }}.
+          body: Update the README action pin for ${{ steps.release.outputs.tag }}.
           delete-branch: true
