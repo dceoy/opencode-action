@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -37,10 +37,7 @@ jobs:
           if [[ -n "${EVENT_TAG}" ]]; then
             tag="${EVENT_TAG}"
           else
-            tag="$(
-              gh release list --repo "${GITHUB_REPOSITORY}" --json tagName,isLatest \
-                --jq '.[] | select(.isLatest) | .tagName'
-            )"
+            tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq '.tagName')"
             if [[ -z "${tag}" ]]; then
               echo 'No latest release found' >&2
               exit 1
