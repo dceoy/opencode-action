@@ -5,10 +5,12 @@ on:
     types:
       - released
   workflow_dispatch:
-permissions: {}
+permissions:
+  contents: read
 defaults:
   run:
     shell: bash -euo pipefail {0}
+    working-directory: .
 jobs:
   tag:
     permissions:
@@ -18,7 +20,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -32,29 +34,31 @@ jobs:
           EVENT_TAG: ${{ github.event.release.tag_name }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         run: |
-          tag="${EVENT_TAG}"
-          if [[ -z "${tag}" ]]; then
+          if [[ -n "${EVENT_TAG}" ]]; then
+            tag="${EVENT_TAG}"
+          else
             tag="$(
               gh release list --repo "${GITHUB_REPOSITORY}" --json tagName,isLatest \
                 --jq '.[] | select(.isLatest) | .tagName'
             )"
+            if [[ -z "${tag}" ]]; then
+              echo 'No latest release found' >&2
+              exit 1
+            fi
           fi
-          if [[ -z "${tag}" ]]; then
-            echo 'No latest release found' >&2
-            exit 1
-          fi
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          tee -a "${GITHUB_OUTPUT}" <<< "tag=${tag}"
       - name: Update README
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
           match_count="$(grep -Ec 'uses: dceoy/opencode-action@[0-9a-f]{40}' README.md || true)"
           if [[ "${match_count}" != 1 ]]; then
             echo "Expected exactly one pinned dceoy/opencode-action reference in README.md, found ${match_count}." >&2
             exit 1
+          else
+            release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+            sed -iE "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha} # ${RELEASE_TAG}|" README.md
           fi
-          sed -E -i "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha} # ${RELEASE_TAG}|" README.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
