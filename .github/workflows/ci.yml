@@ -7,9 +7,6 @@ on:
   pull_request:
     branches:
       - main
-  release:
-    types:
-      - released
   workflow_dispatch:
 permissions:
   contents: read
@@ -76,13 +73,6 @@ jobs:
     with:
       language: >
         ["actions"]
-  github-major-version-tag:
-    if: >
-      (github.event_name == 'release' && github.event.action == 'released')
-      || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
