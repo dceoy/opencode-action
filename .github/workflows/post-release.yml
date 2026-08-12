@@ -34,7 +34,14 @@ jobs:
         run: |
           tag="${EVENT_TAG}"
           if [[ -z "${tag}" ]]; then
-            tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+            tag="$(
+              gh release list --repo "${GITHUB_REPOSITORY}" --json tagName,isLatest \
+                --jq '.[] | select(.isLatest) | .tagName'
+            )"
+          fi
+          if [[ -z "${tag}" ]]; then
+            echo 'No latest release found' >&2
+            exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
       - name: Update README
