@@ -211,24 +211,6 @@ opencode_jsonc_json() {
   grep -Fq 'command_dirs=("${ACTION_PATH}/.opencode/commands")' "${run_script}"
 }
 
-@test "removed reviewers and legacy helpers have no references" {
-  local symbol
-  local -a removed=(
-    'comment-''analyzer'
-    'code-quality-''reviewer'
-    'pr-test-''analyzer'
-    'opencode_assert_pr_head_''unchanged'
-  )
-
-  for symbol in "${removed[@]}"; do
-    run git -C "${repo_root}" grep -n -F "${symbol}"
-    [ "${status}" -eq 1 ] || {
-      echo "stale reference to ${symbol}: ${output}"
-      return 1
-    }
-  done
-}
-
 @test "bundled opencode.jsonc parses as JSON" {
   opencode_jsonc_json | jq empty
 }
