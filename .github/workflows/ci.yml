@@ -56,6 +56,7 @@ jobs:
       setup-run: |
         corepack install --global pnpm@latest
         corepack pnpm install --frozen-lockfile
+        (cd node_modules/opencode-ai && node postinstall.mjs)
         echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> "${GITHUB_PATH}"
   github-codeql-analysis:
     if: >
