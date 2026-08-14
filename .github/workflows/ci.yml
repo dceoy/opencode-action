@@ -10,10 +10,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-defaults:
-  run:
-    shell: bash -euo pipefail {0}
-    working-directory: .
 jobs:
   github-actions-lint-and-scan:
     if: >
@@ -58,8 +54,10 @@ jobs:
     with:
       search-path: .
       setup-run: |
-        curl -fsSL https://opencode.ai/install | bash -s -- --version 1.2.14
-        echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
+        corepack install --global pnpm@latest
+        corepack pnpm install --frozen-lockfile
+        (cd node_modules/opencode-ai && node postinstall.mjs)
+        echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> "${GITHUB_PATH}"
   github-codeql-analysis:
     if: >
       github.event_name == 'push'

@@ -1,0 +1,7 @@
+{
+  "name": "opencode-action",
+  "private": true,
+  "devDependencies": {
+    "opencode-ai": "latest"
+  }
+}
