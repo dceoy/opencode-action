@@ -1,0 +1,113 @@
+---
+name: Pull request review using OpenCode
+on:
+  workflow_call:
+    inputs:
+      model:
+        required: true
+        type: string
+        description: Model to use with OpenCode
+      agent:
+        required: false
+        type: string
+        description: Primary agent to use
+        default: build
+      share:
+        required: false
+        type: boolean
+        description: Share the OpenCode session
+        default: false
+      prompt:
+        required: false
+        type: string
+        description: Review prompt
+        default: /review-pr
+      use-github-token:
+        required: false
+        type: boolean
+        description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange
+        default: false
+      mentions:
+        required: false
+        type: string
+        description: Comma-separated list of trigger phrases
+        default: /opencode,/oc
+      variant:
+        required: false
+        type: string
+        description: Provider-specific model variant
+        default: ''
+      oidc-base-url:
+        required: false
+        type: string
+        description: Base URL for OIDC token exchange
+        default: https://api.opencode.ai
+      opencode-version:
+        required: false
+        type: string
+        description: OpenCode version to install
+        default: latest
+      use-bundled-toolkit:
+        required: false
+        type: boolean
+        description: Use the action's bundled OpenCode toolkit
+        default: true
+      timeout-minutes:
+        required: false
+        type: number
+        description: Maximum minutes to let OpenCode run
+        default: 60
+      runs-on:
+        required: false
+        type: string
+        description: Runner to use
+        default: ubuntu-latest
+    secrets:
+      OPENROUTER_API_KEY:
+        required: false
+        description: OpenRouter API key
+      OPENCODE_API_KEY:
+        required: false
+        description: OpenCode API key
+      SAKURA_AI_ENGINE_API_KEY:
+        required: false
+        description: Sakura AI Engine API key
+      GH_TOKEN:
+        required: false
+        description: GitHub token for repository access
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+jobs:
+  opencode-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
+          persist-credentials: false
+      - name: Run OpenCode
+        uses: dceoy/opencode-action@v0  # zizmor: ignore[unpinned-uses] maintained by this repository's major release tag
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        with:
+          model: ${{ inputs.model }}
+          agent: ${{ inputs.agent }}
+          share: ${{ inputs.share }}
+          prompt: ${{ inputs.prompt }}
+          use-github-token: ${{ inputs.use-github-token }}
+          mentions: ${{ inputs.mentions }}
+          variant: ${{ inputs.variant }}
+          oidc-base-url: ${{ inputs.oidc-base-url }}
+          opencode-version: ${{ inputs.opencode-version }}
+          use-bundled-toolkit: ${{ inputs.use-bundled-toolkit }}
+          timeout-minutes: ${{ inputs.timeout-minutes }}
