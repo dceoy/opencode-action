@@ -63,6 +63,12 @@ on:
         description: Runner to use
         default: ubuntu-latest
     secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+        description: Anthropic API key
+      OPENAI_API_KEY:
+        required: false
+        description: OpenAI API key
       OPENROUTER_API_KEY:
         required: false
         description: OpenRouter API key
@@ -90,15 +96,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 1
-          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
+          token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
           persist-credentials: false
       - name: Run OpenCode
         uses: dceoy/opencode-action@v0  # zizmor: ignore[unpinned-uses] maintained by this repository's major release tag
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
           model: ${{ inputs.model }}
           agent: ${{ inputs.agent }}
