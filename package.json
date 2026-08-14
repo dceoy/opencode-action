@@ -4,5 +4,10 @@
   "packageManager": "pnpm@10.15.0",
   "devDependencies": {
     "opencode-ai": "latest"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "opencode-ai"
+    ]
   }
 }
