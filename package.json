@@ -1,0 +1,8 @@
+{
+  "name": "opencode-action",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "devDependencies": {
+    "opencode-ai": "latest"
+  }
+}
