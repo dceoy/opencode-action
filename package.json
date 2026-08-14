@@ -3,10 +3,5 @@
   "private": true,
   "devDependencies": {
     "opencode-ai": "latest"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "opencode-ai"
-    ]
   }
 }
