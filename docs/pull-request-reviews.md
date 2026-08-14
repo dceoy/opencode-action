@@ -8,27 +8,28 @@ Agents can also load `pr-review` directly through OpenCode's native skill tool, 
 
 Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout. Request, chunk, and action timeouts are safety limits, not substitutes for bounding request size, and `chunkTimeout` cannot guarantee that a provider-side gateway or inference timeout will not end a request sooner.
 
+Start from the pinned workflow in the [README quick start](../README.md#quick-start), then grant pull-request write access and configure the OpenCode step for review mode. The copied job remains triggered by `/oc` or `/opencode`; the fixed `prompt` below makes either accepted mention run `/review-pr`:
+
 ```yaml
 permissions:
   contents: read
   pull-requests: write
   id-token: write
-steps:
-  - name: Run OpenCode review
-    uses: dceoy/opencode-action@da47df8f9d60c12de7b76dc1ca37633b147f0241 # v0.6.4
-    env:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      GITHUB_TOKEN: ${{ github.token }}
-    with:
-      model: openrouter/openrouter/free
-      prompt: /review-pr
+
+# In the Run OpenCode step from the README quick start:
+env:
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+  GITHUB_TOKEN: ${{ github.token }}
+with:
+  model: openrouter/openrouter/free
+  prompt: /review-pr
 ```
 
 When `use-github-token: true`, pass `GH_TOKEN` or `GITHUB_TOKEN` and grant the workflow token the required permissions.
 
 ## Review aspects
 
-Use one or more keywords after `/review-pr`:
+To select review aspects in this fixed-prompt setup, set `prompt` to `/review-pr` followed by one or more keywords:
 
 | Command                           | Focus                                |
 | --------------------------------- | ------------------------------------ |
