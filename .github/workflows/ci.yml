@@ -12,6 +12,10 @@ permissions:
   contents: read
 jobs:
   github-actions-lint-and-scan:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       actions: read
@@ -22,25 +26,42 @@ jobs:
       yamllint-search-path: .
       zizmor-search-path: .
   markdown-lint:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     uses: dceoy/gha-for-devops/.github/workflows/markdown-lint.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
   shell-lint:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     uses: dceoy/gha-for-devops/.github/workflows/shell-lint.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
   bats-test:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     uses: dceoy/gha-for-devops/.github/workflows/bats-test.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       search-path: .
       setup-run: |
+        corepack install --global pnpm@latest
         corepack pnpm install --frozen-lockfile
         echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> "${GITHUB_PATH}"
   github-codeql-analysis:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'pull_request'
+      || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       security-events: write
