@@ -3,4 +3,4 @@ paths:
   .github/workflows/opencode-*.yml:
     ignore:
       # actionlint does not yet recognize GitHub's $/ self repository reference.
-      - 'specifying action "\$/" in invalid format because ref is missing'
+      - 'specifying action "\$/\." in invalid format because ref is missing'
