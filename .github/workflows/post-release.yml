@@ -44,15 +44,36 @@ jobs:
             fi
           fi
           tee -a "${GITHUB_OUTPUT}" <<< "tag=${tag}"
+      - name: Set actions/checkout release
+        id: checkout
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+        run: |
+          tag="$(gh release view --repo actions/checkout --json tagName --jq '.tagName')"
+          sha="$(gh api "repos/actions/checkout/commits/${tag}" --jq '.sha')"
+          if [[ -z "${tag}" || ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Failed to resolve the latest actions/checkout release commit.' >&2
+            exit 1
+          fi
+          tee -a "${GITHUB_OUTPUT}" <<< "tag=${tag}"
+          tee -a "${GITHUB_OUTPUT}" <<< "sha=${sha}"
       - name: Update release pins
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          CHECKOUT_TAG: ${{ steps.checkout.outputs.tag }}
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.sha }}
         run: |
           release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
 
-          readme_match_count="$(grep -Ec 'uses: dceoy/opencode-action@[0-9a-f]{40}' README.md || true)"
-          if [[ "${readme_match_count}" != 1 ]]; then
-            echo "Expected exactly one pinned dceoy/opencode-action reference in README.md, found ${readme_match_count}." >&2
+          readme_action_match_count="$(grep -Ec 'uses: dceoy/opencode-action@[0-9a-f]{40}' README.md || true)"
+          if [[ "${readme_action_match_count}" != 1 ]]; then
+            echo "Expected exactly one pinned dceoy/opencode-action reference in README.md, found ${readme_action_match_count}." >&2
+            exit 1
+          fi
+
+          readme_checkout_match_count="$(grep -Ec 'uses: actions/checkout@[0-9a-f]{40}' README.md || true)"
+          if [[ "${readme_checkout_match_count}" != 1 ]]; then
+            echo "Expected exactly one pinned actions/checkout reference in README.md, found ${readme_checkout_match_count}." >&2
             exit 1
           fi
 
@@ -63,6 +84,7 @@ jobs:
           fi
 
           sed -iE "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha} # ${RELEASE_TAG}|" README.md
+          sed -iE "s|(uses: actions/checkout@)[0-9a-f]{40}( +#.*)?|\1${CHECKOUT_SHA} # ${CHECKOUT_TAG}|" README.md
           sed -iE "s|(uses: dceoy/opencode-action/\.github/workflows/opencode-(bot|review)\.yml@)[0-9a-f]{40}|\1${release_sha}|g" docs/reusable-workflows.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
@@ -72,5 +94,5 @@ jobs:
           title: Update release pins for ${{ steps.release.outputs.tag }}
           branch: github-actions/release-pins
           base: ${{ github.event.repository.default_branch }}
-          body: Update the README action pin and reusable workflow documentation pins for ${{ steps.release.outputs.tag }}.
+          body: Update the README action and actions/checkout pins plus reusable workflow documentation pins for ${{ steps.release.outputs.tag }}.
           delete-branch: true
