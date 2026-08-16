@@ -57,6 +57,10 @@ on:
         type: number
         description: Maximum minutes to let OpenCode run
         default: 60
+      action-ref:
+        required: true
+        type: string
+        description: OpenCode action revision to check out
       runs-on:
         required: false
         type: string
@@ -124,8 +128,16 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
           persist-credentials: false
+      - name: Checkout OpenCode action
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: dceoy/opencode-action
+          ref: ${{ inputs.action-ref }}
+          path: .opencode-action
+          fetch-depth: 1
+          persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@v0  # zizmor: ignore[unpinned-uses] maintained by this repository's major release tag
+        uses: ./.opencode-action
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
