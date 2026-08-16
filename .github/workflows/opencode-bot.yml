@@ -99,6 +99,12 @@ on:
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
+  issue_comment:
+    types:
+      - created
+  pull_request_review_comment:
+    types:
+      - created
 permissions:
   contents: read
   pull-requests: write
@@ -111,12 +117,19 @@ jobs:
       (
         (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
         && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+        && (
+          inputs.model != ''
+          || startsWith(github.event.comment.body, '/oc')
+          || contains(github.event.comment.body, ' /oc')
+          || startsWith(github.event.comment.body, '/opencode')
+          || contains(github.event.comment.body, ' /opencode')
+        )
       ) || (
         github.event_name != 'issue_comment'
         && github.event_name != 'pull_request_review_comment'
         && inputs.prompt != ''
       )
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -125,7 +138,7 @@ jobs:
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@v0  # zizmor: ignore[unpinned-uses] maintained by this repository's major release tag
+        uses: $/.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -140,14 +153,14 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
-          model: ${{ inputs.model }}
-          agent: ${{ inputs.agent }}
+          model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
+          agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt }}
           use-github-token: ${{ inputs.use-github-token }}
-          mentions: ${{ inputs.mentions }}
+          mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
-          oidc-base-url: ${{ inputs.oidc-base-url }}
-          opencode-version: ${{ inputs.opencode-version }}
-          use-bundled-toolkit: ${{ inputs.use-bundled-toolkit }}
-          timeout-minutes: ${{ inputs.timeout-minutes }}
+          oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
+          opencode-version: ${{ inputs.opencode-version || 'latest' }}
+          use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
+          timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

@@ -2,7 +2,7 @@
 
 `opencode-action` publishes two reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
 
-The examples below pin the reusable workflow definition to the commit that introduced these workflows. The called workflow currently invokes `dceoy/opencode-action@v0` internally, so this fixes the workflow definition without making the nested action reference immutable.
+The examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/.` references the action at the repository root from the same repository and running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
 
 ## Mention bot
 
@@ -25,7 +25,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@7c392aad14ab1281630ae0c93e81d727f76b3e92
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@de968892b27dd42727fa175cd00610a54d091bf9
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@7c392aad14ab1281630ae0c93e81d727f76b3e92
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@de968892b27dd42727fa175cd00610a54d091bf9
     with:
       model: openrouter/openrouter/free
     secrets:
@@ -83,14 +83,16 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
+GitHub.com's `$/path` self repository syntax resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. These workflows use `$/.` because the action is defined at the repository root. GitHub Enterprise Server does not support this syntax.
+
 ## Secrets
 
-Pass only the provider secret needed by the selected model. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, and `SAKURA_AI_ENGINE_API_KEY`.
+Pass only the provider secret needed by the selected model. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
 
-`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. If `use-github-token: true`, ensure the caller grants the permissions required by the requested operation.
+`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. For code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`.
 
 ## Permissions
 
-The reusable workflows request `contents: read`, `pull-requests: write`, `issues: write`, `id-token: write`, and `actions: read`. A called workflow cannot elevate the `GITHUB_TOKEN` permissions granted by its caller, so the calling job must grant the permissions needed by the selected mode.
+The reusable workflows request `contents: read`, `pull-requests: write`, `issues: write`, `id-token: write`, and `actions: read`. A called workflow can only maintain or reduce the caller's `GITHUB_TOKEN` permissions: the caller must grant the requested permissions, but its higher `contents` permission cannot override the called workflow's `contents: read` ceiling. A separately supplied `GH_TOKEN` is not governed by that `GITHUB_TOKEN` permission ceiling.
 
 The examples keep `permissions`, `with`, and `secrets` under the calling job so their scopes are explicit: `permissions` controls the caller token, `with` configures the reusable workflow inputs, and `secrets` passes credentials.
