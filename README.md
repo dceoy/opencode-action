@@ -59,6 +59,17 @@ The shorter `/oc` trigger also works:
 
 The default setup exchanges the workflow OIDC token for an OpenCode GitHub App token, which requires `id-token: write`.
 
+## Reusable workflows
+
+For smaller caller workflows, this repository provides reusable workflows for the mention bot and pull request reviews:
+
+| Workflow                                                       | Purpose                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted issue or pull request comments, or from a fixed prompt. |
+| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Run the bundled `/review-pr` flow for `pull_request` events.                      |
+
+See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
+
 ## Models and secrets
 
 Set `model` to a `provider/model` value and pass the corresponding API key:
