@@ -8,6 +8,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 Use `opencode-bot.yml` for `/opencode` and `/oc` comments, or for another event with a fixed `prompt`.
 
+<!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode
@@ -25,7 +26,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@de968892b27dd42727fa175cd00610a54d091bf9
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@e5fa6280c65275a5cd7b2251d235f752849ab4d4  # v0.6.5
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -38,6 +39,7 @@ For comment events, the reusable workflow accepts comments only from `OWNER`, `M
 
 Use `opencode-review.yml` for automatic reviews on `pull_request` events. Its `prompt` defaults to `/review-pr`.
 
+<!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode review
@@ -53,7 +55,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@de968892b27dd42727fa175cd00610a54d091bf9
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@e5fa6280c65275a5cd7b2251d235f752849ab4d4  # v0.6.5
     with:
       model: openrouter/openrouter/free
     secrets:
