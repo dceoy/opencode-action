@@ -57,10 +57,6 @@ on:
         type: number
         description: Maximum minutes to let OpenCode run
         default: 60
-      action-ref:
-        required: true
-        type: string
-        description: OpenCode action revision to check out
       runs-on:
         required: false
         type: string
@@ -118,7 +114,7 @@ jobs:
     if: >
       github.event_name == 'pull_request'
       && (
-        inputs.action-ref != ''
+        inputs.model != ''
         || (
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
           && (! github.event.pull_request.draft)
@@ -134,16 +130,8 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
           persist-credentials: false
-      - name: Checkout OpenCode action
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          repository: dceoy/opencode-action
-          ref: ${{ inputs.action-ref || github.sha }}
-          path: .opencode-action
-          fetch-depth: 1
-          persist-credentials: false
       - name: Run OpenCode
-        uses: ./.opencode-action
+        uses: $/
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -167,5 +155,5 @@ jobs:
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
-          use-bundled-toolkit: ${{ inputs.action-ref == '' || inputs.use-bundled-toolkit }}
+          use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}
