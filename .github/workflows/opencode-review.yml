@@ -78,6 +78,24 @@ on:
       SAKURA_AI_ENGINE_API_KEY:
         required: false
         description: Sakura AI Engine API key
+      GOOGLE_GENERATIVE_AI_API_KEY:
+        required: false
+        description: Google Generative AI API key
+      DEEPSEEK_API_KEY:
+        required: false
+        description: DeepSeek API key
+      XAI_API_KEY:
+        required: false
+        description: xAI API key
+      GROQ_API_KEY:
+        required: false
+        description: Groq API key
+      CEREBRAS_API_KEY:
+        required: false
+        description: Cerebras API key
+      MOONSHOT_API_KEY:
+        required: false
+        description: Moonshot AI API key
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
@@ -106,6 +124,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
           model: ${{ inputs.model }}
