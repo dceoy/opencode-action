@@ -2,7 +2,7 @@
 
 `opencode-action` publishes two reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
 
-The examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/` references the action from the same repository at the running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
+The examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/.` references the action at the repository root from the same repository and running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
 
 ## Mention bot
 
@@ -25,7 +25,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@2c992b25c28496277dc04a698ca3d74f72ef77ec
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@de968892b27dd42727fa175cd00610a54d091bf9
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@2c992b25c28496277dc04a698ca3d74f72ef77ec
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@de968892b27dd42727fa175cd00610a54d091bf9
     with:
       model: openrouter/openrouter/free
     secrets:
@@ -83,7 +83,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-The `$/` self repository reference is supported on GitHub.com and resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. GitHub Enterprise Server does not support this syntax.
+GitHub.com's `$/path` self repository syntax resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. These workflows use `$/.` because the action is defined at the repository root. GitHub Enterprise Server does not support this syntax.
 
 ## Secrets
 
