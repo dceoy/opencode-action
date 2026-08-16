@@ -2,7 +2,7 @@
 
 `opencode-action` publishes two reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
 
-The examples below pin the reusable workflow definition and its `action-ref` input to the same commit. The called workflow checks out that OpenCode action revision and invokes it from a local path, so a full commit SHA makes both layers immutable.
+The examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/` references the action from the same repository at the running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
 
 ## Mention bot
 
@@ -28,7 +28,6 @@ jobs:
     uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@87c8c6821360f1ced2fbb0868fb8e583df100046
     with:
       model: opencode-go/kimi-k3
-      action-ref: 87c8c6821360f1ced2fbb0868fb8e583df100046
     secrets:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 ```
@@ -57,7 +56,6 @@ jobs:
     uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@87c8c6821360f1ced2fbb0868fb8e583df100046
     with:
       model: openrouter/openrouter/free
-      action-ref: 87c8c6821360f1ced2fbb0868fb8e583df100046
     secrets:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
@@ -83,8 +81,9 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
 | `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
-| `action-ref`          | Required                                                            | Revision of `dceoy/opencode-action` to check out.             |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
+
+The `$/` self repository reference is supported on GitHub.com and resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. GitHub Enterprise Server does not support this syntax.
 
 ## Secrets
 
