@@ -83,7 +83,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
 | `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
-| `action-ref`          | Required                                                            | Revision of `dceoy/opencode-action` to check out.              |
+| `action-ref`          | Required                                                            | Revision of `dceoy/opencode-action` to check out.             |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
 ## Secrets
