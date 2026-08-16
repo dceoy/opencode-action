@@ -33,11 +33,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@e5fa6280c65275a5cd7b2251d235f752849ab4d4 # v0.6.5
+        uses: dceoy/opencode-action@e5fa6280c65275a5cd7b2251d235f752849ab4d4  # v0.6.5
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
