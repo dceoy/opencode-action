@@ -103,6 +103,10 @@ on:
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
 permissions:
   contents: read
   pull-requests: write
@@ -111,8 +115,18 @@ permissions:
   actions: read
 jobs:
   opencode-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ${{ inputs.runs-on }}
+    if: >
+      github.event_name == 'pull_request'
+      && (
+        inputs.action-ref != ''
+        || (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+          && (! github.event.pull_request.draft)
+          && (! startsWith(github.head_ref, 'dependabot/'))
+          && (! startsWith(github.head_ref, 'renovate/'))
+        )
+      )
+    runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -124,7 +138,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: dceoy/opencode-action
-          ref: ${{ inputs.action-ref }}
+          ref: ${{ inputs.action-ref || github.sha }}
           path: .opencode-action
           fetch-depth: 1
           persist-credentials: false
@@ -144,14 +158,14 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
-          model: ${{ inputs.model }}
-          agent: ${{ inputs.agent }}
+          model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
+          agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
-          prompt: ${{ inputs.prompt }}
+          prompt: ${{ inputs.prompt || '/review-pr' }}
           use-github-token: ${{ inputs.use-github-token }}
-          mentions: ${{ inputs.mentions }}
+          mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
-          oidc-base-url: ${{ inputs.oidc-base-url }}
-          opencode-version: ${{ inputs.opencode-version }}
-          use-bundled-toolkit: ${{ inputs.use-bundled-toolkit }}
-          timeout-minutes: ${{ inputs.timeout-minutes }}
+          oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
+          opencode-version: ${{ inputs.opencode-version || 'latest' }}
+          use-bundled-toolkit: ${{ inputs.action-ref == '' || inputs.use-bundled-toolkit }}
+          timeout-minutes: ${{ inputs.timeout-minutes || 60 }}
