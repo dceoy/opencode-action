@@ -85,7 +85,7 @@ jobs:
 
           sed -E -i "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha} # ${RELEASE_TAG}|" README.md
           sed -E -i "s|(uses: actions/checkout@)[0-9a-f]{40}( +#.*)?|\1${CHECKOUT_SHA} # ${CHECKOUT_TAG}|" README.md
-          sed -E -i "s|(uses: dceoy/opencode-action/\.github/workflows/opencode-(bot|review)\.yml@)[0-9a-f]{40}|\1${release_sha}|g" docs/reusable-workflows.md
+          sed -E -i "s#(uses: dceoy/opencode-action/\.github/workflows/opencode-(bot|review)\.yml@)[0-9a-f]{40}#\1${release_sha}#g" docs/reusable-workflows.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
