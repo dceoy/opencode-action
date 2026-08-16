@@ -2,7 +2,7 @@
 
 `opencode-action` publishes two reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
 
-The examples below use the maintained `v0` major tag. Pin the reusable workflow to a full commit SHA when an immutable reference is required.
+The examples below pin the reusable workflow definition to the commit that introduced these workflows. The called workflow currently invokes `dceoy/opencode-action@v0` internally, so this fixes the workflow definition without making the nested action reference immutable.
 
 ## Mention bot
 
@@ -25,7 +25,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@v0
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@7c392aad14ab1281630ae0c93e81d727f76b3e92
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@v0
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@7c392aad14ab1281630ae0c93e81d727f76b3e92
     with:
       model: openrouter/openrouter/free
     secrets:
@@ -66,20 +66,20 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 Both reusable workflows expose the action configuration plus a runner input:
 
-| Input | Default | Description |
-| ----- | ------- | ----------- |
-| `model` | Required | Model in `provider/model` format. |
-| `agent` | `build` | Primary agent. |
-| `share` | `false` | Share the OpenCode session. |
-| `prompt` | `''` for `opencode-bot.yml`; `/review-pr` for `opencode-review.yml` | Fixed prompt. |
-| `use-github-token` | `false` | Use the workflow token instead of the default App-token flow. |
-| `mentions` | `/opencode,/oc` | Comma-separated trigger phrases. |
-| `variant` | `''` | Provider-specific model variant. |
-| `oidc-base-url` | `https://api.opencode.ai` | OIDC exchange base URL. |
-| `opencode-version` | `latest` | OpenCode version to install. |
-| `use-bundled-toolkit` | `true` | Use the bundled OpenCode toolkit. |
-| `timeout-minutes` | `60` | Maximum OpenCode runtime in minutes. |
-| `runs-on` | `ubuntu-latest` | Runner label for the called job. |
+| Input                 | Default                                                             | Description                                                   |
+| --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `model`               | Required                                                            | Model in `provider/model` format.                             |
+| `agent`               | `build`                                                             | Primary agent.                                                |
+| `share`               | `false`                                                             | Share the OpenCode session.                                   |
+| `prompt`              | `''` for `opencode-bot.yml`; `/review-pr` for `opencode-review.yml` | Fixed prompt.                                                 |
+| `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
+| `mentions`            | `/opencode,/oc`                                                     | Comma-separated trigger phrases.                              |
+| `variant`             | `''`                                                                | Provider-specific model variant.                              |
+| `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
+| `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
+| `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
+| `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
+| `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
 ## Secrets
 
