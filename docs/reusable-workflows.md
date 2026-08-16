@@ -8,6 +8,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 Use `opencode-bot.yml` for `/opencode` and `/oc` comments, or for another event with a fixed `prompt`.
 
+<!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode
@@ -38,6 +39,7 @@ For comment events, the reusable workflow accepts comments only from `OWNER`, `M
 
 Use `opencode-review.yml` for automatic reviews on `pull_request` events. Its `prompt` defaults to `/review-pr`.
 
+<!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode review
