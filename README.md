@@ -14,6 +14,7 @@ In **Settings → Secrets and variables → Actions**, add the API key for your 
 
 Create `.github/workflows/opencode.yml`:
 
+<!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode
