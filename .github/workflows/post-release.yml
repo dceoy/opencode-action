@@ -94,5 +94,6 @@ jobs:
           title: Update release pins for ${{ steps.release.outputs.tag }}
           branch: github-actions/release-pins
           base: ${{ github.event.repository.default_branch }}
+          labels: agent:github-actions
           body: Update the README action and actions/checkout pins plus reusable workflow documentation pins for ${{ steps.release.outputs.tag }}.
           delete-branch: true
