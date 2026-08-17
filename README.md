@@ -38,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@e5fa6280c65275a5cd7b2251d235f752849ab4d4  # v0.6.5
+        uses: dceoy/opencode-action@7c5dff7b8c34c3aacb74307136f84889f99e1b3f  # v0.6.6
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
