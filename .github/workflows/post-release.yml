@@ -16,7 +16,10 @@ jobs:
     permissions:
       contents: write
     uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
+    with:
+      app-client-id: ${{ vars.GH_APP_CLIENT_ID }}
     secrets:
+      GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
   release-pins:
     permissions:
