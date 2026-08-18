@@ -98,7 +98,7 @@ opencode_jsonc_json() {
 }
 
 @test "pr-review uses exactly one generic read-only subagent" {
-  local actual legacy
+  local actual expected
 
   [ -f "${review_worker}" ]
   [ "$(frontmatter_value "${review_worker}" mode)" = "subagent" ]
@@ -112,21 +112,12 @@ opencode_jsonc_json() {
     return 1
   }
 
-  for legacy in \
-    code-reviewer \
-    code-simplifier \
-    documentation-accuracy-reviewer \
-    finding-reviewer \
-    performance-reviewer \
-    security-code-reviewer \
-    silent-failure-hunter \
-    test-coverage-reviewer \
-    type-design-analyzer; do
-    [ ! -e "${agents_dir}/${legacy}.md" ] || {
-      echo "legacy fixed subagent remains: ${legacy}"
-      return 1
-    }
-  done
+  actual="$(agent_files | xargs -n1 basename | sed 's/\.md$//' | sort)"
+  expected="$(printf '%s\n' review-pr-orchestrator review-worker | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected agent file set:\n%s\n' "${actual}"
+    return 1
+  }
 }
 
 @test "review-worker denies bash, edit, and task and only allows read, glob, and grep" {
@@ -134,7 +125,7 @@ opencode_jsonc_json() {
 
   perm="$(frontmatter "${review_worker}")"
 
-  actual="$(printf '%s\n' "${perm}" | grep -oE '^  ("[^"]+"|[a-zA-Z_]+):' | sed -E 's/^  //; s/:$//' | sort)"
+  actual="$(printf '%s\n' "${perm}" | grep -oE '^  ("[^"]+"|'"'"'[^'"'"']+'"'"'|[a-zA-Z0-9_-]+):' | sed -E 's/^  //; s/:$//' | sort)"
   expected="$(printf '%s\n' '"*"' glob grep read | sort)"
   [ "${actual}" = "${expected}" ] || {
     printf 'unexpected top-level review-worker permission keys:\n%s\n' "${actual}"
@@ -220,6 +211,21 @@ opencode_jsonc_json() {
   for helper in review-pr-gh.sh review-pr-submit.sh; do
     [ -f "${repo_root}/.opencode/scripts/${helper}" ]
   done
+}
+
+@test "orchestrator may only edit the review-state payload files" {
+  local actual expected
+
+  actual="$(permission_allow_keys "${orchestrator}" edit)"
+  expected="$(printf '%s\n' \
+    '$HOME/.config/opencode/review-state/initial.json' \
+    '$HOME/.config/opencode/review-state/update.json' \
+    '../*.config/opencode/review-state/initial.json' \
+    '../*.config/opencode/review-state/update.json' | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected edit allow-list:\n%s\n' "${actual}"
+    return 1
+  }
 }
 
 @test "trusted review external-directory access is agent-scoped" {
