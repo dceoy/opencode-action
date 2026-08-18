@@ -1,6 +1,9 @@
 ---
 name: pr-review
 description: Review a GitHub pull request with dynamic read-only subagents, independent finding validation, stale-head protection, and validated inline findings
+metadata:
+  opencode/slash: "false"
+  opencode/autoinvoke: "false"
 ---
 
 # Strictly Read-Only PR Review
@@ -60,11 +63,13 @@ TASK KIND: discovery
 ROLE: <dynamic task role>
 TARGET: <owner/repo#number or local review target>
 REVIEWED HEAD SHA: <sha when PR mode>
+PR INTENT: <short intent derived from the request and trusted PR metadata>
 PRIMARY SCOPE: <changed files, hunks, interfaces, or behaviors>
 RISK HYPOTHESIS: <specific question to investigate>
 REVIEW LENSES: <selected lenses>
 RELEVANT DIFF: <required changed code>
 SUPPORTING CONTEXT: <bounded unchanged code or established project guidance if needed>
+EXISTING FEEDBACK: <relevant current feedback when available; otherwise unavailable>
 NON-NEGOTIABLE CONSTRAINTS: <user scope, runtime constraints, and applicable pre-existing guidance>
 ```
 

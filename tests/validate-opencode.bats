@@ -82,9 +82,11 @@ opencode_jsonc_json() {
   }
 }
 
-@test "review-pr command routes to the orchestrator and pr-review skill" {
+@test "review-pr command routes to the orchestrator and internal pr-review skill" {
   [ "$(frontmatter_value "${review_pr_command}" agent)" = "review-pr-orchestrator" ]
   [ "$(frontmatter_value "${review_pr_skill}" name)" = "pr-review" ]
+  grep -Fq 'opencode/slash: "false"' "${review_pr_skill}"
+  grep -Fq 'opencode/autoinvoke: "false"' "${review_pr_skill}"
 
   body="$(awk '
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
@@ -178,19 +180,16 @@ opencode_jsonc_json() {
   done
 }
 
-@test "external directory access exposes only trusted review helpers and state" {
-  local actual expected default_action
+@test "trusted review external-directory access is agent-scoped" {
+  local actual expected
 
-  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
-  [ "${default_action}" = "deny" ]
+  actual="$(opencode_jsonc_json | jq -r '(.permission.external_directory // {}) | to_entries[] | select(.value == "allow") | .key' | sort)"
+  [ -z "${actual}" ]
 
-  actual="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
   expected="$(printf '%s\n' \
     '$HOME/.config/opencode/review-state/*' \
     '$HOME/.config/opencode/scripts/review-pr-gh.sh' \
     '$HOME/.config/opencode/scripts/review-pr-submit.sh' | sort)"
-  [ "${actual}" = "${expected}" ]
-
   actual="$(permission_allow_keys "${orchestrator}" external_directory)"
   [ "${actual}" = "${expected}" ]
 }

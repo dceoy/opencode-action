@@ -1,8 +1,8 @@
 # Pull request reviews
 
-The bundled `pr-review` skill runs a read-only, multi-agent review and submits validated findings through GitHub's pull request review API. The `/review-pr` command remains a thin wrapper that loads the skill and forwards any requested review aspects.
+The bundled `/review-pr` flow runs a strictly read-only, risk-driven multi-agent review and submits validated findings through GitHub's pull request review API. The command is the supported entrypoint: it selects the dedicated `review-pr-orchestrator` primary agent and loads the internal `pr-review` skill.
 
-Agents can also load `pr-review` directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees below: those come from `review-pr-orchestrator`'s `permission` config (denying edit and unrestricted `bash`), which only applies when the command routes to that agent. Loading the skill directly injects the same instructions into whatever agent calls it, and that agent's own permissions still apply, so the read-only behavior is advisory rather than enforced.
+`pr-review` contains the review procedure, while `review-pr-orchestrator` contains the permission boundary. Loading the skill directly into another primary agent does not transfer those permissions, so direct skill loading must not be treated as an enforced read-only review path. The skill is marked non-slash and non-autoinvokable for OpenCode v2 discovery; the command remains the explicit review entrypoint.
 
 ## Setup
 
@@ -52,17 +52,20 @@ To select review aspects in this fixed-prompt setup, set `prompt` to `/review-pr
 | `/review-pr types`                | Type design                          |
 | `/review-pr simplify`             | Read-only simplification suggestions |
 
-A full review uses five core reviewers to cover six dimensions: correctness and code quality share the canonical code reviewer, while performance, test coverage, documentation accuracy, and security each retain a dedicated reviewer. Comments and docstrings are part of the documentation-accuracy review rather than a separate reviewer pass. Explicit `comments` requests focus that reviewer on changed comments/docstrings and the implementation they describe. Specialty reviewers are added when relevant to the diff, and the simplifier runs only when explicitly requested.
+An unscoped review first builds a change and risk map, covers baseline correctness, regression, tests, and documentation, then adds only lenses justified by the actual diff. It typically creates 2-6 dynamically named discovery tasks such as `authorization-boundary`, `migration-integrity`, `async-cleanup`, or `workflow-permissions`; these are task roles, not fixed agent identities. Explicit aspects are hard scope constraints rather than routes to specialist agent files.
+
+The current OpenCode v1-compatible runtime uses one hidden `review-worker` subagent definition with read/glob/grep permissions only. Each discovery task launches a fresh worker session, and every surviving candidate is checked in a separate fresh validation session that actively seeks counterevidence before the parent may publish it. When OpenCode v2's built-in read-only `explore` contract becomes the action runtime boundary, this compatibility worker can be removed without changing the review procedure.
 
 ## Finding and submission behavior
 
-The orchestrator retains the full pull request context for anchoring and normalization, but classifies files and hunks before delegation. Each reviewer receives only its relevant diff subset and containing-function context. The orchestrator then:
+The parent primary agent retains the full pull request context for anchoring and normalization while each child receives only a bounded packet for its specific risk hypothesis. The review flow then:
 
-1. keeps only high-confidence, actionable findings on changed files
-2. removes style-only feedback and duplicates
-3. validates findings against the captured diff
-4. posts anchorable findings as inline review comments
-5. keeps genuine unanchorable findings in the review body
+1. maps changed behavior and chooses only justified review lenses
+2. dispatches fresh read-only discovery tasks with bounded context
+3. deduplicates candidates by root cause
+4. validates candidates independently as `confirmed`, `rejected`, or `needs-human`
+5. arbitrates confirmed findings against the captured diff
+6. posts anchorable confirmed findings as inline review comments and keeps genuine unanchorable findings in the review body
 
 A successful run validates the complete payload without a GitHub write, then creates one structured GitHub review and updates its body with the workflow run link. The validated payload is sealed against later edits, and the live initial submission can be attempted only once per run. `/review-pr` does not post through `gh pr comment` or the issue comment API.
 
@@ -78,7 +81,7 @@ If no finding can be anchored, the command returns a concise Markdown fallback i
 
 When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration and externally discovered skills, removes inherited plugins and agents, and resolves the review command only from the action bundle.
 
-External-directory access is denied by default. Only the directly invoked trusted review helpers and their dedicated state directory under `~/.config/opencode/` are exposed to OpenCode. The helpers source the trusted-context and token-resolution libraries only from their installed sibling paths; repository-controlled files never enter that execution path. Review-only mode does not modify the checkout, run mutating repository commands, or allow reviewer agents to post directly to GitHub.
+The bundled global OpenCode config does not grant trusted review paths to every agent. External-directory access to the fixed review helpers and dedicated state directory under `~/.config/opencode/` is allowed only by the `review-pr-orchestrator` permission profile. The read-only worker has no shell or edit permission. The helpers source the trusted-context and token-resolution libraries only from their installed sibling paths; repository-controlled files never enter that execution path.
 
 ### Trusted pull request context
 
