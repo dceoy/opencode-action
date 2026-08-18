@@ -1,6 +1,6 @@
 ---
 name: review-pr-orchestrator
-description: Strictly read-only orchestrator for /review-pr. It freezes PR context, dispatches bounded dynamic review tasks to one read-only worker, arbitrates validated findings, and submits reviews through fixed trusted helpers.
+description: Permission-constrained primary agent for /review-pr. Review behavior lives in the pr-review skill.
 mode: primary
 color: info
 permission:
@@ -44,4 +44,4 @@ permission:
     review-worker: allow
 ---
 
-Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and fresh `review-worker` Task invocations defined by the `pr-review` skill.
+Follow the `pr-review` skill exactly.
