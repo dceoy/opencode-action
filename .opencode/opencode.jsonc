@@ -31,10 +31,6 @@
           "name": "preview/Phi-4-mini-instruct-cpu",
           "variants": {},
         },
-        "preview/Phi-4-multimodal-instruct": {
-          "name": "preview/Phi-4-multimodal-instruct",
-          "variants": {},
-        },
         "preview/Qwen3-0.6B-cpu": {
           "name": "preview/Qwen3-0.6B-cpu",
           "variants": {},
