@@ -6,6 +6,7 @@ setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
   orchestrator="${agents_dir}/review-pr-orchestrator.md"
+  review_worker="${agents_dir}/review-worker.md"
   review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
   review_pr_skill="${repo_root}/.opencode/skills/pr-review/SKILL.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
@@ -55,21 +56,9 @@ permission_allow_keys() {
   ' | sort
 }
 
-reviewer_refs() {
-  grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' "${review_pr_skill}" \
-    | tr -d '`' | sort -u
-}
-
 routing_line() {
   local aspect="${1}"
   grep -F -- "\`${aspect}\`" "${review_pr_skill}" | grep -E '^- ' | head -1
-}
-
-routing_reviewers() {
-  local aspect="${1}"
-  routing_line "${aspect}" \
-    | grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' \
-    | tr -d '`' | sort -u
 }
 
 opencode_jsonc_json() {
@@ -106,56 +95,58 @@ opencode_jsonc_json() {
   [[ "${body}" == *'$ARGUMENTS'* ]]
 }
 
-@test "skill reviewer references exactly match the orchestrator task allow-list" {
-  local refs allowed reviewer
-  refs="$(reviewer_refs)"
-  allowed="$(permission_allow_keys "${orchestrator}" task)"
-  [ "${refs}" = "${allowed}" ] || {
-    printf 'skill reviewers:\n%s\norchestrator task allow-list:\n%s\n' "${refs}" "${allowed}"
+@test "pr-review uses exactly one generic read-only subagent" {
+  local actual legacy
+
+  [ -f "${review_worker}" ]
+  [ "$(frontmatter_value "${review_worker}" mode)" = "subagent" ]
+  [ "$(frontmatter_value "${review_worker}" hidden)" = "true" ]
+  grep -Fq 'TASK KIND: discovery | validation' "${review_worker}"
+  grep -Fq 'fresh `review-worker` Task' "${review_pr_skill}"
+
+  actual="$(permission_allow_keys "${orchestrator}" task)"
+  [ "${actual}" = "review-worker" ] || {
+    printf 'unexpected task allow-list:\n%s\n' "${actual}"
     return 1
   }
 
-  while IFS= read -r reviewer; do
-    [ -f "${agents_dir}/${reviewer}.md" ]
-  done <<< "${refs}"
-}
-
-@test "explicit review aspects route to canonical reviewers" {
-  local pair aspect expected actual
-  for pair in \
-    code:code-reviewer \
-    quality:code-reviewer \
-    performance:performance-reviewer \
-    security:security-code-reviewer \
-    tests:test-coverage-reviewer \
-    coverage:test-coverage-reviewer \
-    docs:documentation-accuracy-reviewer \
-    documentation:documentation-accuracy-reviewer \
-    comments:documentation-accuracy-reviewer \
-    errors:silent-failure-hunter \
-    types:type-design-analyzer \
-    simplify:code-simplifier; do
-    aspect="${pair%%:*}"
-    expected="${pair#*:}"
-    actual="$(routing_reviewers "${aspect}")"
-    [ "${actual}" = "${expected}" ] || {
-      echo "${aspect} routes to '${actual}', expected '${expected}'"
+  for legacy in \
+    code-reviewer \
+    code-simplifier \
+    documentation-accuracy-reviewer \
+    finding-reviewer \
+    performance-reviewer \
+    security-code-reviewer \
+    silent-failure-hunter \
+    test-coverage-reviewer \
+    type-design-analyzer; do
+    [ ! -e "${agents_dir}/${legacy}.md" ] || {
+      echo "legacy fixed subagent remains: ${legacy}"
       return 1
     }
   done
 }
 
-@test "full review keeps exactly the five core reviewers" {
-  local line actual expected
-  line="$(routing_line all)"
-  actual="$(grep -oE '`[a-z][a-z0-9-]*reviewer`' <<< "${line}" | tr -d '`' | sort -u)"
-  expected="$(printf '%s\n' \
-    code-reviewer \
-    documentation-accuracy-reviewer \
-    performance-reviewer \
-    security-code-reviewer \
-    test-coverage-reviewer | sort)"
-  [ "${actual}" = "${expected}" ]
+@test "explicit review aspects map to lenses instead of fixed agent identities" {
+  local aspect line
+
+  for aspect in code quality performance security tests coverage docs documentation comments errors types simplify all; do
+    line="$(routing_line "${aspect}")"
+    [ -n "${line}" ] || {
+      echo "missing lens mapping for ${aspect}"
+      return 1
+    }
+  done
+
+  run grep -E 'code-reviewer|code-simplifier|documentation-accuracy-reviewer|finding-reviewer|performance-reviewer|security-code-reviewer|silent-failure-hunter|test-coverage-reviewer|type-design-analyzer' "${review_pr_skill}"
+  [ "${status}" -eq 1 ]
+}
+
+@test "unscoped review uses baseline coverage and risk-driven dynamic roles" {
+  grep -Fq 'baseline correctness, regression, tests, and documentation checks' "${review_pr_skill}"
+  grep -Fq 'typically 2-6 discovery tasks' "${review_pr_skill}"
+  grep -Fq 'dynamic role name describing the actual risk under review' "${review_pr_skill}"
+  grep -Fq 'never reuse the discovery Task session for validation' "${review_pr_skill}"
 }
 
 @test "orchestrator may load only pr-review and approved fixed bash commands" {
