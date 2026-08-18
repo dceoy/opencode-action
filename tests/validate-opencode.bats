@@ -129,13 +129,51 @@ opencode_jsonc_json() {
   done
 }
 
+@test "review-worker denies bash, edit, and task and only allows read, glob, and grep" {
+  local perm key
+
+  perm="$(frontmatter "${review_worker}")"
+
+  printf '%s\n' "${perm}" | grep -qE '^  "\*": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^  glob: allow$'
+  printf '%s\n' "${perm}" | grep -qE '^  grep: allow$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*": allow$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.\*": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.example": allow$'
+
+  for key in bash edit task; do
+    ! printf '%s\n' "${perm}" | grep -qE "^  ${key}:" || {
+      echo "review-worker unexpectedly grants ${key} permission"
+      return 1
+    }
+  done
+}
+
 @test "explicit review aspects map to lenses instead of fixed agent identities" {
-  local aspect line
+  local aspect line keyword
 
   for aspect in code quality performance security tests coverage docs documentation comments errors types simplify all; do
     line="$(routing_line "${aspect}")"
     [ -n "${line}" ] || {
       echo "missing lens mapping for ${aspect}"
+      return 1
+    }
+
+    case "${aspect}" in
+      code | quality) keyword="maintainability issues" ;;
+      performance) keyword="algorithmic complexity" ;;
+      security) keyword="fail-secure behavior" ;;
+      tests | coverage) keyword="test quality" ;;
+      docs | documentation) keyword="operational guidance" ;;
+      comments) keyword="implementation claims" ;;
+      errors) keyword="silent-failure risks" ;;
+      types) keyword="serialization contracts" ;;
+      simplify) keyword="KISS, DRY, and YAGNI" ;;
+      all) keyword="risk-driven lenses" ;;
+    esac
+    [[ "${line}" == *"${keyword}"* ]] || {
+      echo "lens body for ${aspect} missing expected keyword '${keyword}': ${line}"
       return 1
     }
   done
@@ -181,12 +219,17 @@ opencode_jsonc_json() {
 }
 
 @test "trusted review external-directory access is agent-scoped" {
-  local actual expected default_action
+  local global_allow actual expected default_action
 
   default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
   [ "${default_action}" = "deny" ]
 
-  actual="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
+  global_allow="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
+  [ -z "${global_allow}" ] || {
+    printf 'unexpected global external-directory allow entries:\n%s\n' "${global_allow}"
+    return 1
+  }
+
   expected="$(printf '%s\n' \
     '$HOME/.config/opencode/review-state/*' \
     '$HOME/.config/opencode/scripts/review-pr-gh.sh' \
