@@ -130,9 +130,16 @@ opencode_jsonc_json() {
 }
 
 @test "review-worker denies bash, edit, and task and only allows read, glob, and grep" {
-  local perm key
+  local perm actual expected
 
   perm="$(frontmatter "${review_worker}")"
+
+  actual="$(printf '%s\n' "${perm}" | grep -oE '^  ("[^"]+"|[a-zA-Z_]+):' | sed -E 's/^  //; s/:$//' | sort)"
+  expected="$(printf '%s\n' '"*"' glob grep read | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected top-level review-worker permission keys:\n%s\n' "${actual}"
+    return 1
+  }
 
   printf '%s\n' "${perm}" | grep -qE '^  "\*": deny$'
   printf '%s\n' "${perm}" | grep -qE '^  glob: allow$'
@@ -141,13 +148,6 @@ opencode_jsonc_json() {
   printf '%s\n' "${perm}" | grep -qE '^    "\*\.env": deny$'
   printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.\*": deny$'
   printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.example": allow$'
-
-  for key in bash edit task; do
-    ! printf '%s\n' "${perm}" | grep -qE "^  ${key}:" || {
-      echo "review-worker unexpectedly grants ${key} permission"
-      return 1
-    }
-  done
 }
 
 @test "explicit review aspects map to lenses instead of fixed agent identities" {
@@ -171,6 +171,10 @@ opencode_jsonc_json() {
       types) keyword="serialization contracts" ;;
       simplify) keyword="KISS, DRY, and YAGNI" ;;
       all) keyword="risk-driven lenses" ;;
+      *)
+        echo "no keyword mapping for aspect ${aspect}"
+        return 1
+        ;;
     esac
     [[ "${line}" == *"${keyword}"* ]] || {
       echo "lens body for ${aspect} missing expected keyword '${keyword}': ${line}"
