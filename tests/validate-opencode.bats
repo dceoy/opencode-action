@@ -6,6 +6,7 @@ setup() {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   agents_dir="${repo_root}/.opencode/agents"
   orchestrator="${agents_dir}/review-pr-orchestrator.md"
+  review_worker="${agents_dir}/review-worker.md"
   review_pr_command="${repo_root}/.opencode/commands/review-pr.md"
   review_pr_skill="${repo_root}/.opencode/skills/pr-review/SKILL.md"
   opencode_jsonc="${repo_root}/.opencode/opencode.jsonc"
@@ -55,21 +56,9 @@ permission_allow_keys() {
   ' | sort
 }
 
-reviewer_refs() {
-  grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' "${review_pr_skill}" \
-    | tr -d '`' | sort -u
-}
-
 routing_line() {
   local aspect="${1}"
   grep -F -- "\`${aspect}\`" "${review_pr_skill}" | grep -E '^- ' | head -1
-}
-
-routing_reviewers() {
-  local aspect="${1}"
-  routing_line "${aspect}" \
-    | grep -oE '`[a-z][a-z0-9-]*(reviewer|analyzer|hunter|simplifier)`' \
-    | tr -d '`' | sort -u
 }
 
 opencode_jsonc_json() {
@@ -93,9 +82,11 @@ opencode_jsonc_json() {
   }
 }
 
-@test "review-pr command routes to the orchestrator and pr-review skill" {
+@test "review-pr command routes to the orchestrator and internal pr-review skill" {
   [ "$(frontmatter_value "${review_pr_command}" agent)" = "review-pr-orchestrator" ]
   [ "$(frontmatter_value "${review_pr_skill}" name)" = "pr-review" ]
+  grep -Fq 'opencode/slash: "false"' "${review_pr_skill}"
+  grep -Fq 'opencode/autoinvoke: "false"' "${review_pr_skill}"
 
   body="$(awk '
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
@@ -106,56 +97,91 @@ opencode_jsonc_json() {
   [[ "${body}" == *'$ARGUMENTS'* ]]
 }
 
-@test "skill reviewer references exactly match the orchestrator task allow-list" {
-  local refs allowed reviewer
-  refs="$(reviewer_refs)"
-  allowed="$(permission_allow_keys "${orchestrator}" task)"
-  [ "${refs}" = "${allowed}" ] || {
-    printf 'skill reviewers:\n%s\norchestrator task allow-list:\n%s\n' "${refs}" "${allowed}"
+@test "pr-review uses exactly one generic read-only subagent" {
+  local actual expected
+
+  [ -f "${review_worker}" ]
+  [ "$(frontmatter_value "${review_worker}" mode)" = "subagent" ]
+  [ "$(frontmatter_value "${review_worker}" hidden)" = "true" ]
+  grep -Fq 'TASK KIND: discovery | validation' "${review_worker}"
+  grep -Fq 'fresh `review-worker` Task' "${review_pr_skill}"
+
+  actual="$(permission_allow_keys "${orchestrator}" task)"
+  [ "${actual}" = "review-worker" ] || {
+    printf 'unexpected task allow-list:\n%s\n' "${actual}"
     return 1
   }
 
-  while IFS= read -r reviewer; do
-    [ -f "${agents_dir}/${reviewer}.md" ]
-  done <<< "${refs}"
+  actual="$(agent_files | xargs -n1 basename | sed 's/\.md$//' | sort)"
+  expected="$(printf '%s\n' review-pr-orchestrator review-worker | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected agent file set:\n%s\n' "${actual}"
+    return 1
+  }
 }
 
-@test "explicit review aspects route to canonical reviewers" {
-  local pair aspect expected actual
-  for pair in \
-    code:code-reviewer \
-    quality:code-reviewer \
-    performance:performance-reviewer \
-    security:security-code-reviewer \
-    tests:test-coverage-reviewer \
-    coverage:test-coverage-reviewer \
-    docs:documentation-accuracy-reviewer \
-    documentation:documentation-accuracy-reviewer \
-    comments:documentation-accuracy-reviewer \
-    errors:silent-failure-hunter \
-    types:type-design-analyzer \
-    simplify:code-simplifier; do
-    aspect="${pair%%:*}"
-    expected="${pair#*:}"
-    actual="$(routing_reviewers "${aspect}")"
-    [ "${actual}" = "${expected}" ] || {
-      echo "${aspect} routes to '${actual}', expected '${expected}'"
+@test "review-worker denies bash, edit, and task and only allows read, glob, and grep" {
+  local perm actual expected
+
+  perm="$(frontmatter "${review_worker}")"
+
+  actual="$(printf '%s\n' "${perm}" | grep -oE '^  ("[^"]+"|'"'"'[^'"'"']+'"'"'|[a-zA-Z0-9_-]+):' | sed -E 's/^  //; s/:$//' | sort)"
+  expected="$(printf '%s\n' '"*"' glob grep read | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected top-level review-worker permission keys:\n%s\n' "${actual}"
+    return 1
+  }
+
+  printf '%s\n' "${perm}" | grep -qE '^  "\*": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^  glob: allow$'
+  printf '%s\n' "${perm}" | grep -qE '^  grep: allow$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*": allow$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.\*": deny$'
+  printf '%s\n' "${perm}" | grep -qE '^    "\*\.env\.example": allow$'
+}
+
+@test "explicit review aspects map to lenses instead of fixed agent identities" {
+  local aspect line keyword
+
+  for aspect in code quality performance security tests coverage docs documentation comments errors types simplify all; do
+    line="$(routing_line "${aspect}")"
+    [ -n "${line}" ] || {
+      echo "missing lens mapping for ${aspect}"
+      return 1
+    }
+
+    case "${aspect}" in
+      code | quality) keyword="maintainability issues" ;;
+      performance) keyword="algorithmic complexity" ;;
+      security) keyword="fail-secure behavior" ;;
+      tests | coverage) keyword="test quality" ;;
+      docs | documentation) keyword="operational guidance" ;;
+      comments) keyword="implementation claims" ;;
+      errors) keyword="silent-failure risks" ;;
+      types) keyword="serialization contracts" ;;
+      simplify) keyword="KISS, DRY, and YAGNI" ;;
+      all) keyword="risk-driven lenses" ;;
+      *)
+        echo "no keyword mapping for aspect ${aspect}"
+        return 1
+        ;;
+    esac
+    [[ "${line}" == *"${keyword}"* ]] || {
+      echo "lens body for ${aspect} missing expected keyword '${keyword}': ${line}"
       return 1
     }
   done
+
+  run grep -E 'code-reviewer|code-simplifier|documentation-accuracy-reviewer|finding-reviewer|performance-reviewer|security-code-reviewer|silent-failure-hunter|test-coverage-reviewer|type-design-analyzer' "${review_pr_skill}"
+  [ "${status}" -eq 1 ]
 }
 
-@test "full review keeps exactly the five core reviewers" {
-  local line actual expected
-  line="$(routing_line all)"
-  actual="$(grep -oE '`[a-z][a-z0-9-]*reviewer`' <<< "${line}" | tr -d '`' | sort -u)"
-  expected="$(printf '%s\n' \
-    code-reviewer \
-    documentation-accuracy-reviewer \
-    performance-reviewer \
-    security-code-reviewer \
-    test-coverage-reviewer | sort)"
-  [ "${actual}" = "${expected}" ]
+@test "unscoped review uses baseline coverage and risk-driven dynamic roles" {
+  grep -Fq 'baseline correctness, regression, tests, and documentation checks' "${review_pr_skill}"
+  grep -Fq 'typically 2-6 discovery tasks' "${review_pr_skill}"
+  grep -Fq 'dynamic role name describing the actual risk under review' "${review_pr_skill}"
+  grep -Fq 'never reuse the discovery Task session for validation' "${review_pr_skill}"
 }
 
 @test "orchestrator may load only pr-review and approved fixed bash commands" {
@@ -187,19 +213,37 @@ opencode_jsonc_json() {
   done
 }
 
-@test "external directory access exposes only trusted review helpers and state" {
-  local actual expected default_action
+@test "orchestrator may only edit the review-state payload files" {
+  local actual expected
+
+  actual="$(permission_allow_keys "${orchestrator}" edit)"
+  expected="$(printf '%s\n' \
+    '$HOME/.config/opencode/review-state/initial.json' \
+    '$HOME/.config/opencode/review-state/update.json' \
+    '../*.config/opencode/review-state/initial.json' \
+    '../*.config/opencode/review-state/update.json' | sort)"
+  [ "${actual}" = "${expected}" ] || {
+    printf 'unexpected edit allow-list:\n%s\n' "${actual}"
+    return 1
+  }
+}
+
+@test "trusted review external-directory access is agent-scoped" {
+  local global_allow actual expected default_action
 
   default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
   [ "${default_action}" = "deny" ]
 
-  actual="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
+  global_allow="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
+  [ -z "${global_allow}" ] || {
+    printf 'unexpected global external-directory allow entries:\n%s\n' "${global_allow}"
+    return 1
+  }
+
   expected="$(printf '%s\n' \
     '$HOME/.config/opencode/review-state/*' \
     '$HOME/.config/opencode/scripts/review-pr-gh.sh' \
     '$HOME/.config/opencode/scripts/review-pr-submit.sh' | sort)"
-  [ "${actual}" = "${expected}" ]
-
   actual="$(permission_allow_keys "${orchestrator}" external_directory)"
   [ "${actual}" = "${expected}" ]
 }

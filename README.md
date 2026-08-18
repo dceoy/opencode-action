@@ -107,8 +107,8 @@ Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-o
 
 ## Pull request reviews
 
-Set `prompt: /review-pr` to run the bundled read-only `pr-review` skill through its thin compatibility command wrapper. Findings are deduplicated, validated against the diff, and posted inline when they can be anchored to changed lines. Agents can also load the skill directly through OpenCode's native skill tool, but only `/review-pr` carries the read-only guarantees; see [Pull request reviews](docs/pull-request-reviews.md#review-isolation).
+Set `prompt: /review-pr` to run the bundled read-only review through a dedicated permission-constrained primary agent. The command loads the internal `pr-review` skill, which builds a change/risk map, dispatches fresh read-only child sessions, independently validates candidate findings, and posts confirmed findings inline when they can be anchored to changed lines. Use `/review-pr` rather than loading `pr-review` directly when the enforced read-only boundary is required.
 
-The default review uses five core reviewers to cover correctness and code quality, performance, test coverage, documentation accuracy, and security. Specialty reviewers beyond that set are added only when the diff matches their documented concern or an aspect such as `security`, `tests`, `docs`, or `performance` explicitly requests them. Provider request and chunk timeouts and the action's `timeout-minutes` watchdog are safety limits; they do not replace bounded request context or guarantee that a provider gateway or inference request will remain open.
+An unscoped review creates a small set of dynamic, risk-driven discovery tasks instead of routing to fixed specialist agents. Explicit aspects such as `security`, `tests`, `docs`, `performance`, or `simplify` constrain the selected review lenses. Discovery and validation run in separate fresh child sessions; the current OpenCode v1-compatible implementation uses one hidden `review-worker` definition for those sessions.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.

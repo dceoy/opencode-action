@@ -57,9 +57,6 @@
   "permission": {
     "external_directory": {
       "*": "deny",
-      "$HOME/.config/opencode/scripts/review-pr-submit.sh": "allow",
-      "$HOME/.config/opencode/scripts/review-pr-gh.sh": "allow",
-      "$HOME/.config/opencode/review-state/*": "allow",
     },
   },
 }

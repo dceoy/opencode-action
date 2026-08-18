@@ -1,6 +1,6 @@
 ---
 name: review-pr-orchestrator
-description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, and submits reviews through fixed trusted helpers.
+description: Permission-constrained primary agent for /review-pr. Review behavior lives in the pr-review skill.
 mode: primary
 color: info
 permission:
@@ -41,14 +41,7 @@ permission:
     'bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update': allow
   task:
     "*": deny
-    code-reviewer: allow
-    performance-reviewer: allow
-    security-code-reviewer: allow
-    test-coverage-reviewer: allow
-    documentation-accuracy-reviewer: allow
-    silent-failure-hunter: allow
-    type-design-analyzer: allow
-    code-simplifier: allow
+    review-worker: allow
 ---
 
-Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
+Follow the `pr-review` skill exactly.
