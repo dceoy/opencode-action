@@ -181,11 +181,12 @@ opencode_jsonc_json() {
 }
 
 @test "trusted review external-directory access is agent-scoped" {
-  local actual expected
+  local actual expected default_action
 
-  actual="$(opencode_jsonc_json | jq -r '(.permission.external_directory // {}) | to_entries[] | select(.value == "allow") | .key' | sort)"
-  [ -z "${actual}" ]
+  default_action="$(opencode_jsonc_json | jq -r '.permission.external_directory."*" // empty')"
+  [ "${default_action}" = "deny" ]
 
+  actual="$(opencode_jsonc_json | jq -r '.permission.external_directory | to_entries[] | select(.key != "*" and .value == "allow") | .key' | sort)"
   expected="$(printf '%s\n' \
     '$HOME/.config/opencode/review-state/*' \
     '$HOME/.config/opencode/scripts/review-pr-gh.sh' \
