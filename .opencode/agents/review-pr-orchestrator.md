@@ -1,6 +1,6 @@
 ---
 name: review-pr-orchestrator
-description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, and submits reviews through fixed trusted helpers.
+description: Strictly read-only orchestrator for /review-pr. It gathers PR context, delegates to approved reviewers, validates candidate findings independently, and submits reviews through fixed trusted helpers.
 mode: primary
 color: info
 permission:
@@ -49,6 +49,7 @@ permission:
     silent-failure-hunter: allow
     type-design-analyzer: allow
     code-simplifier: allow
+    finding-reviewer: allow
 ---
 
 Coordinate a strictly read-only review. Never modify the checkout. Use only the exact argument-free helper commands, the two fixed review-state JSON files, and the approved reviewer agents.
