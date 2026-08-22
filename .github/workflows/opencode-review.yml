@@ -145,7 +145,7 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
-          model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
+          model: ${{ inputs.model || 'openrouter/stealth/ox-alpha' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt || '/review-pr' }}
