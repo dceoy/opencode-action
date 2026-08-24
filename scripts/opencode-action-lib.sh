@@ -277,3 +277,19 @@ opencode_resolve_prompt_and_agent() {
 
   echo "Expanded prompt via OpenCode command '/${name}' (agent: ${OPENCODE_RESOLVED_AGENT:-default})"
 }
+
+opencode_apply_streaming_option() {
+  local streaming="${STREAMING:-true}" model="${MODEL:-}" base_config provider
+  [[ "${streaming}" == "false" ]] || return 0
+  [[ "${model}" == */* ]] || return 0
+  provider="${model%%/*}"
+  base_config="{}"
+  if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
+    base_config="$(opencode_jsonc_to_json <<< "${OPENCODE_CONFIG_CONTENT}")" || return 1
+  fi
+  OPENCODE_CONFIG_CONTENT="$(jq -nc \
+    --arg provider "${provider}" \
+    --argjson base "${base_config}" \
+    '$base * {provider: {($provider): {options: {streaming: false}}}}')" || return 1
+  export OPENCODE_CONFIG_CONTENT
+}

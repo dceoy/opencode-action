@@ -293,6 +293,8 @@ opencode_configure_run() {
   # shellcheck source=scripts/opencode-action-lib.sh
   source "${script_dir}/opencode-action-lib.sh"
 
+  opencode_apply_streaming_option
+
   opencode_validate_variant \
     "${MODEL:-}" "${VARIANT:-}" "${ACTION_PATH:-}/.opencode/opencode.jsonc" || return 1
 

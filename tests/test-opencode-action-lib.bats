@@ -279,3 +279,40 @@ EOF_INNER
 
   [ "${status}" -eq 0 ]
 }
+
+@test "streaming option is a no-op unless STREAMING is exactly false with provider/model id" {
+  run bash -euo pipefail -c '
+    source "$1"
+    unset OPENCODE_CONFIG_CONTENT
+    MODEL="opencode/ox-alpha-free" STREAMING="true" opencode_apply_streaming_option
+    [[ -z "${OPENCODE_CONFIG_CONTENT:-}" ]]
+    MODEL="ox-alpha-free" STREAMING="false" opencode_apply_streaming_option
+    [[ -z "${OPENCODE_CONFIG_CONTENT:-}" ]]
+  ' "$library"
+  [[ "$status" -eq 0 ]]
+}
+
+@test "streaming false merges options into fresh inline config for the model provider" {
+  run bash -euo pipefail -c '
+    source "$1"
+    unset OPENCODE_CONFIG_CONTENT
+    MODEL="opencode-go/ox-alpha-free" STREAMING="false" opencode_apply_streaming_option
+    jq -e \
+      "'"'"'.provider["opencode-go"].options.streaming == false and (keys == ["provider"])"'"'"' \
+      <<< "${OPENCODE_CONFIG_CONTENT}" > /dev/null
+    printf "%s" "${OPENCODE_CONFIG_CONTENT}"
+  ' "$library"
+  [[ "$status" -eq 0 ]]
+  jq -e '.provider["opencode-go"].options.streaming == false' <<< "${output}" > /dev/null
+}
+
+@test "streaming false preserves existing inline config keys while adding the provider option" {
+  run bash -euo pipefail -c '
+    source "$1"
+    export OPENCODE_CONFIG_CONTENT='"'"'{"default_agent":"build","x":1}'"'"'
+    MODEL="opencode/ox-alpha-free" STREAMING="false" opencode_apply_streaming_option
+    printf "%s" "${OPENCODE_CONFIG_CONTENT}"
+  ' "$library"
+  [[ "$status" -eq 0 ]]
+  jq -e '.default_agent == "build" and .x == 1 and .provider.opencode.options.streaming == false' <<< "${output}" > /dev/null
+}

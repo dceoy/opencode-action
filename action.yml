@@ -42,6 +42,10 @@ inputs:
     required: false
     description: OpenCode version to install (e.g., v1.2.3)
     default: latest
+  streaming:
+    required: false
+    description: Sets provider options.streaming to false for the run model's provider.
+    default: 'true'
   use-bundled-toolkit:
     required: false
     description: Whether to use the action's bundled .opencode/ agents, commands, skills, and supporting configuration.
@@ -126,6 +130,7 @@ runs:
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
         USE_GITHUB_TOKEN: ${{ inputs.use-github-token }}
+        STREAMING: ${{ inputs.streaming }}
         MENTIONS: ${{ inputs.mentions }}
         VARIANT: ${{ inputs.variant }}
         OIDC_BASE_URL: ${{ inputs.oidc-base-url }}
