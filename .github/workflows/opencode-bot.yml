@@ -47,6 +47,11 @@ on:
         type: string
         description: OpenCode version to install
         default: latest
+      streaming:
+        required: false
+        type: boolean
+        description: Sets provider options.streaming to false for the run model's provider.
+        default: true
       use-bundled-toolkit:
         required: false
         type: boolean
@@ -163,5 +168,6 @@ jobs:
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
+          streaming: ${{ inputs.streaming }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}
