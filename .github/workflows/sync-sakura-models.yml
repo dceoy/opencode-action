@@ -5,7 +5,8 @@ on:
     - cron: '17 0 * * *'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 defaults:
   run:
     shell: bash -euo pipefail {0}
@@ -24,18 +25,10 @@ jobs:
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
         run: >
           bash scripts/sync-sakura-models.sh
-      - name: Validate GitHub token
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          if [[ -z "${GH_TOKEN}" ]]; then
-            echo '::error::The GH_TOKEN repository secret is required and must be a personal access token, not GITHUB_TOKEN or a GitHub App installation token.'
-            exit 1
-          fi
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
-          token: ${{ secrets.GH_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
+          token: ${{ github.token }}
           commit-message: Sync Sakura AI Engine models
           title: Sync Sakura AI Engine models
           branch: github-actions/sakura-models
