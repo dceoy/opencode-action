@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           if [[ -z "${GH_TOKEN}" ]]; then
-            echo '::error::The GH_TOKEN repository secret is required and must be a GitHub App or personal access token, not GITHUB_TOKEN.'
+            echo '::error::The GH_TOKEN repository secret is required and must be a personal access token, not GITHUB_TOKEN or a GitHub App installation token.'
             exit 1
           fi
       - name: Create pull request
