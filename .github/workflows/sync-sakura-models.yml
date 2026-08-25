@@ -25,7 +25,8 @@ jobs:
       - name: Sync Sakura AI Engine models
         env:
           SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
-        run: bash scripts/sync-sakura-models.sh
+        run: >
+          bash scripts/sync-sakura-models.sh
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
