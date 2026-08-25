@@ -5,7 +5,9 @@ setup() {
   sync_script="${repo_root}/scripts/sync-sakura-models.sh"
   config_path="${BATS_TEST_TMPDIR}/opencode.jsonc"
   mock_bin="${BATS_TEST_TMPDIR}/bin"
+  probe_log="${BATS_TEST_TMPDIR}/probe.log"
   mkdir -p "${mock_bin}"
+  : > "${probe_log}"
 
   cat > "${config_path}" << 'JSONC'
 {
@@ -54,7 +56,13 @@ if [[ "${url}" == */models ]]; then
     printf '%s\n' '{"data":[{"id":"chat-a"}]}'
     ;;
   all-non-chat)
+    printf '%s\n' '{"data":[{"id":"multilingual-e5-large"},{"id":"preview/Qwen3-Embedding-4B-FP16"},{"id":"whisper-large-v3-turbo"}]}'
+    ;;
+  ambiguous-400)
     printf '%s\n' '{"data":[{"id":"embedding-x"}]}'
+    ;;
+  mixed-models)
+    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"multilingual-e5-large"},{"id":"preview/Qwen3-Embedding-4B-FP16"},{"id":"whisper-large-v3-turbo"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
     ;;
   brace-model)
   printf '%s\n' '{"data":[{"id":"chat-{brace}"},{"id":"preview/Kimi-K2.7-Code"}]}'
@@ -68,6 +76,7 @@ fi
 
 output=''
 payload=''
+probe_log="${MOCK_CURL_PROBE_LOG:?MOCK_CURL_PROBE_LOG is required}"
 while (( $# > 0 )); do
   case "$1" in
     --output)
@@ -85,6 +94,7 @@ while (( $# > 0 )); do
 done
 
 model="$(jq -r '.model' <<< "${payload}")"
+printf '%s\n' "${model}" >> "${probe_log}"
 case "${MOCK_CURL_MODE:-normal}" in
 probe-error)
   status=429
@@ -113,6 +123,7 @@ MOCK
 @test "syncs sorted chat models and preserves the rest of the config" {
   run env \
     PATH="${mock_bin}:${PATH}" \
+    MOCK_CURL_PROBE_LOG="${probe_log}" \
     SAKURA_AI_ENGINE_API_KEY=test \
     bash "${sync_script}" "${config_path}"
 
@@ -128,6 +139,7 @@ MOCK
   run env \
     PATH="${mock_bin}:${PATH}" \
     MOCK_CURL_MODE=brace-model \
+    MOCK_CURL_PROBE_LOG="${probe_log}" \
     SAKURA_AI_ENGINE_API_KEY=test \
     bash "${sync_script}" "${config_path}"
 
@@ -136,6 +148,25 @@ MOCK
   run grep -q '"chat-a"' "${config_path}"
   [ "${status}" -eq 1 ]
   grep -q '"keep-model"' "${config_path}"
+
+  run env \
+    PATH="${mock_bin}:${PATH}" \
+    MOCK_CURL_MODE=mixed-models \
+    MOCK_CURL_PROBE_LOG="${probe_log}" \
+    SAKURA_AI_ENGINE_API_KEY=test \
+    bash "${sync_script}" "${config_path}"
+
+  [ "${status}" -eq 0 ]
+  for model in chat-a chat-b preview/Kimi-K2.7-Code; do
+    grep -Fq "\"${model}\"" "${config_path}"
+  done
+  for model in multilingual-e5-large preview/Qwen3-Embedding-4B-FP16 whisper-large-v3-turbo; do
+    run grep -Fq "\"${model}\"" "${config_path}"
+    [ "${status}" -eq 1 ]
+    run grep -Fqx "${model}" "${probe_log}"
+    [ "${status}" -eq 1 ]
+  done
+  grep -Fq '"keep-model"' "${config_path}"
 }
 
 @test "fails closed for invalid Sakura sync responses" {
@@ -144,7 +175,8 @@ MOCK
     'initial-error|Failed to fetch Sakura models.'
     'probe-error|Failed to probe Sakura model chat-a (HTTP 429).'
     'probe-transport|Failed to probe Sakura model chat-a.'
-    'all-non-chat|Failed to probe Sakura model embedding-x (HTTP 400); refusing to classify it as non-chat.'
+    'all-non-chat|Sakura returned no usable chat models; refusing to update the config.'
+    'ambiguous-400|Failed to probe Sakura model embedding-x (HTTP 400); refusing to classify it as non-chat.'
     'missing-default|Required Sakura model preview/Kimi-K2.7-Code is unavailable; refusing to update the config.'
   )
 
@@ -155,6 +187,7 @@ MOCK
     run env \
       PATH="${mock_bin}:${PATH}" \
       MOCK_CURL_MODE="${mode}" \
+      MOCK_CURL_PROBE_LOG="${probe_log}" \
       SAKURA_AI_ENGINE_API_KEY=test \
       bash "${sync_script}" "${config_path}"
 

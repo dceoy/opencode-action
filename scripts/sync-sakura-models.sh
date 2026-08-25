@@ -6,6 +6,17 @@ api_base="${SAKURA_AI_ENGINE_API_BASE_URL:-https://api.ai.sakura.ad.jp/v1}"
 api_key="${SAKURA_AI_ENGINE_API_KEY:?SAKURA_AI_ENGINE_API_KEY is required}"
 default_model='preview/Kimi-K2.7-Code'
 
+is_known_non_chat_model() {
+  case "$1" in
+    multilingual-e5-large | preview/Qwen3-Embedding-4B-FP16 | whisper-large-v3-turbo)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
@@ -35,6 +46,11 @@ fi
 mapfile -t models < "${model_ids}"
 chat_models=()
 for model in "${models[@]}"; do
+  if is_known_non_chat_model "${model}"; then
+    echo "Skipping known non-chat Sakura model ${model}." >&2
+    continue
+  fi
+
   payload="$(jq -cn --arg model "${model}" '{model: $model, messages: [{role: "user", content: "Reply with OK."}], max_tokens: 1}')"
   probe_response="${tmp_dir}/probe.json"
 
