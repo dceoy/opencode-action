@@ -87,12 +87,9 @@ The provider account must have sufficient credits or quota. For providers not bu
 
 ## Sakura AI Engine model synchronization
 
-The optional [Sakura model synchronization workflow](.github/workflows/sync-sakura-models.yml) discovers chat-capable Sakura AI Engine models and opens or updates a pull request when the catalog changes. Configure these repository secrets before enabling it:
+The optional [Sakura model synchronization workflow](.github/workflows/sync-sakura-models.yml) discovers chat-capable Sakura AI Engine models and opens or updates a pull request when the catalog changes. Configure the `SAKURA_AI_ENGINE_API_KEY` repository secret before enabling it.
 
-- `SAKURA_AI_ENGINE_API_KEY`: Sakura AI Engine API key.
-- `GH_TOKEN`: a personal access token with permission to write repository contents and pull requests; do not store a GitHub App installation token here because it expires after one hour.
-
-Use a non-`GITHUB_TOKEN` value for `GH_TOKEN`. Pull requests created with the repository-provided `GITHUB_TOKEN` put `pull_request` workflow runs into an approval-required state; see [GitHub's `GITHUB_TOKEN` documentation](https://docs.github.com/en/actions/concepts/security/github_token).
+The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` and `pull-requests: write`; no additional GitHub token secret is required. GitHub does not create new workflow runs for events triggered by `GITHUB_TOKEN`, so pull requests created by this workflow do not automatically trigger `pull_request` workflows. See [GitHub's `GITHUB_TOKEN` documentation](https://docs.github.com/en/actions/concepts/security/github_token).
 
 ## Inputs
 
