@@ -85,6 +85,15 @@ Set `model` to a `provider/model` value and pass the corresponding API key:
 
 The provider account must have sufficient credits or quota. For providers not built into OpenCode, see [Custom providers](docs/custom-providers.md).
 
+## Sakura AI Engine model synchronization
+
+The optional [Sakura model synchronization workflow](.github/workflows/sync-sakura-models.yml) discovers chat-capable Sakura AI Engine models and opens or updates a pull request when the catalog changes. Configure these repository secrets before enabling it:
+
+- `SAKURA_AI_ENGINE_API_KEY`: Sakura AI Engine API key.
+- `GH_TOKEN`: a GitHub App installation token or personal access token with permission to write repository contents and pull requests.
+
+Use a non-`GITHUB_TOKEN` value for `GH_TOKEN`. Pull requests created with the repository-provided `GITHUB_TOKEN` put `pull_request` workflow runs into an approval-required state; see [GitHub's `GITHUB_TOKEN` documentation](https://docs.github.com/en/actions/concepts/security/github_token).
+
 ## Inputs
 
 | Input                 | Default                   | Description                                                                                                                                                             |
