@@ -57,17 +57,13 @@ for model in "${models[@]}"; do
     2??)
       chat_models+=("${model}")
       ;;
-    400 | 404 | 405 | 422)
-      echo "Skipping non-chat model ${model} (HTTP ${status})." >&2
-      cat "${probe_response}" >&2
-      ;;
     401 | 403 | 429 | 5??)
       echo "Failed to probe Sakura model ${model} (HTTP ${status})." >&2
       cat "${probe_response}" >&2
       exit 1
       ;;
     *)
-      echo "Unexpected response probing Sakura model ${model} (HTTP ${status})." >&2
+      echo "Failed to probe Sakura model ${model} (HTTP ${status}); refusing to classify it as non-chat." >&2
       cat "${probe_response}" >&2
       exit 1
       ;;

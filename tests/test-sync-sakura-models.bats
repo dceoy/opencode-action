@@ -57,10 +57,10 @@ if [[ "${url}" == */models ]]; then
     printf '%s\n' '{"data":[{"id":"embedding-x"}]}'
     ;;
   brace-model)
-    printf '%s\n' '{"data":[{"id":"chat-{brace}"},{"id":"preview/Kimi-K2.7-Code"}]}'
-    ;;
+  printf '%s\n' '{"data":[{"id":"chat-{brace}"},{"id":"preview/Kimi-K2.7-Code"}]}'
+  ;;
   *)
-    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"embedding-x"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
+    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
     ;;
   esac
   exit 0
@@ -117,16 +117,11 @@ MOCK
     bash "${sync_script}" "${config_path}"
 
   [ "${status}" -eq 0 ]
-  sync_output="${output}"
   grep -q '"chat-a"' "${config_path}"
   grep -q '"chat-b"' "${config_path}"
-  run grep -q '"embedding-x"' "${config_path}"
-  [ "${status}" -eq 1 ]
   run grep -q '"old-model"' "${config_path}"
   [ "${status}" -eq 1 ]
   grep -q '"keep-model"' "${config_path}"
-  [[ "${sync_output}" == *'Skipping non-chat model embedding-x (HTTP 400).'* ]]
-  [[ "${sync_output}" == *'unsupported'* ]]
   grep -q '"external_directory"' "${config_path}"
   [ "$(grep -n '"chat-[ab]"' "${config_path}" | head -1 | sed 's/.*chat-\([ab]\).*/\1/')" = a ]
 
@@ -149,7 +144,7 @@ MOCK
     'initial-error|Failed to fetch Sakura models.'
     'probe-error|Failed to probe Sakura model chat-a (HTTP 429).'
     'probe-transport|Failed to probe Sakura model chat-a.'
-    'all-non-chat|Sakura returned no usable chat models; refusing to update the config.'
+    'all-non-chat|Failed to probe Sakura model embedding-x (HTTP 400); refusing to classify it as non-chat.'
     'missing-default|Required Sakura model preview/Kimi-K2.7-Code is unavailable; refusing to update the config.'
   )
 
