@@ -85,7 +85,7 @@ MOCK
   ! grep -q '"embedding-x"' "${config_path}"
   ! grep -q '"old-model"' "${config_path}"
   grep -q '"external_directory"' "${config_path}"
-  [ "$(grep -n '"'"'chat-[ab]'"'"'" "${config_path}" | head -1 | sed 's/.*chat-\([ab]\).*/\1/')" = a ]
+  [ "$(grep -n '"chat-[ab]"' "${config_path}" | head -1 | sed 's/.*chat-\([ab]\).*/\1/')" = a ]
 }
 
 @test "leaves the config unchanged when the models response is empty" {
