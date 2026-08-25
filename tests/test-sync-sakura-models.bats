@@ -7,13 +7,21 @@ setup() {
   mock_bin="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "${mock_bin}"
 
-  cat > "${config_path}" <<'JSONC'
+  cat > "${config_path}" << 'JSONC'
 {
   "provider": {
     "sakura": {
       "models": {
         "old-model": {
           "name": "old-model",
+          "variants": {},
+        },
+      },
+    },
+    "other": {
+      "models": {
+        "keep-model": {
+          "name": "keep-model",
           "variants": {},
         },
       },
@@ -27,17 +35,34 @@ setup() {
 }
 JSONC
 
-  cat > "${mock_bin}/curl" <<'MOCK'
+  cat > "${mock_bin}/curl" << 'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 
 url="${*: -1}"
 if [[ "${url}" == */models ]]; then
-  if [[ "${MOCK_CURL_MODE:-normal}" == empty ]]; then
+  case "${MOCK_CURL_MODE:-normal}" in
+  initial-error)
+    printf '%s\n' '{"error":"unauthorized"}'
+    printf '%s\n' 'initial models request failed' >&2
+    exit 22
+    ;;
+  empty)
     printf '%s\n' '{"data":[]}'
-  else
-    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"embedding-x"},{"id":"chat-a"}]}'
-  fi
+    ;;
+  missing-default)
+    printf '%s\n' '{"data":[{"id":"chat-a"}]}'
+    ;;
+  all-non-chat)
+    printf '%s\n' '{"data":[{"id":"embedding-x"}]}'
+    ;;
+  brace-model)
+    printf '%s\n' '{"data":[{"id":"chat-{brace}"},{"id":"preview/Kimi-K2.7-Code"}]}'
+    ;;
+  *)
+    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"embedding-x"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
+    ;;
+  esac
   exit 0
 fi
 
@@ -60,13 +85,25 @@ while (( $# > 0 )); do
 done
 
 model="$(jq -r '.model' <<< "${payload}")"
-if [[ "${model}" == embedding-x ]]; then
+case "${MOCK_CURL_MODE:-normal}" in
+probe-error)
+  status=429
+  body='{"error":"rate limited"}'
+  ;;
+probe-transport)
+  printf '%s\n' 'probe transport failed' >&2
+  exit 7
+  ;;
+*)
+  if [[ "${model}" == embedding-x ]]; then
   status=400
   body='{"error":"unsupported"}'
-else
-  status=200
-  body='{"choices":[]}'
-fi
+  else
+    status=200
+    body='{"choices":[]}'
+  fi
+  ;;
+esac
 printf '%s' "${body}" > "${output}"
 printf '%s' "${status}"
 MOCK
@@ -80,23 +117,54 @@ MOCK
     bash "${sync_script}" "${config_path}"
 
   [ "${status}" -eq 0 ]
+  sync_output="${output}"
   grep -q '"chat-a"' "${config_path}"
   grep -q '"chat-b"' "${config_path}"
-  ! grep -q '"embedding-x"' "${config_path}"
-  ! grep -q '"old-model"' "${config_path}"
+  run grep -q '"embedding-x"' "${config_path}"
+  [ "${status}" -eq 1 ]
+  run grep -q '"old-model"' "${config_path}"
+  [ "${status}" -eq 1 ]
+  grep -q '"keep-model"' "${config_path}"
+  [[ "${sync_output}" == *'Skipping non-chat model embedding-x (HTTP 400).'* ]]
+  [[ "${sync_output}" == *'unsupported'* ]]
   grep -q '"external_directory"' "${config_path}"
   [ "$(grep -n '"chat-[ab]"' "${config_path}" | head -1 | sed 's/.*chat-\([ab]\).*/\1/')" = a ]
-}
-
-@test "leaves the config unchanged when the models response is empty" {
-  before="$(cat "${config_path}")"
 
   run env \
     PATH="${mock_bin}:${PATH}" \
-    MOCK_CURL_MODE=empty \
+    MOCK_CURL_MODE=brace-model \
     SAKURA_AI_ENGINE_API_KEY=test \
     bash "${sync_script}" "${config_path}"
 
-  [ "${status}" -ne 0 ]
-  [ "$(cat "${config_path}")" = "${before}" ]
+  [ "${status}" -eq 0 ]
+  grep -q '"chat-{brace}"' "${config_path}"
+  run grep -q '"chat-a"' "${config_path}"
+  [ "${status}" -eq 1 ]
+  grep -q '"keep-model"' "${config_path}"
+}
+
+@test "fails closed for invalid Sakura sync responses" {
+  local -a cases=(
+    'empty|Sakura returned an invalid or empty model listing.'
+    'initial-error|Failed to fetch Sakura models.'
+    'probe-error|Failed to probe Sakura model chat-a (HTTP 429).'
+    'probe-transport|Failed to probe Sakura model chat-a.'
+    'all-non-chat|Sakura returned no usable chat models; refusing to update the config.'
+    'missing-default|Required Sakura model preview/Kimi-K2.7-Code is unavailable; refusing to update the config.'
+  )
+
+  for test_case in "${cases[@]}"; do
+    IFS='|' read -r mode expected <<< "${test_case}"
+    before="$(cat "${config_path}")"
+
+    run env \
+      PATH="${mock_bin}:${PATH}" \
+      MOCK_CURL_MODE="${mode}" \
+      SAKURA_AI_ENGINE_API_KEY=test \
+      bash "${sync_script}" "${config_path}"
+
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *"${expected}"* ]]
+    [ "$(cat "${config_path}")" = "${before}" ]
+  done
 }
