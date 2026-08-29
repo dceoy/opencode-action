@@ -81,10 +81,10 @@ Set `model` to a `provider/model` value and pass the corresponding API key:
 | OpenRouter       | `openrouter/openrouter/free` | `OPENROUTER_API_KEY`           |
 | Anthropic        | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`            |
 | OpenAI           | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`               |
-| Google AI Studio | `google/gemini-3.7-flash`    | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| Google AI Studio | `google/gemini-3.6-flash`    | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | Custom provider  | `myprovider/my-model`        | Provider-specific              |
 
-For Google AI Studio, store the Gemini API key as the repository secret `GOOGLE_GENERATIVE_AI_API_KEY`, then select a native Google model such as `google/gemini-3.7-flash`. The reusable workflows already accept and forward this secret to OpenCode.
+For Google AI Studio, store the Gemini API key as the repository secret `GOOGLE_GENERATIVE_AI_API_KEY`, then select a native Google model such as `google/gemini-3.6-flash`. The reusable workflows already accept and forward this secret to OpenCode.
 
 The provider account must have sufficient credits or quota. For providers not built into OpenCode, see [Custom providers](docs/custom-providers.md).
 
