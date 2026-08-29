@@ -128,9 +128,9 @@ jobs:
         with:
           fetch-depth: 1
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
-          persist-credentials: ${{ inputs.use-github-token }}
+          persist-credentials: ${{ inputs.use-github-token == true }}
       - name: Configure Git identity
-        if: inputs.use-github-token
+        if: inputs.use-github-token == true
         run: |
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
