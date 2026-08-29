@@ -95,7 +95,7 @@ on:
         description: Cerebras API key
       MOONSHOT_API_KEY:
         required: false
-        description: Moonshot AI API key
+        description: Moonshot API key
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
@@ -128,9 +128,9 @@ jobs:
         with:
           fetch-depth: 1
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
-          persist-credentials: ${{ inputs.use-github-token == true }}
+          persist-credentials: ${{ inputs.use-github-token }}
       - name: Configure Git identity
-        if: inputs.use-github-token == true
+        if: inputs.use-github-token
         run: |
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
