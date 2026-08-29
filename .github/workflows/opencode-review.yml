@@ -150,7 +150,7 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
-          model: ${{ inputs.model || 'google/gemini-3.7-flash' }}
+          model: ${{ inputs.model || 'google/gemini-3.6-flash' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt || '/review-pr' }}
