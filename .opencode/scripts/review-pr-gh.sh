@@ -133,7 +133,7 @@ case "${operation}" in
       || fail "Pull request metadata did not match the trusted PR number."
     opencode_review_sha_is_valid "${base_sha}" || fail "Trusted PR base SHA is unavailable."
     opencode_review_sha_is_valid "${head_sha}" || fail "Trusted PR head SHA is unavailable."
-    opencode_review_verify_commit "${repo}" "${number}" "${head_sha}" \
+    opencode_review_verify_commit "${repo}" "${head_sha}" \
       || fail "Pinned PR commit cannot be read."
 
     compare_metadata="$(gh api "repos/${repo}/compare/${base_sha}...${head_sha}")" \

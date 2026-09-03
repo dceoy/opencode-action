@@ -41,11 +41,29 @@ if [[ "\$*" == pr\\ view\\ * ]]; then
   current_live_head="\$(cat "${live_head_file}")"
   printf '%s\n' '{"headRefOid":"'"\${current_live_head}"'"}'
 elif [[ "\$*" == "api repos/octo/repo/pulls/42" ]]; then
-  if [[ "\${COMPARE_CASE:-valid}" == bad-pr-metadata ]]; then
-    printf '%s\n' '{"number":42,"title":null,"body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
-  else
-    printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
-  fi
+  case "\${COMPARE_CASE:-valid}" in
+    bad-pr-metadata)
+      printf '%s\n' '{"number":42,"title":null,"body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+    mismatched-number)
+      printf '%s\n' '{"number":99,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+    invalid-body)
+      printf '%s\n' '{"number":42,"title":"${live_title}","body":7,"base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+    missing-base-branch)
+      printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":null,"sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+    missing-head-branch)
+      printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":null,"sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+    missing-url)
+      printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":null}'
+      ;;
+    *)
+      printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+      ;;
+  esac
 elif [[ "\$*" == "api repos/octo/repo/commits/${head_sha} --jq .sha" ]]; then
   commit_count=0
   if [[ -f "${commit_calls}" ]]; then
@@ -183,7 +201,7 @@ write_pull_request_event() {
   write_snapshot_gh
   prepare_state
 
-  for compare_case in bad-pr-metadata unreadable-head compare-error missing-files malformed-file negative-additions fractional-additions large; do
+  for compare_case in bad-pr-metadata mismatched-number invalid-body missing-base-branch missing-head-branch missing-url unreadable-head compare-error missing-files malformed-file negative-additions fractional-additions large; do
     run env COMPARE_CASE="${compare_case}" HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
 
     [ "${status}" -ne 0 ]
@@ -327,6 +345,7 @@ EOF
   run env FAIL_REVIEW_POST=true VALIDATE_REVIEW_REQUEST=true HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
   [ "${status}" -ne 0 ]
+  [[ "${output}" == *"::error::Failed to submit the review."* ]]
   [ ! -e "${fake_home}/.config/opencode/review-state/review_id" ]
   [ "$(grep -Fc 'api --method POST repos/octo/repo/pulls/42/reviews --input' "${gh_calls}")" -eq 1 ]
   run grep -q 'pr view' "${gh_calls}"

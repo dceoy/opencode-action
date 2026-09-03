@@ -120,6 +120,14 @@ EOF
   assert_trusted_context_rejected
 }
 
+@test "trusted context rejects a resolved SHA that only prefixes the pinned SHA" {
+  write_event
+  write_context "octo/repo" 42 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "aaaaaaa"
+  write_gh_commit aaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+  assert_trusted_context_rejected
+}
+
 @test "trusted context rejects malformed or unavailable trust inputs" {
   local context_file="${fake_home}/.config/opencode/review-state/context.json"
   write_event
@@ -207,6 +215,33 @@ EOF
   jq -e --arg head_sha "${head}" \
     '.headRefOid == $head_sha and .baseRefOid == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .files[0].path == "file.txt"' \
     <<< "${output}" > /dev/null
+}
+
+@test "metadata rejects a pinned snapshot that no longer matches the trusted context" {
+  local base=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  local head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  local mismatched_head=cccccccccccccccccccccccccccccccccccccccc
+  write_event
+  write_context octo/repo 42 "${base}" "${head}"
+  jq -n --arg base_sha "${base}" --arg head_sha "${mismatched_head}" \
+    '{
+      number: 42,
+      title: "Review",
+      body: "Body",
+      baseRefName: "main",
+      baseRefOid: $base_sha,
+      headRefName: "topic",
+      headRefOid: $head_sha,
+      files: [{path: "file.txt", additions: 1, deletions: 0}],
+      url: "https://github.com/octo/repo/pull/42"
+    }' > "${fake_home}/.config/opencode/review-state/metadata.json"
+  write_gh_commit "${head}"
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
+    GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \
+    bash "${gh_helper}" metadata
+
+  [ "${status}" -ne 0 ]
 }
 
 @test "both review helpers source the canonical trusted context implementation" {

@@ -38,16 +38,15 @@ opencode_review_pinned_context() {
 }
 
 opencode_review_verify_commit() {
-  local repo="${1:-}" pr_number="${2:-}" head_sha="${3:-}" resolved_sha
+  local repo="${1:-}" head_sha="${2:-}" resolved_sha
 
-  [[ "$#" -eq 3 ]] || return 1
+  [[ "$#" -eq 2 ]] || return 1
   [[ "${repo}" =~ ^[^/]+/[^/]+$ ]] || return 1
-  [[ "${pr_number}" =~ ^[1-9][0-9]*$ ]] || return 1
   opencode_review_sha_is_valid "${head_sha}" || return 1
 
   resolved_sha="$(gh api "repos/${repo}/commits/${head_sha}" --jq .sha)" || return 1
   [[ "${resolved_sha}" =~ ^[0-9a-fA-F]{7,64}$ ]] || return 1
-  [[ "${resolved_sha}" == "${head_sha}" || "${resolved_sha}" == "${head_sha}"* ]]
+  [[ "${resolved_sha}" == "${head_sha}" ]]
 }
 
 opencode_review_trusted_context() {
@@ -55,7 +54,7 @@ opencode_review_trusted_context() {
 
   context="$(opencode_review_pinned_context)" || return 1
   IFS=$'\t' read -r repo pr_number base_sha head_sha <<< "${context}"
-  opencode_review_verify_commit "${repo}" "${pr_number}" "${head_sha}" || return 1
+  opencode_review_verify_commit "${repo}" "${head_sha}" || return 1
 
   printf '%s\t%s\t%s\t%s\n' "${repo}" "${pr_number}" "${base_sha}" "${head_sha}"
 }
