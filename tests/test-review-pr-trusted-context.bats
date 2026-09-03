@@ -18,19 +18,23 @@ write_event() {
 }
 
 write_context() {
-  local repo="${1:-octo/repo}" number="${2:-42}" head="${3:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
-  jq -n --arg repository "${repo}" --argjson pr_number "${number}" --arg head_sha "${head}" \
-    '{repository: $repository, pr_number: $pr_number, head_sha: $head_sha}' \
+  local repo="${1:-octo/repo}" number="${2:-42}"
+  local base="${3:-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}"
+  local head="${4:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+  jq -n --arg repository "${repo}" --argjson pr_number "${number}" \
+    --arg base_sha "${base}" --arg head_sha "${head}" \
+    '{repository: $repository, pr_number: $pr_number, base_sha: $base_sha, head_sha: $head_sha}' \
     > "${fake_home}/.config/opencode/review-state/context.json"
 }
 
-write_gh_head() {
+write_gh_commit() {
   local head="${1:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+  local resolved="${2:-${head}}"
   cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
-  printf '%s\n' '${head}'
+if [[ "\$*" == "api repos/octo/repo/commits/${head} --jq .sha" ]]; then
+  printf '%s\n' '${resolved}'
   exit 0
 fi
 exit 1
@@ -50,21 +54,21 @@ assert_trusted_context_rejected() {
   [ "${status}" -ne 0 ]
 }
 
-@test "trusted context accepts a matching event repository and live head" {
+@test "trusted context accepts a matching event repository and pinned commit" {
   write_event
   write_context
-  write_gh_head
+  write_gh_commit
 
   run_trusted_context
 
   [ "${status}" -eq 0 ]
-  [ "${output}" = $'octo/repo\t42\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]
+  [ "${output}" = $'octo/repo\t42\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]
 }
 
 @test "trusted context rejects a repository mismatch" {
   write_event
   write_context "other/repo"
-  write_gh_head
+  write_gh_commit
 
   assert_trusted_context_rejected
 }
@@ -72,15 +76,46 @@ assert_trusted_context_rejected() {
 @test "trusted context rejects a pull request mismatch" {
   write_event 43
   write_context
-  write_gh_head
+  write_gh_commit
 
   assert_trusted_context_rejected
 }
 
-@test "trusted context rejects a stale live head" {
+@test "trusted context accepts an advanced live head" {
   write_event
   write_context
-  write_gh_head "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  cat > "${fake_bin}/gh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == "api repos/octo/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --jq .sha" ]]; then
+  printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "${fake_bin}/gh"
+
+  run_trusted_context
+
+  [ "${status}" -eq 0 ]
+}
+
+@test "trusted context rejects an unreadable pinned commit" {
+  write_event
+  write_context
+  cat > "${fake_bin}/gh" << 'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  chmod +x "${fake_bin}/gh"
+
+  assert_trusted_context_rejected
+}
+
+@test "trusted context rejects a commit response with a different valid SHA" {
+  write_event
+  write_context
+  write_gh_commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa cccccccccccccccccccccccccccccccccccccccc
 
   assert_trusted_context_rejected
 }
@@ -88,7 +123,7 @@ assert_trusted_context_rejected() {
 @test "trusted context rejects malformed or unavailable trust inputs" {
   local context_file="${fake_home}/.config/opencode/review-state/context.json"
   write_event
-  write_gh_head
+  write_gh_commit
 
   rm -f "${context_file}"
   assert_trusted_context_rejected
@@ -115,7 +150,7 @@ assert_trusted_context_rejected() {
   write_context "octo/repo" 42 "abcdef"
   assert_trusted_context_rejected
 
-  write_context "octo/repo" 42 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  write_context "octo/repo" 42 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   assert_trusted_context_rejected
 
   write_context
@@ -133,16 +168,30 @@ EOF
   assert_trusted_context_rejected
 }
 
-@test "metadata validates the pinned head with one GitHub read" {
+@test "metadata reads the captured snapshot without checking the live head" {
   local calls="${fake_home}/gh-calls"
+  local base=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  local head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   write_event
-  write_context
+  write_context octo/repo 42 "${base}" "${head}"
+  jq -n --arg base_sha "${base}" --arg head_sha "${head}" \
+    '{
+      number: 42,
+      title: "Review",
+      body: "Body",
+      baseRefName: "main",
+      baseRefOid: $base_sha,
+      headRefName: "topic",
+      headRefOid: $head_sha,
+      files: [{path: "file.txt", additions: 1, deletions: 0}],
+      url: "https://github.com/octo/repo/pull/42"
+    }' > "${fake_home}/.config/opencode/review-state/metadata.json"
   cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'call\n' >>'${calls}'
-if [[ "\$*" == "pr view 42 --repo octo/repo --json number,title,body,baseRefName,headRefName,headRefOid,files,url" ]]; then
-  printf '%s\n' '{"number":42,"headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+if [[ "\$*" == "api repos/octo/repo/commits/${head} --jq .sha" ]]; then
+  printf '%s\n' '${head}'
   exit 0
 fi
 exit 1
@@ -155,7 +204,9 @@ EOF
 
   [ "${status}" -eq 0 ]
   [ "$(wc -l < "${calls}")" -eq 1 ]
-  jq -e '.headRefOid == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' <<< "${output}" > /dev/null
+  jq -e --arg head_sha "${head}" \
+    '.headRefOid == $head_sha and .baseRefOid == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" and .files[0].path == "file.txt"' \
+    <<< "${output}" > /dev/null
 }
 
 @test "both review helpers source the canonical trusted context implementation" {
@@ -184,7 +235,7 @@ opencode_review_event_pr_number() { printf '42'; }
 EOF
   write_event
   write_context
-  write_gh_head
+  write_gh_commit
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" \
     GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" \

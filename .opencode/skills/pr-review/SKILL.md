@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a GitHub pull request with dynamic read-only subagents, independent finding validation, stale-head protection, and validated inline findings
+description: Review a GitHub pull request with dynamic read-only subagents, independent finding validation, immutable snapshot protection, and validated inline findings
 metadata:
   opencode/slash: "false"
   opencode/autoinvoke: "false"
@@ -18,9 +18,9 @@ The only review subagent is `review-worker`. Every discovery or validation Task 
 
 ## 1. Establish the trusted context
 
-Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare` once, followed by `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. The context is persisted outside the checkout and pins one repository, PR number, and head SHA for the entire review. If `prepare` fails, stop. If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.
+Before any analysis, invoke `bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" prepare` once, followed by `bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" context`. The context is persisted outside the checkout and pins one repository, PR number, base SHA, and head SHA for the entire review. The metadata captured during `context` and every later diff, validation, and submission operation remain bound to that immutable snapshot. If `prepare` fails, stop. If `context` reports `Trusted pull request number is unavailable.`, continue in local mode; for every other `context` failure, stop.
 
-The context helper derives the PR number from `.pull_request.number` or `.issue.number`. For `issue_comment`, it fetches and pins the current head SHA through the trusted PR API. Metadata, diff, submission, and update revalidate that the current head still matches the pinned SHA and fail closed otherwise. Obtain metadata and the diff only through these fixed operations:
+The context helper derives the PR number from `.pull_request.number` or `.issue.number`. For `pull_request` events it pins and captures the event's base/head pair and metadata; for `issue_comment`, it fetches both SHAs and metadata together through the trusted PR API. It captures normalized PR metadata and changed-file data at pin time. If GitHub's comparison response reaches its 300-file limit, context fails closed rather than saving incomplete file metadata. Later metadata reads use that captured snapshot, while diff reads use the fixed `base_sha...head_sha` comparison endpoint. Submission and update verify that the pinned head commit remains readable, but they do not reject an advanced live PR head. Obtain metadata and the diff only through these fixed operations:
 
 ```bash
 bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" metadata
@@ -29,7 +29,7 @@ bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" diff
 
 If no PR context can be established, use local mode: `git status --short`, `git diff --name-only HEAD`, and `git diff --no-ext-diff`; do not infer a PR from the current branch. Once `context` succeeds, any later metadata, diff, or validation failure must abort the review rather than falling back to local mode.
 
-Capture the full diff, changed-file list, PR title/body, base and head branch names, head SHA, and relevant source context using the read, glob, and grep tools. Retain the full diff locally for anchoring and final normalization.
+Capture the full diff, changed-file list, PR title/body, base and head branch names, base SHA, head SHA, and relevant source context using the read, glob, and grep tools. Retain the full diff locally for anchoring and final normalization. If the live PR advances after pinning, continue using the captured snapshot; GitHub may render the resulting comments as outdated, which is expected.
 
 ## 2. Build a change and risk map
 
@@ -153,7 +153,7 @@ bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" update
 
 After the single `prepare` in section 1, write the initial payload only to `$HOME/.config/opencode/review-state/initial.json`, then run `validate-initial`. Validation is non-mutating and reports the exact invalid field. Correct validation failures only in `initial.json` and rerun `validate-initial`; never create diagnostic or test findings. Once validation succeeds, the payload is sealed: do not modify it or run validation again. Run `submit-initial` exactly once. Any submission failure terminates the review: never retry submission, rerun `prepare`, or experiment with alternate payloads. Before `update`, write exactly `{body}` only to `$HOME/.config/opencode/review-state/update.json`. Never add arguments, redirections, pipelines, or process substitutions to helper commands.
 
-You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the head commit from the same context, and updates only the review ID it recorded when the initial submission succeeded in this run. It validates the trusted event context, temporary payload, target commit, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
+You never pass a repository, PR number, target commit, or review ID: the helper derives the repository and PR number from the trusted GitHub Actions context, pins the write to the immutable head commit from that context, and updates only the review ID it recorded when the initial submission succeeded in this run. It validates the trusted event context, temporary payload, pinned commit readability, HTTP method, and exact pull-request-review endpoint. It sources the existing App-token resolver and calls `opencode_require_app_token_for_review` immediately before its permitted POST or PUT. This preserves verified `opencode-agent[bot]` attribution when available, preserves the explicit `use-github-token: true` fallback, and never accepts an unverified candidate for a write.
 
 After successful inline submission, do not repeat findings in the final assistant output. Update the submitted review with final status and the run URL when available; the helper targets the review it recorded, so no review ID is passed. If GitHub rejects inline anchors, fail the run without retrying or posting a fallback. If no inline anchors remain before validation, return the concise markdown fallback instead of submitting an empty comments array.
 

@@ -8,6 +8,8 @@ setup() {
   fake_home="$(mktemp -d "${BATS_TEST_TMPDIR}/home.XXXXXX")"
   fake_bin="${fake_home}/bin"
   event_path="${fake_home}/event.json"
+  base_sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   mkdir -p "${fake_bin}"
 }
 
@@ -24,48 +26,200 @@ prepare_state() {
   [ "${status}" -eq 0 ]
 }
 
-@test "issue_comment context resolves and pins the PR head" {
-  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
-  cat > "${fake_bin}/gh" << 'EOF'
+write_snapshot_gh() {
+  local live_head="${1:-${head_sha}}" live_title="${2:-Review}" live_base="${3:-${base_sha}}"
+  gh_calls="${fake_home}/gh-calls"
+  request_log="${fake_home}/request-log"
+  commit_calls="${fake_home}/commit-calls"
+  live_head_file="${fake_home}/live-head"
+  printf '%s\n' "${live_head}" > "${live_head_file}"
+  cat > "${fake_bin}/gh" << EOF
 #!/usr/bin/env bash
-[[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]] || exit 1
-printf '%s\n' 0123456789abcdef0123456789abcdef01234567
+set -euo pipefail
+printf '%s\n' "\$*" >> "${gh_calls}"
+if [[ "\$*" == pr\\ view\\ * ]]; then
+  current_live_head="\$(cat "${live_head_file}")"
+  printf '%s\n' '{"headRefOid":"'"\${current_live_head}"'"}'
+elif [[ "\$*" == "api repos/octo/repo/pulls/42" ]]; then
+  if [[ "\${COMPARE_CASE:-valid}" == bad-pr-metadata ]]; then
+    printf '%s\n' '{"number":42,"title":null,"body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+  else
+    printf '%s\n' '{"number":42,"title":"${live_title}","body":"Body","base":{"ref":"main","sha":"${live_base}"},"head":{"ref":"topic","sha":"${live_head}"},"html_url":"https://github.com/octo/repo/pull/42"}'
+  fi
+elif [[ "\$*" == "api repos/octo/repo/commits/${head_sha} --jq .sha" ]]; then
+  commit_count=0
+  if [[ -f "${commit_calls}" ]]; then
+    commit_count="\$(wc -l < "${commit_calls}")"
+  fi
+  commit_count=\$((commit_count + 1))
+  printf '%s\n' "\$commit_count" >> "${commit_calls}"
+  if [[ "\${COMPARE_CASE:-valid}" == unreadable-head ]]; then
+    exit 1
+  fi
+  if [[ "\${ASSERT_TOKEN_BEFORE_COMMIT:-false}" == true && "\$commit_count" -ge 3 && ! -e "${fake_home}/token-verified" ]]; then
+    : > "${fake_home}/commit-before-token"
+  fi
+  if [[ "\${FAIL_COMMIT_CALL:-0}" == "\$commit_count" ]]; then
+    exit 1
+  fi
+  if [[ "\${ADVANCE_AFTER_COMMIT:-false}" == true && "\$commit_count" -ge 3 ]]; then
+    printf '%s\n' dddddddddddddddddddddddddddddddddddddddd > "${live_head_file}"
+  fi
+  printf '%s\n' '${head_sha}'
+elif [[ "\$*" == "api repos/octo/repo/compare/${base_sha}...${head_sha}" ]]; then
+  case "\${COMPARE_CASE:-valid}" in
+    compare-error)
+      exit 1
+      ;;
+    missing-files)
+      printf '%s\n' '{}'
+      ;;
+    malformed-file)
+      printf '%s\n' '{"files":[{"filename":"file.txt","additions":"1","deletions":0}]}'
+      ;;
+    negative-additions)
+      printf '%s\n' '{"files":[{"filename":"file.txt","additions":-1,"deletions":0}]}'
+      ;;
+    fractional-additions)
+      printf '%s\n' '{"files":[{"filename":"file.txt","additions":1.5,"deletions":0}]}'
+      ;;
+    large)
+      jq -cn '{files: [range(0; 300) | {filename: ("file-" + tostring), additions: 1, deletions: 0}]}'
+      ;;
+    *)
+      printf '%s\n' '{"files":[{"filename":"file.txt","additions":1,"deletions":0}]}'
+      ;;
+  esac
+elif [[ "\$*" == "api -H Accept: application/vnd.github.diff repos/octo/repo/compare/${base_sha}...${head_sha}" ]]; then
+  printf '%s\n' 'diff for pinned snapshot'
+elif [[ "\$*" == api\\ --method\\ POST\\ repos/octo/repo/pulls/42/reviews\\ --input\\ * ]]; then
+  if [[ "\${FAIL_REVIEW_POST:-false}" == true ]]; then
+    printf '%s\n' '{"message":"Validation Failed"}' >&2
+    exit 1
+  fi
+  request_file=""
+  for arg in "\$@"; do
+    request_file="\$arg"
+  done
+  if [[ "\${ASSERT_LIVE_HEAD_AT_WRITE:-false}" == true && "\$(cat "${live_head_file}")" != dddddddddddddddddddddddddddddddddddddddd ]]; then
+    exit 1
+  fi
+  if [[ "\${VALIDATE_REVIEW_REQUEST:-false}" == true ]]; then
+    jq -e --arg pinned_head '${head_sha}' '
+      type == "object"
+      and .event == "COMMENT"
+      and .commit_id == \$pinned_head
+      and (.body | type == "string" and length > 0)
+      and (.comments | type == "array" and length > 0)
+      and all(.comments[];
+        type == "object"
+        and (.body | type == "string" and length > 0)
+        and (.path | type == "string" and length > 0)
+        and (.line | type == "number" and floor == . and . > 0)
+        and (.side == "LEFT" or .side == "RIGHT")
+      )
+    ' "\${request_file}" > /dev/null || exit 1
+  fi
+  jq -c '.commit_id' "\${request_file}" >> "${request_log}"
+  printf '%s\n' '{"id":555}'
+elif [[ "\$*" == api\\ --method\\ PUT\\ repos/octo/repo/pulls/42/reviews/555\\ --input\\ * ]]; then
+  if [[ "\${FAIL_REVIEW_PUT:-false}" == true ]]; then
+    printf '%s\n' '{"message":"Validation Failed"}' >&2
+    exit 1
+  fi
+  request_file=""
+  for arg in "\$@"; do
+    request_file="\$arg"
+  done
+  if [[ "\${ASSERT_LIVE_HEAD_AT_WRITE:-false}" == true && "\$(cat "${live_head_file}")" != dddddddddddddddddddddddddddddddddddddddd ]]; then
+    exit 1
+  fi
+  if [[ "\${VALIDATE_REVIEW_REQUEST:-false}" == true ]]; then
+    jq -e 'keys == ["body"] and (.body | type == "string" and length > 0)' "\${request_file}" > /dev/null || exit 1
+  fi
+  printf '%s\n' '{}'
+else
+  exit 1
+fi
 EOF
   chmod +x "${fake_bin}/gh"
+}
+
+write_issue_comment_event() {
+  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
+}
+
+write_pull_request_event() {
+  printf '%s\n' "{\"pull_request\":{\"number\":42,\"title\":\"Event snapshot\",\"body\":\"Event body\",\"html_url\":\"https://github.com/octo/repo/pull/42?event=snapshot\",\"base\":{\"ref\":\"event-main\",\"sha\":\"${base_sha}\"},\"head\":{\"ref\":\"event-topic\",\"sha\":\"${head_sha}\"}}}" > "${event_path}"
+}
+
+@test "issue_comment context resolves and pins both PR SHAs" {
+  write_issue_comment_event
+  write_snapshot_gh
   prepare_state
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
 
   [ "${status}" -eq 0 ]
   [ "$(jq -r '.pr_number' <<< "${output}")" = "42" ]
-  [ "$(jq -r '.head_sha' <<< "${output}")" = "0123456789abcdef0123456789abcdef01234567" ]
+  [ "$(jq -r '.base_sha' <<< "${output}")" = "${base_sha}" ]
+  [ "$(jq -r '.head_sha' <<< "${output}")" = "${head_sha}" ]
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" metadata
+
+  [ "${status}" -eq 0 ]
+  jq -e '
+    .title == "Review"
+    and .body == "Body"
+    and .baseRefName == "main"
+    and .headRefName == "topic"
+    and .url == "https://github.com/octo/repo/pull/42"
+  ' <<< "${output}" > /dev/null
 }
 
-@test "pull_request context uses the event head SHA" {
-  printf '%s\n' '{"pull_request":{"number":7,"head":{"sha":"abcdef0123456789abcdef0123456789abcdef01"}}}' > "${event_path}"
+@test "context fails closed for invalid snapshot responses" {
+  local compare_case
+  write_issue_comment_event
+  write_snapshot_gh
+  prepare_state
+
+  for compare_case in bad-pr-metadata unreadable-head compare-error missing-files malformed-file negative-additions fractional-additions large; do
+    run env COMPARE_CASE="${compare_case}" HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+
+    [ "${status}" -ne 0 ]
+    [ ! -s "${fake_home}/.config/opencode/review-state/context.json" ]
+    [ ! -e "${fake_home}/.config/opencode/review-state/metadata.json" ]
+  done
+}
+
+@test "pull_request context uses the event base and head SHAs" {
+  write_pull_request_event
+  write_snapshot_gh "dddddddddddddddddddddddddddddddddddddd" "Live metadata" "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
   prepare_state
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
 
   [ "${status}" -eq 0 ]
-  [ "$(jq -r '.pr_number' <<< "${output}")" = "7" ]
-  [ "$(jq -r '.head_sha' <<< "${output}")" = "abcdef0123456789abcdef0123456789abcdef01" ]
+  [ "$(jq -r '.base_sha' <<< "${output}")" = "${base_sha}" ]
+  [ "$(jq -r '.head_sha' <<< "${output}")" = "${head_sha}" ]
+  grep -Fq "api repos/octo/repo/compare/${base_sha}...${head_sha}" "${gh_calls}"
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" metadata
+
+  [ "${status}" -eq 0 ]
+  jq -e '
+    .title == "Event snapshot"
+    and .body == "Event body"
+    and .baseRefName == "event-main"
+    and .headRefName == "event-topic"
+    and .url == "https://github.com/octo/repo/pull/42?event=snapshot"
+  ' <<< "${output}" > /dev/null
 }
 
-@test "issue_comment submission uses the pinned PR head" {
+@test "issue_comment submission uses the pinned head commit" {
   write_resolver
-  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
-  cat > "${fake_bin}/gh" << 'EOF'
-#!/usr/bin/env bash
-if [[ "$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
-  printf '%s\n' 0123456789abcdef0123456789abcdef01234567
-elif [[ "$1" == "api" ]]; then
-  jq -n '{id: 555}'
-else
-  exit 1
-fi
-EOF
-  chmod +x "${fake_bin}/gh"
+  write_issue_comment_event
+  write_snapshot_gh
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
@@ -77,6 +231,7 @@ EOF
 
   [ "${status}" -eq 0 ]
   [ "$(jq -r '.id' <<< "${output}")" = "555" ]
+  [ "$(cat "${request_log}")" = "\"${head_sha}\"" ]
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
@@ -84,67 +239,40 @@ EOF
   [[ "${output}" == *"must pass validate-initial"* ]]
 }
 
-@test "submission fails if the PR head changes after context" {
-  write_resolver
-  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
-  count_file="${BATS_TEST_TMPDIR}/gh-count"
-  printf '0' > "${count_file}"
-  cat > "${fake_bin}/gh" << EOF
-#!/usr/bin/env bash
-if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
-  count="\$(cat "${count_file}")"
-  if [[ "\$count" == "0" ]]; then
-    printf '1' >"${count_file}"
-    printf '%s\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-  else
-    printf '%s\\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-  fi
-elif [[ "\$1" == "api" ]]; then
-  exit 99
-else
-  exit 1
-fi
-EOF
-  chmod +x "${fake_bin}/gh"
+@test "submission succeeds when the live PR head advances after context" {
+  write_issue_comment_event
+  write_snapshot_gh
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
-  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
-  run env HOME="${fake_home}" bash "${submit}" validate-initial
-  [ "${status}" -eq 0 ]
-
-  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
-
-  [ "${status}" -ne 0 ]
-  [[ "${output}" == *"PR head changed"* ]]
-}
-
-@test "submission rechecks the PR head after token verification" {
-  printf '%s\n' '{"issue":{"number":42}}' > "${event_path}"
-  count_file="${BATS_TEST_TMPDIR}/gh-count"
-  printf '0' > "${count_file}"
+  : > "${gh_calls}"
+  write_snapshot_gh "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   mkdir -p "${fake_home}/.config/opencode/scripts"
   cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
 opencode_prepare_gh_token() { return 0; }
-opencode_require_app_token_for_review() { printf '2' >"${count_file}"; }
+opencode_require_app_token_for_review() { printf '%s\n' cccccccccccccccccccccccccccccccccccccccc > "${live_head_file}"; }
 EOF
-  cat > "${fake_bin}/gh" << EOF
-#!/usr/bin/env bash
-if [[ "\$*" == "pr view 42 --repo octo/repo --json headRefOid --jq .headRefOid" ]]; then
-  count="\$(cat "${count_file}")"
-  if [[ "\$count" == "2" ]]; then
-    printf '%s\\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-  else
-    printf '1' >"${count_file}"
-    printf '%s\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-  fi
-elif [[ "\$1" == "api" ]]; then
-  exit 99
-else
-  exit 1
-fi
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
+
+  run env ADVANCE_AFTER_COMMIT=true ASSERT_LIVE_HEAD_AT_WRITE=true VALIDATE_REVIEW_REQUEST=true HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
+
+  [ "${status}" -eq 0 ]
+  run grep -q 'pr view' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+  [ "$(cat "${live_head_file}")" = dddddddddddddddddddddddddddddddddddddddd ]
+  [ "$(cat "${request_log}")" = "\"${head_sha}\"" ]
+}
+
+@test "submission rechecks the pinned commit after token verification" {
+  write_issue_comment_event
+  write_snapshot_gh
+  mkdir -p "${fake_home}/.config/opencode/scripts"
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
+opencode_prepare_gh_token() { return 0; }
+opencode_require_app_token_for_review() { : > "${fake_home}/token-verified"; }
 EOF
-  chmod +x "${fake_bin}/gh"
   prepare_state
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
   [ "${status}" -eq 0 ]
@@ -154,8 +282,147 @@ EOF
 
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
 
+  [ "${status}" -eq 0 ]
+  [ -e "${fake_home}/token-verified" ]
+  [ "$(cat "${request_log}")" = "\"${head_sha}\"" ]
+}
+
+@test "submission fails closed when the pinned commit becomes unreadable after token verification" {
+  write_issue_comment_event
+  write_snapshot_gh
+  mkdir -p "${fake_home}/.config/opencode/scripts"
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
+opencode_prepare_gh_token() { return 0; }
+opencode_require_app_token_for_review() { : > "${fake_home}/token-verified"; }
+EOF
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
+
+  run env ASSERT_TOKEN_BEFORE_COMMIT=true ADVANCE_AFTER_COMMIT=true ASSERT_LIVE_HEAD_AT_WRITE=true VALIDATE_REVIEW_REQUEST=true FAIL_COMMIT_CALL=3 HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
+
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *"changed during token verification"* ]]
+  [[ "${output}" == *"after token verification"* ]]
+  [ -e "${fake_home}/token-verified" ]
+  [ ! -e "${fake_home}/commit-before-token" ]
+  [ ! -e "${request_log}" ]
+  run grep -Fq 'api --method POST repos/octo/repo/pulls/42/reviews --input' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+}
+
+@test "submission stops when GitHub rejects the pinned review anchor" {
+  write_resolver
+  write_issue_comment_event
+  write_snapshot_gh
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+  printf '%s\n' '{"body":"Review","comments":[{"path":"x","line":1,"side":"RIGHT","body":"**important · code-reviewer**\n\nfinding"}]}' > "${fake_home}/.config/opencode/review-state/initial.json"
+  run env HOME="${fake_home}" bash "${submit}" validate-initial
+  [ "${status}" -eq 0 ]
+
+  run env FAIL_REVIEW_POST=true VALIDATE_REVIEW_REQUEST=true HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" submit-initial
+
+  [ "${status}" -ne 0 ]
+  [ ! -e "${fake_home}/.config/opencode/review-state/review_id" ]
+  [ "$(grep -Fc 'api --method POST repos/octo/repo/pulls/42/reviews --input' "${gh_calls}")" -eq 1 ]
+  run grep -q 'pr view' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+}
+
+@test "metadata and diff remain pinned after the live head advances" {
+  write_issue_comment_event
+  write_snapshot_gh
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+
+  write_snapshot_gh "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "Changed live metadata" "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  : > "${gh_calls}"
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" metadata
+  [ "${status}" -eq 0 ]
+  jq -e --arg base_sha "${base_sha}" --arg head_sha "${head_sha}" \
+    '.title == "Review" and .body == "Body" and .baseRefName == "main" and .headRefName == "topic" and .baseRefOid == $base_sha and .headRefOid == $head_sha and .files == [{path:"file.txt", additions:1, deletions:0}]' \
+    <<< "${output}" > /dev/null
+
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" diff
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "diff for pinned snapshot" ]
+  run grep -q 'pr view' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+  grep -Fq "api -H Accept: application/vnd.github.diff repos/octo/repo/compare/${base_sha}...${head_sha}" "${gh_calls}"
+}
+
+@test "update accepts an advanced live head and keeps the recorded review ID" {
+  write_resolver
+  write_issue_comment_event
+  write_snapshot_gh
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+  printf '%s' 555 > "${fake_home}/.config/opencode/review-state/review_id"
+  printf '%s\n' '{"body":"Updated review"}' > "${fake_home}/.config/opencode/review-state/update.json"
+
+  write_snapshot_gh "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
+opencode_prepare_gh_token() { return 0; }
+opencode_require_app_token_for_review() { printf '%s\n' cccccccccccccccccccccccccccccccccccccccc > "${live_head_file}"; }
+EOF
+  : > "${gh_calls}"
+  run env ADVANCE_AFTER_COMMIT=true ASSERT_LIVE_HEAD_AT_WRITE=true VALIDATE_REVIEW_REQUEST=true HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" update
+
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${live_head_file}")" = dddddddddddddddddddddddddddddddddddddddd ]
+  run grep -q 'pr view' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+  grep -Fq 'api --method PUT repos/octo/repo/pulls/42/reviews/555 --input' "${gh_calls}"
+}
+
+@test "update stops when GitHub rejects the pinned review anchor" {
+  write_resolver
+  write_issue_comment_event
+  write_snapshot_gh
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+  printf '%s' 555 > "${fake_home}/.config/opencode/review-state/review_id"
+  printf '%s\n' '{"body":"Updated review"}' > "${fake_home}/.config/opencode/review-state/update.json"
+
+  run env FAIL_REVIEW_PUT=true HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" update
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"Failed to submit the review update"* ]]
+  [ "$(grep -Fc 'api --method PUT repos/octo/repo/pulls/42/reviews/555 --input' "${gh_calls}")" -eq 1 ]
+  run grep -q 'pr view' "${gh_calls}"
+  [ "${status}" -ne 0 ]
+}
+
+@test "update fails closed when the pinned commit becomes unreadable after token verification" {
+  write_issue_comment_event
+  write_snapshot_gh
+  mkdir -p "${fake_home}/.config/opencode/scripts"
+  cat > "${fake_home}/.config/opencode/scripts/resolve-app-token.sh" << EOF
+opencode_prepare_gh_token() { return 0; }
+opencode_require_app_token_for_review() { : > "${fake_home}/token-verified"; }
+EOF
+  prepare_state
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${helper}" context
+  [ "${status}" -eq 0 ]
+  printf '%s' 555 > "${fake_home}/.config/opencode/review-state/review_id"
+  printf '%s\n' '{"body":"Updated review"}' > "${fake_home}/.config/opencode/review-state/update.json"
+
+  run env ASSERT_TOKEN_BEFORE_COMMIT=true FAIL_COMMIT_CALL=3 HOME="${fake_home}" PATH="${fake_bin}:${PATH}" GITHUB_REPOSITORY="octo/repo" GITHUB_EVENT_PATH="${event_path}" bash "${submit}" update
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"after token verification"* ]]
+  [ -e "${fake_home}/token-verified" ]
+  [ ! -e "${fake_home}/commit-before-token" ]
+  run grep -Fq 'api --method PUT repos/octo/repo/pulls/42/reviews/555 --input' "${gh_calls}"
+  [ "${status}" -ne 0 ]
 }
 
 @test "validation rejects malformed JSON" {
