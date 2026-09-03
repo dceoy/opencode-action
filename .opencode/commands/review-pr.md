@@ -1,5 +1,5 @@
 ---
-description: Comprehensive GitHub PR review with stale-head protection and inline findings.
+description: Comprehensive GitHub PR review with immutable snapshot protection and inline findings.
 agent: review-pr-orchestrator
 ---
 

@@ -131,8 +131,8 @@ opencode_resolve_app_token_candidates() {
 
 # Best-effort resolution: exports GH_TOKEN/GITHUB_TOKEN when a *candidate*
 # App token is found, without verifying its identity. Only safe for reads
-# (gh pr view, gh pr diff); never use this to gate a structured PR review
-# write.
+# (gh pr view, pinned commit/compare reads); never use this to gate a
+# structured PR review write.
 #
 # $1: the workflow's use-github-token input value ("true"/"false"/empty).
 #     When "true", the caller has explicitly opted into using its own

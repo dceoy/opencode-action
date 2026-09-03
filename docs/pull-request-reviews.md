@@ -85,7 +85,7 @@ The bundled global OpenCode config does not grant trusted review paths to every 
 
 ### Trusted pull request context
 
-One shared trusted-context helper derives the repository and pull request number from the GitHub Actions event and validates the pinned pull request head SHA for both read and write helpers. The submission helper validates the same context immediately before the write and repeats the live-head check after token verification. If the pull request head changes after the diff is captured or while the token is being resolved, the run fails before submitting stale findings.
+One shared trusted-context helper derives the repository and pull request number from the GitHub Actions event and pins a base/head SHA pair for both read and write helpers. It captures event metadata for `pull_request` runs or obtains metadata and both SHAs together for `issue_comment` runs, so the saved metadata belongs to the immutable snapshot. The changed-file list is captured from the pinned comparison; if GitHub's comparison response reaches its 300-file limit, context fails closed rather than saving incomplete file metadata. The diff helper reads only the pinned `base_sha...head_sha` comparison. The submission helper validates the pinned head commit immediately before the write and repeats that readability check after token verification. If the live pull request head advances after the snapshot is captured, the run still submits against the pinned commit; GitHub may render affected comments as outdated, which is intentional.
 
 ### Trusted host boundary
 
@@ -111,7 +111,7 @@ Review-only mode fails rather than weakening its guarantees when:
 
 - the bundled toolkit is disabled or the OpenCode version is unsupported
 - trusted pull request context cannot be established
-- the pull request head changes
+- the pinned commit or comparison cannot be read
 - no App token verifies and workflow-token fallback was not explicitly enabled
 - review payload validation or structured submission fails
 - the `~/.opencode` state directory is a symlink, checked before the OpenCode binary is cached or installed, since cleaning or reusing it would otherwise write through the link
