@@ -73,7 +73,17 @@ Add another discovery worker only when evidence reveals a material unresolved bo
 
 ## 4. Validate independently
 
-Deduplicate candidates by root cause and assign stable IDs. Validate survivors with fresh `review-worker` Tasks; never reuse the discovery Task session for validation. Give each validator the candidate, relevant diff, and only the targeted context needed to falsify it.
+Deduplicate candidates by root cause and assign stable IDs. Validate survivors with fresh `review-worker` Tasks; never reuse the discovery Task session for validation. Each validator receives a decision-complete packet:
+
+```text
+TASK KIND: validation
+ROLE: <dynamic risk role>
+SNAPSHOT: <owner/repo#number and reviewed head SHA, or local target>
+SCOPE: <affected changed files, hunks, interfaces, or behavior>
+HYPOTHESIS: <candidate IDs>
+EVIDENCE: <complete deduplicated candidate records, relevant diff, and any known counterevidence>
+CONSTRAINTS: <user scope and verified pre-existing project/runtime constraints>
+```
 
 Validation returns only:
 
@@ -103,18 +113,30 @@ bash "$HOME/.config/opencode/scripts/review-pr-gh.sh" validate
 
 If no confirmed findings or material verification notes remain, return exactly `No noteworthy issues found.` and do not submit an empty review.
 
+If confirmed findings or material verification notes remain but none has a valid inline anchor, return a concise markdown summary after snapshot validation and do not write `initial.json` or call the submission helper.
+
 ## 6. Submit through the trusted helper
 
-For findings, write only `$HOME/.config/opencode/review-state/initial.json` as `{body, comments}`. The helper supplies the trusted commit and review event. Inline comments use GitHub line/path/side fields and the body format `**<severity> · <dynamic-role>**` followed by the concise finding.
+If at least one valid inline anchor remains, every anchorable confirmed finding must be submitted in the `comments` array; never return anchorable findings only as top-level assistant text.
 
-Then run:
+Write only `$HOME/.config/opencode/review-state/initial.json` as `{body, comments}`. The helper supplies the trusted commit and review event. Normalize each published inline severity to exactly `critical`, `important`, or `suggestion`. Every inline comment body must begin:
+
+```text
+**<critical|important|suggestion> · <dynamic-role>**
+
+<concise finding>
+```
+
+If `summary_only` findings or material verification notes also remain, list them in the nonempty top-level `body`; otherwise the body may contain only the inline-finding count/status.
+
+Then run, in order:
 
 ```bash
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" validate-initial
 bash "$HOME/.config/opencode/scripts/review-pr-submit.sh" submit-initial
 ```
 
-Fix payload validation errors only before submission. After validation succeeds, seal the payload and invoke `submit-initial` once; any submission failure terminates the review without retry or fallback posting.
+Fix payload validation errors only before submission. After validation succeeds, seal the payload and invoke `submit-initial` exactly once. Do not complete a PR-mode findings path until that submission succeeds. Any submission failure terminates the review without retry, fallback posting, or emitting anchorable findings as assistant-only output.
 
 After successful submission, write only `{body}` to `$HOME/.config/opencode/review-state/update.json` and run:
 
