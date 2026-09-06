@@ -6,7 +6,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 ## Manual dispatch
 
-`opencode-bot.yml` exposes `workflow_dispatch` with the same inputs as `workflow_call`. `model` is required, and `prompt` must be non-empty for the job to run. It can be dispatched from the Actions UI or API, including clients such as ChatGPT with GitHub access.
+`opencode-bot.yml` exposes `workflow_dispatch` with the same inputs as `workflow_call`. `model` is required, and `prompt` must be non-empty for the job to run. It can be dispatched from the Actions UI or by API clients and integrations authorized to dispatch GitHub Actions workflows.
 
 ## OpenCode bot
 
