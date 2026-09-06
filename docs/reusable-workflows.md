@@ -1,12 +1,12 @@
 # Reusable workflows
 
-`opencode-action` publishes three reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
+`opencode-action` publishes two reusable GitHub Actions workflows under `.github/workflows`. Call them as jobs with `uses`, then pass action configuration through `with` and provider credentials through `secrets`.
 
-Released workflow examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/.` references the action at the repository root from the same repository and running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
+The examples below pin the reusable workflow definition to a full commit SHA. Inside the called workflow, `uses: $/.` references the action at the repository root from the same repository and running commit, so the workflow reference also pins the action implementation without a second checkout or a separate action revision input.
 
 ## Manual dispatch
 
-Use `opencode-dispatch.yml` from a caller whose only trigger is `workflow_dispatch`. The reusable workflow requires both `model` and `prompt` and skips runs from any other event.
+Use `opencode-bot.yml` from a `workflow_dispatch` caller and pass a non-empty fixed `prompt`. The existing non-comment path in `opencode-bot.yml` runs for any caller event when `prompt` is set, so a separate dispatch-specific reusable workflow is unnecessary.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -28,12 +28,12 @@ on:
 jobs:
   opencode:
     permissions:
-      contents: write
+      contents: read
       issues: write
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-dispatch.yml@main
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@743cd15bb9bdfa0b9659347f995b977f635fe2a3  # v0.7.2
     with:
       model: ${{ inputs.model }}
       prompt: ${{ inputs.prompt }}
@@ -41,7 +41,7 @@ jobs:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 ```
 
-Pin `@main` to a full commit SHA once using this workflow in production. Because the caller is manually dispatched, the called workflow permits `contents: write`; the caller still controls whether that permission is granted. The default authentication remains the OpenCode App-token flow. Set `use-github-token: true` only when the caller token itself should be used for repository writes.
+The reusable workflow keeps `contents: read` for the caller token. For code-changing tasks, pass a separately write-scoped `GH_TOKEN`; higher `contents` permission on the caller's `GITHUB_TOKEN` cannot raise the called workflow's permission ceiling.
 
 ## Mention bot
 
@@ -107,16 +107,16 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 ## Inputs
 
-The reusable workflows share most action inputs plus a runner input:
+Both reusable workflows expose the action configuration plus a runner input:
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `model`               | Required                                                            | Model in `provider/model` format.                             |
 | `agent`               | `build`                                                             | Primary agent.                                                |
 | `share`               | `false`                                                             | Share the OpenCode session.                                   |
-| `prompt`              | Required for dispatch; `''` for bot; `/review-pr` for review       | Fixed prompt.                                                 |
+| `prompt`              | `''` for `opencode-bot.yml`; `/review-pr` for `opencode-review.yml` | Fixed prompt.                                                 |
 | `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                     | Comment triggers; not exposed by the dispatch workflow.       |
+| `mentions`            | `/opencode,/oc`                                                     | Comma-separated trigger phrases.                              |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
@@ -130,12 +130,10 @@ GitHub.com's `$/path` self repository syntax resolves to the repository and comm
 
 Pass only the provider secret needed by the selected model. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
 
-`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, the bot and review workflows limit that fallback to `contents: read`, while the dispatch workflow can use `contents: write` when the caller grants it. A separately supplied `GH_TOKEN` is not governed by the called workflow's `GITHUB_TOKEN` permission ceiling.
+`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. For code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`.
 
 ## Permissions
 
-`opencode-bot.yml` and `opencode-review.yml` request `contents: read`, `pull-requests: write`, `issues: write`, `id-token: write`, and `actions: read`. `opencode-dispatch.yml` requests the same permissions except `contents: write` because manual dispatch is a trusted operator action intended to support code-changing tasks.
-
-A called workflow can only maintain or reduce the caller's `GITHUB_TOKEN` permissions: the caller must grant the requested permissions, and a separately supplied `GH_TOKEN` is not governed by that `GITHUB_TOKEN` permission ceiling.
+The reusable workflows request `contents: read`, `pull-requests: write`, `issues: write`, `id-token: write`, and `actions: read`. A called workflow can only maintain or reduce the caller's `GITHUB_TOKEN` permissions: the caller must grant the requested permissions, but its higher `contents` permission cannot override the called workflow's `contents: read` ceiling. A separately supplied `GH_TOKEN` is not governed by that `GITHUB_TOKEN` permission ceiling.
 
 The examples keep `permissions`, `with`, and `secrets` under the calling job so their scopes are explicit: `permissions` controls the caller token, `with` configures the reusable workflow inputs, and `secrets` passes credentials.
