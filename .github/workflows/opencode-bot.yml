@@ -95,10 +95,11 @@ on:
         description: Cerebras API key
       MOONSHOT_API_KEY:
         required: false
-        description: Moonshot API key
+        description: Moonshot AI API key
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
+  # checkov:skip=CKV_GHA_7: Parameterized manual dispatch is an intentional trusted-operator interface.
   workflow_dispatch:
     inputs:
       model:
