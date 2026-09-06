@@ -1,6 +1,6 @@
 # opencode-action
 
-Run an [OpenCode](https://opencode.ai/) agent from GitHub issue and pull request comments.
+Run an [OpenCode](https://opencode.ai/) agent from GitHub Actions, including issue and pull request comments, pull request reviews, and manually dispatched tasks.
 
 [![CI](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml/badge.svg)](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml)
 
@@ -62,12 +62,12 @@ The default setup exchanges the workflow OIDC token for an OpenCode GitHub App t
 
 ## Reusable workflows
 
-For smaller caller workflows, this repository provides reusable workflows for the mention bot and pull request reviews:
+For smaller caller workflows, this repository provides reusable workflows for OpenCode tasks and pull request reviews:
 
-| Workflow                                                       | Purpose                                                                           |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted issue or pull request comments, or from a fixed prompt. |
-| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Run the bundled `/review-pr` flow for `pull_request` events.                      |
+| Workflow                                                       | Purpose                                                                 |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments, manual dispatch, or a fixed prompt. |
+| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Run the bundled `/review-pr` flow for `pull_request` events.            |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
 
@@ -106,6 +106,8 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                                                  |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                                                 |
+
+Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
