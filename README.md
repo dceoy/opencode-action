@@ -109,7 +109,7 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                                                  |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                                                 |
 
-Direct `workflow_dispatch` exposes the same input contract as `workflow_call`. For direct dispatch, `model` is required and the job runs only when `prompt` is non-empty.
+Direct `workflow_dispatch` exposes the same input contract as `workflow_call`. For direct dispatch, `model` is required and a non-empty `prompt` is required for the job to run.
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
