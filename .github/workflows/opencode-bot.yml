@@ -95,26 +95,71 @@ on:
         description: Cerebras API key
       MOONSHOT_API_KEY:
         required: false
-        description: Moonshot AI API key
+        description: Moonshot API key
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
   workflow_dispatch:
     inputs:
-      prompt:
+      model:
         required: true
         type: string
-        description: Prompt to run
-      model:
+        description: Model to use with OpenCode
+      agent:
         required: false
         type: string
-        description: Model to use with OpenCode
-        default: sakura/preview/Kimi-K2.7-Code
+        description: Primary agent to use
+        default: build
+      share:
+        required: false
+        type: boolean
+        description: Share the OpenCode session
+        default: false
+      prompt:
+        required: false
+        type: string
+        description: Custom prompt to override the event comment
+        default: ''
+      use-github-token:
+        required: false
+        type: boolean
+        description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange
+        default: false
+      mentions:
+        required: false
+        type: string
+        description: Comma-separated list of trigger phrases
+        default: /opencode,/oc
+      variant:
+        required: false
+        type: string
+        description: Provider-specific model variant
+        default: ''
+      oidc-base-url:
+        required: false
+        type: string
+        description: Base URL for OIDC token exchange
+        default: https://api.opencode.ai
+      opencode-version:
+        required: false
+        type: string
+        description: OpenCode version to install
+        default: latest
       use-bundled-toolkit:
         required: false
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
+      timeout-minutes:
+        required: false
+        type: number
+        description: Maximum minutes to let OpenCode run
+        default: 60
+      runs-on:
+        required: false
+        type: string
+        description: Runner to use
+        default: ubuntu-latest
   issue_comment:
     types:
       - created
