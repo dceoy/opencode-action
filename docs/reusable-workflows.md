@@ -12,7 +12,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 When `opencode-bot.yml` is on the repository's default branch, it can be started through the GitHub Actions UI or workflow-dispatch API. This also makes it suitable for clients such as ChatGPT with GitHub access that can dispatch Actions workflows.
 
-Direct dispatch requires `prompt`. `model` defaults to `sakura/preview/Kimi-K2.7-Code`, and `use-bundled-toolkit` defaults to `true`. Provider credentials must be configured as Actions secrets in the repository where the workflow runs.
+Direct dispatch exposes the same inputs, types, required flags, and defaults as `workflow_call`. `model` is required. `prompt` retains the reusable-workflow default of `''`, but the job runs only when it is non-empty. Provider credentials must be configured as Actions secrets in the repository where the workflow runs.
 
 ### Reusable caller
 
@@ -134,7 +134,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-Direct `workflow_dispatch` on `opencode-bot.yml` exposes only `prompt`, `model`, and `use-bundled-toolkit`; other settings use the workflow's existing defaults.
+Direct `workflow_dispatch` on `opencode-bot.yml` mirrors the complete `workflow_call` input contract above, including `agent`, `share`, `use-github-token`, `mentions`, `variant`, `oidc-base-url`, `opencode-version`, `use-bundled-toolkit`, `timeout-minutes`, and `runs-on`.
 
 GitHub.com's `$/path` self repository syntax resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. These workflows use `$/.` because the action is defined at the repository root. GitHub Enterprise Server does not support this syntax.
 
