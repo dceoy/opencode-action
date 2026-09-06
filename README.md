@@ -62,13 +62,12 @@ The default setup exchanges the workflow OIDC token for an OpenCode GitHub App t
 
 ## Reusable workflows
 
-For smaller caller workflows, this repository provides reusable workflows for manual dispatches, the mention bot, and pull request reviews:
+For smaller caller workflows, this repository provides reusable workflows for OpenCode tasks and pull request reviews:
 
-| Workflow                                                           | Purpose                                                                           |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`opencode-dispatch.yml`](.github/workflows/opencode-dispatch.yml) | Run a required prompt from a trusted `workflow_dispatch` caller.                  |
-| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)           | Run OpenCode from trusted issue or pull request comments, or from a fixed prompt. |
-| [`opencode-review.yml`](.github/workflows/opencode-review.yml)     | Run the bundled `/review-pr` flow for `pull_request` events.                      |
+| Workflow                                                       | Purpose                                                                                                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments or any caller event with a fixed prompt, including `workflow_dispatch`.             |
+| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Run the bundled `/review-pr` flow for `pull_request` events.                                                           |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
 
