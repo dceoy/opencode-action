@@ -12,7 +12,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 When `opencode-bot.yml` is on the repository's default branch, it can be started through the GitHub Actions UI or workflow-dispatch API. This also makes it suitable for clients such as ChatGPT with GitHub access that can dispatch Actions workflows.
 
-Direct dispatch exposes the same inputs, types, required flags, and defaults as `workflow_call`. `model` is required. `prompt` retains the reusable-workflow default of `''`, but the job runs only when it is non-empty. Provider credentials must be configured as Actions secrets in the repository where the workflow runs.
+Direct dispatch exposes the same inputs, types, required flags, and defaults as `workflow_call`. `model` is required. `prompt` retains the reusable-workflow default of `''`, but a non-empty value is required for the job to run. Provider credentials must be configured as Actions secrets in the repository where the workflow runs.
 
 ### Reusable caller
 
