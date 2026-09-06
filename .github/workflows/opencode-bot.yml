@@ -1,5 +1,5 @@
 ---
-name: Mention bot using OpenCode
+name: OpenCode bot
 on:
   workflow_call:
     inputs:
@@ -99,6 +99,22 @@ on:
       GH_TOKEN:
         required: false
         description: GitHub token for repository access
+  workflow_dispatch:
+    inputs:
+      prompt:
+        required: true
+        type: string
+        description: Prompt to run
+      model:
+        required: false
+        type: string
+        description: Model to use with OpenCode
+        default: sakura/preview/Kimi-K2.7-Code
+      use-bundled-toolkit:
+        required: false
+        type: boolean
+        description: Use the action's bundled OpenCode toolkit
+        default: true
   issue_comment:
     types:
       - created
