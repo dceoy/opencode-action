@@ -6,52 +6,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 ## Manual dispatch
 
-`opencode-bot.yml` supports both direct `workflow_dispatch` and reuse from another `workflow_dispatch` workflow.
-
-### Direct dispatch
-
-When `opencode-bot.yml` is on the repository's default branch, it can be started through the GitHub Actions UI or workflow-dispatch API. This also makes it suitable for clients such as ChatGPT with GitHub access that can dispatch Actions workflows.
-
-Direct dispatch exposes the same inputs, types, required flags, and defaults as `workflow_call`. `model` is required. `prompt` retains the reusable-workflow default of `''`, but a non-empty value is required for the job to run. Provider credentials must be configured as Actions secrets in the repository where the workflow runs.
-
-### Reusable caller
-
-A consumer repository can keep its own `workflow_dispatch` entry point and call `opencode-bot.yml` as a reusable workflow:
-
-<!-- prettier-ignore -->
-```yaml
----
-name: OpenCode task
-on:
-  workflow_dispatch:
-    inputs:
-      prompt:
-        description: Prompt to run
-        required: true
-        type: string
-      model:
-        description: Model to use with OpenCode
-        required: true
-        default: opencode-go/kimi-k3
-        type: string
-
-jobs:
-  opencode:
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-      id-token: write
-      actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@743cd15bb9bdfa0b9659347f995b977f635fe2a3  # v0.7.2
-    with:
-      model: ${{ inputs.model }}
-      prompt: ${{ inputs.prompt }}
-    secrets:
-      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-```
-
-The reusable workflow keeps `contents: read` for the caller token. For code-changing tasks, pass a separately write-scoped `GH_TOKEN`; higher `contents` permission on the caller's `GITHUB_TOKEN` cannot raise the called workflow's permission ceiling.
+`opencode-bot.yml` exposes `workflow_dispatch` with the same inputs as `workflow_call`. `model` is required, and `prompt` must be non-empty for the job to run. It can be dispatched from the Actions UI or API, including clients such as ChatGPT with GitHub access.
 
 ## OpenCode bot
 
@@ -134,7 +89,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-Direct `workflow_dispatch` on `opencode-bot.yml` mirrors the complete `workflow_call` input contract above, including `agent`, `share`, `use-github-token`, `mentions`, `variant`, `oidc-base-url`, `opencode-version`, `use-bundled-toolkit`, `timeout-minutes`, and `runs-on`.
+Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs.
 
 GitHub.com's `$/path` self repository syntax resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. These workflows use `$/.` because the action is defined at the repository root. GitHub Enterprise Server does not support this syntax.
 
