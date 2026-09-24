@@ -150,7 +150,7 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
         with:
-          model: ${{ inputs.model || 'openrouter/stealth/union-alpha' }}
+          model: ${{ inputs.model || 'openrouter/stealth/space-bunny-alpha' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt || '/review-pr' }}
