@@ -150,7 +150,8 @@ run_request() {
   [ "${status}" -eq 0 ]
   jq -e '.page == 1 and .next_page == null and .next_offset == null' <<< "${output}"
   grep -q 'pulls/127/reviews?per_page=10&page=1' "${BATS_TEST_TMPDIR}/gh-args"
-  ! grep -q -- '--paginate' "${BATS_TEST_TMPDIR}/gh-args"
+  run ! grep -q -- '--paginate' "${BATS_TEST_TMPDIR}/gh-args"
+  [ "${status}" -eq 0 ]
   request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
   printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
   run_request
