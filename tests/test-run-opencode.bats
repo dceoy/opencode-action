@@ -10,6 +10,9 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_workspace="${BATS_TEST_TMPDIR}/workspace"
   mkdir -p "${fake_action}/.opencode" "${fake_home}"
+  mkdir -p "${fake_home}/.config/opencode/tools" "${fake_home}/.config/opencode/scripts"
+  cp "${repo_root}/.opencode/tools/pr-review-api.js" "${fake_home}/.config/opencode/tools/"
+  cp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${fake_home}/.config/opencode/scripts/"
   export XDG_CONFIG_HOME="${fake_home}/.config"
   export XDG_DATA_HOME="${fake_home}/.local/share"
 }
@@ -615,7 +618,7 @@ EOF
     bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
-  [[ "${output}" == *"pr-review-gh.sh"* ]]
+  [[ "${output}" == *"pr-review-api"* ]]
   [[ "${output}" == *"security and performance"* ]]
   [[ "${output}" == *"abcdef"* ]]
   [[ "${output}" != *"UNTRUSTED"* ]]
@@ -664,35 +667,26 @@ EOF
   for caller in build plan ''; do
     mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
     touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-    rm -f "${fake_home}/.config/opencode/review-state/request.json"
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
       MODEL=provider/model AGENT="${caller}" PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
       PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
       bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
     [ "${status}" -eq 0 ]
     jq -e '.default_agent == "action-pr-review" and .formatter == false and .lsp == false and .permission["*"] == "deny" and
-      .agent["action-pr-review"].permission == .permission and .permission.bash["*"] == "deny" and
-      ([.permission.bash[] | select(. == "allow")] | length) == 1' <<< "${output}"
+      .agent["action-pr-review"].permission == .permission and .permission.bash == "deny" and .permission.edit == "deny" and .permission["pr-review-api"] == "allow"' <<< "${output}"
   done
 }
 
-@test "review-only rejects inherited or symlinked request state" {
-  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/review-state"
+@test "review-only fails if the native bridge is missing" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
   touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  for kind in file symlink; do
-    rm -f "${fake_home}/.config/opencode/review-state/request.json"
-    if [[ "${kind}" == file ]]; then
-      touch "${fake_home}/.config/opencode/review-state/request.json"
-    else
-      ln -s "${BATS_TEST_TMPDIR}/outside" "${fake_home}/.config/opencode/review-state/request.json"
-    fi
-    run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
-      MODEL=provider/model PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
-      PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
-    [ "${status}" -ne 0 ]
-    [[ "${output}" == *"must be fresh"* ]]
-  done
+  rm "${fake_home}/.config/opencode/tools/pr-review-api.js"
+  run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+    MODEL=provider/model PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
+    PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"requires the installed native pr-review-api"* ]]
 }
 
 @test "real OpenCode enforces the review tool permission matrix" {
@@ -700,7 +694,7 @@ EOF
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review/references" "${fake_home}/.config/opencode/scripts" "${fake_workspace}/.git"
   printf '%s\n' '---' 'name: pr-review' 'description: Runtime fixture' '---' 'Trusted fixture.' \
     > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  printf '%s\n' '#!/usr/bin/env bash' 'echo ADAPTER_OK' > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh"
+  printf '%s\n' '#!/usr/bin/env bash' '[[ $# == 1 && $1 == --request-stdin ]] || exit 2' 'cat > /dev/null' 'echo ADAPTER_OK' > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh"
   printf 'Evidence\n' > "${fake_workspace}/evidence.txt"
   printf 'Trusted reference\n' > "${fake_home}/.config/opencode/skills/pr-review/references/test.md"
   git init -q "${fake_workspace}"

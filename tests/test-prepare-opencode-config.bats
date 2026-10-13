@@ -5,14 +5,20 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_action="${BATS_TEST_TMPDIR}/action"
   mkdir -p "${fake_home}" "${fake_action}/.opencode"
+  mkdir -p "${fake_action}/.opencode/tools" "${fake_action}/.opencode/scripts"
+  cp "${repo_root}/.opencode/tools/pr-review-api.js" "${fake_action}/.opencode/tools/"
+  cp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${fake_action}/.opencode/scripts/"
   printf '%s\n' bundled > "${fake_action}/.opencode/opencode.jsonc"
   export HOME="${fake_home}"
 }
 @test "review-only prepares fresh config and clears inherited binaries" {
-  mkdir -p "${HOME}/.config/opencode" "${HOME}/.opencode/bin"
+  mkdir -p "${HOME}/.config/opencode/tools" "${HOME}/.opencode/bin"
+  printf 'untrusted\n' > "${HOME}/.config/opencode/tools/pr-review-api.js"
   touch "${HOME}/.config/opencode/old" "${HOME}/.opencode/bin/opencode"
   opencode_prepare_config "${fake_action}" true
   [ -f "${HOME}/.config/opencode/opencode.jsonc" ]
+  cmp "${repo_root}/.opencode/tools/pr-review-api.js" "${HOME}/.config/opencode/tools/pr-review-api.js"
+  cmp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${HOME}/.config/opencode/scripts/pr-review-gh.sh"
   [ ! -e "${HOME}/.config/opencode/old" ]
   [ ! -e "${HOME}/.opencode/bin" ]
 }

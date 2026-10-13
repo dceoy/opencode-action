@@ -11,7 +11,7 @@ setup() {
   mkdir -p "${fake_bin}"
   request_home="${BATS_TEST_TMPDIR}/home"
   request_head=""
-  request_file="${request_home}/.config/opencode/review-state/request.json"
+  request_file="${BATS_TEST_TMPDIR}/request.json"
   mkdir -p "$(dirname "${request_file}")"
   cat > "${fake_bin}/gh" << 'STUB'
 #!/usr/bin/env bash
@@ -26,6 +26,8 @@ if [[ "$*" == *"--method POST"* ]]; then
   fi
 elif [[ "$*" == *"--method DELETE"* ]]; then
   exit 0
+elif [[ -n "${GH_RESPONSE_FILE:-}" ]]; then
+  cat "${GH_RESPONSE_FILE}"
 elif [[ "$*" == *"/git/blobs/"* ]]; then
   printf '%s' '{"encoding":"base64","content":"RnJvemVuIGV2aWRlbmNlCg=="}'
 elif [[ "$*" == *"/git/trees/"* ]]; then
@@ -54,7 +56,7 @@ run_request() {
     GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
     PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     PR_REVIEW_HEAD_SHA="${request_head}" \
-    bash -c 'cd "$1"; bash "$2"' _ "${temp_repo}" "${wrapper}"
+    bash -c 'cd "$1"; bash "$2" --request-stdin < "$3"' _ "${temp_repo}" "${wrapper}" "${request_file}"
 }
 
 @test "publishes using verified OpenCode GitHub App token" {
@@ -159,34 +161,74 @@ run_request() {
   done
 }
 
-@test "structured requests reject symlinked state and request paths" {
-  outside="${BATS_TEST_TMPDIR}/outside"
-  printf '{}' > "${outside}"
-  ln -s "${outside}" "${request_file}"
-  run_request
-  [ "${status}" -ne 0 ]
-  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
-  rm "${request_file}"
-  rmdir "$(dirname "${request_file}")"
-  ln -s "${BATS_TEST_TMPDIR}" "$(dirname "${request_file}")"
-  run_request
-  [ "${status}" -ne 0 ]
-  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
-}
-
 @test "structured requests return decoded immutable blobs and reject truncated trees" {
   set_git_candidate ghs_verified
   sha=abcdefabcdefabcdefabcdefabcdefabcdefabcd
   printf '{"endpoint":"repos/dceoy/opencode-action/git/blobs/%s"}' "${sha}" > "${request_file}"
   run_request
   [ "${status}" -eq 0 ]
-  [ "${output}" = 'Frozen evidence' ]
+  jq -e '.content == "Frozen evidence\n" and .next_offset == null' <<< "${output}"
   printf '{"endpoint":"repos/dceoy/opencode-action/git/trees/%s"}' "${sha}" > "${request_file}"
   run_request
   [ "${status}" -eq 0 ]
-  jq -e '.truncated == false' <<< "${output}"
+  jq -e '.content | fromjson | .truncated == false' <<< "${output}"
   export GH_TREE_TRUNCATED=true
   run_request
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Truncated tree"* ]]
+}
+
+@test "structured response pages reconstruct oversized metadata and Unicode blobs" {
+  set_git_candidate ghs_verified
+  run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" \
+    PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
+    python3 - "${wrapper}" "${temp_repo}" "${BATS_TEST_TMPDIR}" << 'PYCODE'
+import base64
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+wrapper, repo, temporary = sys.argv[1:]
+text = ("Frozen evidence 日本語\n" * 3000)
+response = Path(temporary) / "response.json"
+for kind in ["metadata", "blob"]:
+    if kind == "blob":
+        response.write_text(json.dumps({"encoding": "base64", "content": base64.b64encode(text.encode()).decode()}))
+        endpoint = "repos/dceoy/opencode-action/git/blobs/abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    else:
+        response.write_text(text)
+        endpoint = "repos/dceoy/opencode-action/pulls/127/files"
+    chunks, offset = [], 0
+    while True:
+        raw = subprocess.check_output(["bash", wrapper, "--request-stdin"],
+            input=json.dumps({"endpoint": endpoint, "offset": offset, "limit": 4096}).encode(),
+            cwd=repo, env={**os.environ, "GH_RESPONSE_FILE": str(response)})
+        assert len(raw) < 32768
+        page = json.loads(raw)
+        assert page["offset"] == offset and page["total_chars"] == len(text)
+        chunks.append(page["content"])
+        offset = page["next_offset"]
+        if offset is None:
+            break
+    assert "".join(chunks) == text
+PYCODE
+  [ "${status}" -eq 0 ]
+}
+
+@test "structured paging rejects invalid bounds before credentials" {
+  for bounds in '"offset":true' '"offset":-1' '"offset":1.5' '"offset":"0"' \
+    '"limit":false' '"limit":0' '"limit":4097' '"limit":1.5' '"limit":"10"'; do
+    printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127",%s}' "${bounds}" > "${request_file}"
+    run_request
+    [ "${status}" -ne 0 ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  done
+  request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","offset":0,"payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
+  run_request
+  [ "${status}" -ne 0 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
 }

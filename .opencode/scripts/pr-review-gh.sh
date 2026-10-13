@@ -4,14 +4,13 @@
 set -euo pipefail
 
 pr_review_request() {
-  # Only this exact no-argument command is available to the review agent.
-  python3 - "${BASH_SOURCE[0]}" "${HOME}/.config/opencode/review-state/request.json" << 'PYCODE'
+  # Preserve request stdin on fd 3 while the static program uses stdin.
+  python3 - "${BASH_SOURCE[0]}" 3<&0 << 'PYCODE'
 import base64
 import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 def unique(pairs):
     result = {}
@@ -21,23 +20,24 @@ def unique(pairs):
         result[key] = value
     return result
 
-script, filename = sys.argv[1:]
-path = Path(filename)
-if path.parent.is_symlink() or path.is_symlink():
-    raise ValueError("Review request path must not be a symbolic link")
-with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW)) as stream:
+script = sys.argv[1]
+with os.fdopen(3) as stream:
     request = json.load(stream, object_pairs_hook=unique)
 if not (isinstance(request, dict)
-        and set(request) <= {"endpoint", "method", "paginate", "payload"}
+        and set(request) <= {"endpoint", "method", "paginate", "payload", "offset", "limit"}
         and isinstance(request.get("endpoint"), str)
         and request.get("method", "GET") in ("GET", "POST")
         and isinstance(request.get("paginate", False), bool)):
     raise ValueError("Invalid structured review request")
 method = request.get("method", "GET")
+offset, limit = request.get("offset", 0), request.get("limit", 4096)
+if not (type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 4096):
+    raise ValueError("Invalid response page bounds")
 args = ["bash", script, "api", request["endpoint"], "--method", method]
 payload = None
 if method == "POST":
-    if not isinstance(request.get("payload"), dict) or request.get("paginate", False):
+    if (not isinstance(request.get("payload"), dict) or request.get("paginate", False)
+            or "offset" in request or "limit" in request):
         raise ValueError("Publication requires an embedded JSON payload")
     args += ["--input", "-"]
     payload = json.dumps(request["payload"])
@@ -48,20 +48,30 @@ if request.get("paginate", False):
 immutable = "/git/blobs/" in request["endpoint"] or "/git/trees/" in request["endpoint"]
 if immutable and request.get("paginate", False):
     raise ValueError("Immutable evidence does not support pagination")
-result = subprocess.run(args, input=payload, text=True,
-                        stdout=subprocess.PIPE if immutable else None)
+result = subprocess.run(args, input=payload, text=True, stdout=subprocess.PIPE)
 if result.returncode:
     raise SystemExit(result.returncode)
+content = result.stdout
+if method == "POST":
+    receipt = json.loads(content)
+    print(json.dumps({"review_id": receipt.get("id"), "commit_id": receipt.get("commit_id"),
+                      "state": receipt.get("state"), "url": receipt.get("html_url")}))
+    raise SystemExit(0)
 if immutable:
     evidence = json.loads(result.stdout)
     if "/git/blobs/" in request["endpoint"]:
         if evidence.get("encoding") != "base64":
             raise ValueError("Unsupported blob encoding")
-        sys.stdout.buffer.write(base64.b64decode(evidence["content"]))
+        content = base64.b64decode(evidence["content"]).decode("utf-8")
     else:
         if evidence.get("truncated"):
             raise ValueError("Truncated tree cannot establish complete evidence")
-        print(json.dumps(evidence))
+        content = json.dumps(evidence, ensure_ascii=False)
+if offset > len(content):
+    raise ValueError("Response offset exceeds available evidence")
+end = min(offset + limit, len(content))
+print(json.dumps({"offset": offset, "next_offset": end if end < len(content) else None,
+                  "total_chars": len(content), "content": content[offset:end]}, ensure_ascii=False))
 PYCODE
 }
 
@@ -218,7 +228,7 @@ print(json.dumps(p))
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  if (($# == 0)); then
+  if (($# == 1)) && [[ "$1" == --request-stdin ]]; then
     pr_review_request
   else
     pr_review_gh_main "$@"
