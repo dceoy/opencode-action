@@ -87,7 +87,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `opencode-version`    | `latest`                                                                                               | OpenCode version to install.                                  |
 | `use-bundled-toolkit` | `true`                                                                                                 | Use the bundled OpenCode toolkit.                             |
 | `review-only`         | `false` on bot; `true` on PR review workflow                                                           | Install and invoke the upstream review skill.                 |
-| `pr-review-ref`       | pinned SHA (`v1.0.0`)                                                                                   | Immutable `pr-loop` commit providing the reviewer.                      |
+| `pr-review-ref`       | pinned SHA (`v1.0.0`)                                                                                  | Immutable `pr-loop` commit providing the reviewer.            |
 | `timeout-minutes`     | `60`                                                                                                   | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                                                        | Runner label for the called job.                              |
 

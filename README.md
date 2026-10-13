@@ -105,7 +105,7 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+.                                                          |
 | `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                      |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
-| `pr-review-ref`       | pinned SHA (`v1.0.0`)                | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
+| `pr-review-ref`       | pinned SHA (`v1.0.0`)     | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
