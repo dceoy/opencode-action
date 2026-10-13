@@ -77,15 +77,11 @@ jobs:
           from pathlib import Path
 
           tag, sha = sys.argv[1:]
-          paths = [Path('action.yml'), Path('.github/workflows/opencode-bot.yml'),
-                   Path('.github/workflows/opencode-review.yml')]
-          current = re.search(r'  pr-review-ref:\n(?:    .*\n)*?    default: ([0-9a-f]{40})  # (v\d+\.\d+\.\d+)\n', paths[0].read_text())
+          path = Path('.github/workflows/opencode-review.yml')
+          current = re.search(r'  PR_LOOP_REF: ([0-9a-f]{40})  # (v\d+\.\d+\.\d+)\n', path.read_text())
           if current is None:
               raise SystemExit('Cannot locate the default pr-loop release pin')
-          for path in paths:
-              text = path.read_text().replace(current[1], sha)
-              text = re.sub(r'(# )' + re.escape(current[2]) + r'(?=\n)', lambda m: m[1] + tag, text)
-              path.write_text(text)
+          path.write_text(path.read_text().replace(current[0], f'  PR_LOOP_REF: {sha}  # {tag}\n'))
           for name in ['README.md', 'docs/reusable-workflows.md', 'docs/pull-request-reviews.md']:
               path = Path(name)
               text = path.read_text().replace(current[1], sha)

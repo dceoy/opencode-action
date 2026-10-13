@@ -69,7 +69,7 @@ on:
         required: false
         type: string
         description: Full immutable pr-loop commit SHA
-        default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -185,7 +185,7 @@ on:
         required: false
         type: string
         description: Full immutable pr-loop commit SHA
-        default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -269,5 +269,5 @@ jobs:
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: ${{ inputs.review-only }}
-          pr-review-ref: ${{ inputs.pr-review-ref || 'ddd538f6e9347b13cf6aaebfbda86ba704ee8415' }}  # v1.0.0
+          pr-review-ref: ${{ inputs.pr-review-ref }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

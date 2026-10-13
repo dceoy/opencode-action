@@ -21,7 +21,7 @@ on:
         required: false
         type: string
         description: Review prompt
-        default: Review the pull request for material defects.
+        default: /pr-review
       use-github-token:
         required: false
         type: boolean
@@ -56,7 +56,7 @@ on:
         required: false
         type: string
         description: Full immutable pr-loop commit SHA
-        default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -114,6 +114,8 @@ permissions:
   issues: write
   id-token: write
   actions: read
+env:
+  PR_LOOP_REF: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
 jobs:
   opencode-review:
     if: >
@@ -160,7 +162,7 @@ jobs:
           model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
-          prompt: ${{ inputs.prompt || 'Review the pull request for material defects.' }}
+          prompt: ${{ inputs.prompt || '/pr-review' }}
           use-github-token: ${{ inputs.use-github-token }}
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
@@ -168,5 +170,5 @@ jobs:
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
-          pr-review-ref: ${{ inputs.pr-review-ref || 'ddd538f6e9347b13cf6aaebfbda86ba704ee8415' }}  # v1.0.0
+          pr-review-ref: ${{ inputs.pr-review-ref || env.PR_LOOP_REF }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

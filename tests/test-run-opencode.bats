@@ -611,10 +611,12 @@ EOF
 
 @test "review-only uses installed upstream pr-review skill, not project commands" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_workspace}/.opencode/commands"
+  mkdir -p "${fake_home}/.config/opencode/commands"
+  printf '%s\n' 'Load and follow the installed pr-review skill from dceoy/pr-loop. $ARGUMENTS' > "${fake_home}/.config/opencode/commands/pr-review.md"
   printf '%s\n' 'name: pr-review' > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
   printf '%s\n' 'UNTRUSTED' > "${fake_workspace}/.opencode/commands/review-pr.md"
   run env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" \
-    ACTION_PATH="${repo_root}" PROMPT="security and performance" REVIEW_ONLY=true \
+    ACTION_PATH="${repo_root}" PROMPT="/pr-review security and performance" REVIEW_ONLY=true \
     USE_BUNDLED_TOOLKIT=true MODEL="sakura/preview/Kimi-K2.7-Code" \
     AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
     bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
@@ -635,6 +637,8 @@ EOF
 
 @test "removed review-pr slash command fails with migration hint" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
+  mkdir -p "${fake_home}/.config/opencode/commands"
+  printf '%s\n' 'Load and follow the installed pr-review skill from dceoy/pr-loop. $ARGUMENTS' > "${fake_home}/.config/opencode/commands/pr-review.md"
   printf '%s\n' 'name: pr-review' > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
   run env HOME="${fake_home}" ACTION_PATH="${repo_root}" PROMPT="/review-pr" \
     REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
@@ -646,6 +650,8 @@ EOF
 @test "review-only extracts concrete PR context from pull request event" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
   touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  mkdir -p "${fake_home}/.config/opencode/commands"
+  printf '%s\n' 'Load and follow the installed pr-review skill from dceoy/pr-loop. $ARGUMENTS' > "${fake_home}/.config/opencode/commands/pr-review.md"
   event="${BATS_TEST_TMPDIR}/pr-event.json"
   printf '%s' '{"pull_request":{"html_url":"https://github.com/org/repo/pull/123","head":{"sha":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"}}}' > "${event}"
   run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA HOME="${fake_home}" ACTION_PATH="${repo_root}" \
@@ -658,6 +664,8 @@ EOF
 @test "review-only fails closed without a concrete target" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
   touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  mkdir -p "${fake_home}/.config/opencode/commands"
+  printf '%s\n' 'Load and follow the installed pr-review skill from dceoy/pr-loop. $ARGUMENTS' > "${fake_home}/.config/opencode/commands/pr-review.md"
   run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA -u GITHUB_EVENT_PATH HOME="${fake_home}" \
     ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
     bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"

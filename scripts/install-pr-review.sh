@@ -19,6 +19,15 @@ pr_review_copy_skill() {
   fi
   mkdir -p "${parent}"
   cp -R "${source_dir}" "${target_dir}"
+  mkdir -p "${parent}/../commands"
+  cat > "${parent}/../commands/pr-review.md" <<'COMMAND'
+---
+description: Review a pull request using the installed pr-loop pr-review skill.
+---
+Load and follow the installed pr-review skill from dceoy/pr-loop.
+
+Requested review scope: "$ARGUMENTS"
+COMMAND
 }
 install_pr_review() {
   local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout

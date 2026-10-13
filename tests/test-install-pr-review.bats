@@ -14,6 +14,7 @@ setup() {
   pr_review_copy_skill "${source_dir}" "${target_dir}"
   [ -f "${target_dir}/SKILL.md" ]
   [ -f "${target_dir}/references/github-posting.md" ]
+  [ -f "${BATS_TEST_TMPDIR}/config/commands/pr-review.md" ]
 }
 @test "fails closed when upstream reference is missing" {
   rm "${source_dir}/references/github-posting.md"
