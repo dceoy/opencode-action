@@ -68,28 +68,28 @@ jobs:
 
 This example assumes a trusted, same-repository pull request. For `pull_request` events from public forks, GitHub withholds repository Actions secrets and makes `GITHUB_TOKEN` read-only; Dependabot pull requests have the same restrictions. Private-fork behavior can differ when repository settings explicitly allow secrets or write tokens.
 
-To focus the review, override `prompt` with a supported review aspect, for example `prompt: Focus on security and performance.`. See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
+To focus the review, override `prompt` with a supported review aspect, for example `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
 
 ## Inputs
 
 Both reusable workflows expose the action configuration plus a runner input:
 
-| Input                 | Default                                                             | Description                                                   |
-| --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `model`               | Required                                                            | Model in `provider/model` format.                             |
-| `agent`               | `build`                                                             | Primary agent.                                                |
-| `share`               | `false`                                                             | Share the OpenCode session.                                   |
+| Input                 | Default                                                                                                | Description                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `model`               | Required                                                                                               | Model in `provider/model` format.                             |
+| `agent`               | `build`                                                                                                | Primary agent.                                                |
+| `share`               | `false`                                                                                                | Share the OpenCode session.                                   |
 | `prompt`              | `''` for `opencode-bot.yml`; `Review the pull request for material defects.` for `opencode-review.yml` | Fixed prompt.                                                 |
-| `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                     | Comma-separated trigger phrases.                              |
-| `variant`             | `''`                                                                | Provider-specific model variant.                              |
-| `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
-| `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
-| `review-only`       | `false` on bot; `true` on PR review workflow                       | Install and invoke the upstream review skill.                  |
-| `pr-review-ref`     | pinned immutable SHA                                                  | `pr-loop` commit providing the reviewer.                      |
-| `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
-| `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
+| `use-github-token`    | `false`                                                                                                | Use the workflow token instead of the default App-token flow. |
+| `mentions`            | `/opencode,/oc`                                                                                        | Comma-separated trigger phrases.                              |
+| `variant`             | `''`                                                                                                   | Provider-specific model variant.                              |
+| `oidc-base-url`       | `https://api.opencode.ai`                                                                              | OIDC exchange base URL.                                       |
+| `opencode-version`    | `latest`                                                                                               | OpenCode version to install.                                  |
+| `use-bundled-toolkit` | `true`                                                                                                 | Use the bundled OpenCode toolkit.                             |
+| `review-only`         | `false` on bot; `true` on PR review workflow                                                           | Install and invoke the upstream review skill.                 |
+| `pr-review-ref`       | pinned immutable SHA                                                                                   | `pr-loop` commit providing the reviewer.                      |
+| `timeout-minutes`     | `60`                                                                                                   | Maximum OpenCode runtime in minutes.                          |
+| `runs-on`             | `ubuntu-latest`                                                                                        | Runner label for the called job.                              |
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs.
 

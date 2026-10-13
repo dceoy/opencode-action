@@ -64,10 +64,10 @@ The default setup exchanges the workflow OIDC token for an OpenCode GitHub App t
 
 For smaller caller workflows, this repository provides reusable workflows for OpenCode tasks and pull request reviews:
 
-| Workflow                                                       | Purpose                                                                 |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments, manual dispatch, or a fixed prompt. |
-| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Install and use `pr-loop`'s external `pr-review` skill for `pull_request` events.            |
+| Workflow                                                       | Purpose                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments, manual dispatch, or a fixed prompt.           |
+| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Install and use `pr-loop`'s external `pr-review` skill for `pull_request` events. |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
 
@@ -93,21 +93,21 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 
 ## Inputs
 
-| Input                 | Default                   | Description                                                                                                                                                             |
-| --------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`               | Required                  | Model in `provider/model` format.                                                                                                                                       |
-| `agent`               | `build`                   | Primary agent. A slash command can override it.                                                                                                                         |
-| `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.                                                                                                                  |
-| `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                                                                                                                                        |
-| `variant`             | -                         | Provider-specific reasoning effort; leave empty unless supported. See [Custom providers](docs/custom-providers.md#variants-for-custom-providers).                       |
-| `share`               | `false`                   | Share the OpenCode session.                                                                                                                                             |
-| `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                                           |
-| `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+. |
-| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                                            |
-| `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                                  |
-| `pr-review-ref`      | pinned SHA                | Immutable `pr-loop` commit supplying the review skill.                                                                                                                |
-| `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                                                  |
-| `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                                                 |
+| Input                 | Default                   | Description                                                                                                                                       |
+| --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`               | Required                  | Model in `provider/model` format.                                                                                                                 |
+| `agent`               | `build`                   | Primary agent. A slash command can override it.                                                                                                   |
+| `prompt`              | Event comment             | Fixed prompt to use instead of the triggering comment.                                                                                            |
+| `mentions`            | `/opencode,/oc`           | Comma-separated trigger phrases.                                                                                                                  |
+| `variant`             | -                         | Provider-specific reasoning effort; leave empty unless supported. See [Custom providers](docs/custom-providers.md#variants-for-custom-providers). |
+| `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
+| `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
+| `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+.                                                          |
+| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                      |
+| `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
+| `pr-review-ref`       | pinned SHA                | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
+| `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
+| `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 

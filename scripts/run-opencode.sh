@@ -329,10 +329,20 @@ opencode_configure_run() {
     if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
       base_config="$(opencode_jsonc_to_json <<< "${OPENCODE_CONFIG_CONTENT}")"
     fi
-    OPENCODE_CONFIG_CONTENT="$(jq -nc \
-      --arg agent "${OPENCODE_RESOLVED_AGENT}" \
-      --argjson base "${base_config}" \
-      '$base * {default_agent: $agent}')"
+    if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+      # Allow reading the pinned upstream skill's relative references while
+      # disallowing the editor tool in review mode. Shell commands still obey
+      # the selected agent's permissions, not a dedicated read-only sandbox.
+      OPENCODE_CONFIG_CONTENT="$(jq -nc \
+        --arg agent "${OPENCODE_RESOLVED_AGENT}" \
+        --argjson base "${base_config}" \
+        '$base * {default_agent: $agent, permission: {external_directory: {"$HOME/.config/opencode/skills/pr-review/**": "allow"}, edit: {"*": "deny"}}}')"
+    else
+      OPENCODE_CONFIG_CONTENT="$(jq -nc \
+        --arg agent "${OPENCODE_RESOLVED_AGENT}" \
+        --argjson base "${base_config}" \
+        '$base * {default_agent: $agent}')"
+    fi
     export OPENCODE_CONFIG_CONTENT
   fi
 }
