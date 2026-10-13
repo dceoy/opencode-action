@@ -215,40 +215,6 @@ EOF
   [ "$(cat "${invocation_file}")" = "github run" ]
 }
 
-@test "isolated review rejects an unsupported bundled variant before invoking OpenCode" {
-  fake_bin="${BATS_TEST_TMPDIR}/review-variant-bin"
-  invocation_file="${BATS_TEST_TMPDIR}/review-variant-invocation"
-  mkdir -p "${fake_bin}"
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'printf "%s\n" "$*" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
-  chmod +x "${fake_bin}/opencode"
-  cat > "${fake_action}/.opencode/opencode.jsonc" << 'EOF'
-{"provider":{"sakura":{"models":{"preview/Kimi-K2.7-Code":{"variants":{}}}}}}
-EOF
-
-  run env \
-    PATH="${fake_bin}:${PATH}" \
-    HOME="${fake_home}" \
-    ACTION_PATH="${fake_action}" \
-    GITHUB_WORKSPACE="${fake_workspace}" \
-    GITHUB_ACTIONS="true" \
-    RUNNER_ENVIRONMENT="github-hosted" \
-    PROMPT="/review-pr" \
-    AGENT="build" \
-    MENTIONS="/oc" \
-    MODEL="sakura/preview/Kimi-K2.7-Code" \
-    VARIANT="thinking" \
-    REVIEW_ONLY="true" \
-    USE_BUNDLED_TOOLKIT="true" \
-    TIMEOUT_MINUTES="5" \
-    INVOCATION_FILE="${invocation_file}" \
-    "${run_script}"
-
-  [ "${status}" -ne 0 ]
-  [[ "${output}" == *"does not support variant 'thinking'"* ]]
-  [ ! -e "${invocation_file}" ]
-}
 
 @test "run configuration merges default_agent into existing JSONC" {
   run env \
@@ -273,149 +239,9 @@ EOF
   [ "${status}" -eq 0 ]
 }
 
-@test "review-only run configuration discards inherited config overrides" {
-  run env \
-    HOME="${fake_home}" \
-    ACTION_PATH="${fake_action}" \
-    PROMPT="/review-pr" \
-    AGENT="build" \
-    MENTIONS="/oc" \
-    REVIEW_ONLY="true" \
-    USE_BUNDLED_TOOLKIT="true" \
-    OPENCODE_CONFIG="untrusted.json" \
-    OPENCODE_CONFIG_DIR="untrusted.d" \
-    OPENCODE_CONFIG_CONTENT='{"plugin":["untrusted"]}' \
-    bash -euo pipefail -c '
-      source "$1"
-      opencode_configure_run
-      [[ -z "${OPENCODE_CONFIG+x}" ]]
-      [[ -z "${OPENCODE_CONFIG_DIR+x}" ]]
-      [[ "$OPENCODE_DISABLE_PROJECT_CONFIG" == 1 ]]
-      [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]
-      [[ "$XDG_CONFIG_HOME" == "$HOME/.config" ]]
-      jq -e '\''
-        .default_agent == "build" and
-        (has("plugin") | not)
-      '\'' <<<"$OPENCODE_CONFIG_CONTENT"
-    ' _ "${run_script}"
 
-  [ "${status}" -eq 0 ]
-}
 
-@test "review-only run configuration isolates bundled command resolution" {
-  workspace="${BATS_TEST_TMPDIR}/workspace"
-  mkdir -p "${workspace}/.opencode/commands"
-  cat > "${workspace}/.opencode/commands/review-pr.md" << 'EOF'
----
-description: untrusted project command
-agent: plan
----
 
-MALICIOUS PROJECT REVIEW: $ARGUMENTS
-EOF
-
-  run env \
-    HOME="${fake_home}" \
-    ACTION_PATH="${repo_root}" \
-    GITHUB_WORKSPACE="${workspace}" \
-    PROMPT="/review-pr security" \
-    AGENT="build" \
-    MENTIONS="/oc" \
-    REVIEW_ONLY="true" \
-    USE_BUNDLED_TOOLKIT="true" \
-    bash -euo pipefail -c '
-      source "$1"
-      opencode_configure_run
-      [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/review-pr.md" ]]
-      [[ "$PROMPT" == *"Load and follow the "*" skill."* ]]
-      [[ "$PROMPT" == *"pr-review"* ]]
-      [[ "$PROMPT" == *"security"* ]]
-      [[ "$PROMPT" != *"MALICIOUS PROJECT REVIEW"* ]]
-      jq -e '\''
-        .default_agent == "review-pr-orchestrator" and
-        .default_agent != "plan"
-      '\'' <<<"$OPENCODE_CONFIG_CONTENT"
-    ' _ "${run_script}" "${repo_root}"
-
-  [ "${status}" -eq 0 ]
-}
-
-@test "review-only runtime loads the bundled skill and excludes external skills" {
-  workspace="${BATS_TEST_TMPDIR}/workspace"
-  mkdir -p "${workspace}/.agents/skills/untrusted-review"
-  cat > "${workspace}/.agents/skills/untrusted-review/SKILL.md" << 'EOF'
----
-name: untrusted-review
-description: untrusted project skill
----
-
-# Untrusted review
-EOF
-
-  run env \
-    HOME="${fake_home}" \
-    ACTION_PATH="${repo_root}" \
-    GITHUB_WORKSPACE="${workspace}" \
-    PROMPT="/review-pr security" \
-    AGENT="build" \
-    MENTIONS="/oc" \
-    REVIEW_ONLY="true" \
-    USE_BUNDLED_TOOLKIT="true" \
-    bash -euo pipefail -c '
-      source "$1"
-      source "$2"
-      opencode_prepare_config "$3" true
-      opencode_configure_run
-      cd "$GITHUB_WORKSPACE"
-      opencode debug skill >/dev/null
-      skills="$(opencode debug skill)"
-      jq -e \
-        --arg location "$HOME/.config/opencode/skills/pr-review/SKILL.md" \
-        '\''
-          any(
-            .[];
-            .name == "pr-review"
-            and .location == $location
-            and (.content | contains("# Strictly Read-Only PR Review"))
-          )
-          and all(.[]; .name != "untrusted-review")
-        '\'' <<<"$skills"
-    ' _ "${run_script}" "${repo_root}/scripts/prepare-opencode-config.sh" "${repo_root}"
-
-  [ "${status}" -eq 0 ]
-}
-
-@test "normal run configuration falls back to the bundled toolkit's commands" {
-  workspace="${BATS_TEST_TMPDIR}/workspace"
-  mkdir -p "${workspace}" "${fake_action}/.opencode/commands"
-  cat > "${fake_action}/.opencode/commands/inspect.md" << 'EOF'
----
-description: bundled inspect command
-agent: plan
----
-
-Bundled inspect: $ARGUMENTS
-EOF
-
-  run env \
-    HOME="${fake_home}" \
-    ACTION_PATH="${fake_action}" \
-    GITHUB_WORKSPACE="${workspace}" \
-    PROMPT="/inspect security" \
-    AGENT="build" \
-    MENTIONS="/oc" \
-    REVIEW_ONLY="false" \
-    USE_BUNDLED_TOOLKIT="true" \
-    bash -euo pipefail -c '
-      source "$1"
-      opencode_configure_run
-      [[ "$OPENCODE_RESOLVED_COMMAND_FILE" == "$2/.opencode/commands/inspect.md" ]]
-      [[ "$PROMPT" == *"Bundled inspect: security"* ]]
-      jq -e '\''.default_agent == "plan"'\'' <<<"$OPENCODE_CONFIG_CONTENT"
-    ' _ "${run_script}" "${fake_action}"
-
-  [ "${status}" -eq 0 ]
-}
 
 @test "OpenCode failure classification uses the terminal provider error" {
   output_file="${BATS_TEST_TMPDIR}/output"
@@ -781,4 +607,37 @@ EOF
   [ "$(cat "${invocation_file}")" = "opencode github run" ]
   [[ "$(cat "${prompt_file}")" == *"Inspect securely: security"* ]]
   jq -e '.default_agent == "plan"' "${config_file}"
+}
+
+@test "review-only uses installed upstream pr-review skill, not project commands" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_workspace}/.opencode/commands"
+  printf '%s\n' 'name: pr-review' > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  printf '%s\n' 'UNTRUSTED' > "${fake_workspace}/.opencode/commands/review-pr.md"
+  run env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" \
+    ACTION_PATH="${repo_root}" PROMPT="security and performance" REVIEW_ONLY=true \
+    USE_BUNDLED_TOOLKIT=true MODEL="sakura/preview/Kimi-K2.7-Code" \
+    AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdef \
+    bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
+  [[ "${output}" == *"security and performance"* ]]
+  [[ "${output}" == *"abcdef"* ]]
+  [[ "${output}" != *"UNTRUSTED"* ]]
+}
+
+@test "review-only fails if upstream skill was not installed" {
+  run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+    bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"requires the installed pr-loop pr-review skill"* ]]
+}
+
+@test "removed review-pr slash command fails with migration hint" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
+  printf '%s\n' 'name: pr-review' > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  run env HOME="${fake_home}" ACTION_PATH="${repo_root}" PROMPT="/review-pr" \
+    REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+    bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"bundled /review-pr command was removed"* ]]
 }
