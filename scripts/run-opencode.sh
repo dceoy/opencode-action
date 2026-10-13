@@ -319,7 +319,15 @@ opencode_configure_run() {
       opencode_report_error "The bundled /review-pr command was removed. Specify review focus as plain text."
       return 1
     fi
-    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL:-the pull request identified by the GitHub event} at frozen head ${PR_REVIEW_HEAD_SHA:-determined from the GitHub event}. For ALL GitHub API and CLI reads, structured COMMENT review publication, and publication verification, invoke the trusted CLI adapter as bash ${HOME}/.config/opencode/scripts/pr-review-gh.sh <gh arguments>. Do not invoke gh or GitHub mutation tools directly, nor read, disclose, or print credentials. The adapter resolves and verifies the OpenCode App token before running gh, and fails closed if no verified token is available unless explicitly using use-github-token. Do not modify repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+    if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
+      export PR_REVIEW_URL="${PR_REVIEW_URL:-$(jq -r '.pull_request.html_url // empty' "${GITHUB_EVENT_PATH}")}"
+      export PR_REVIEW_HEAD_SHA="${PR_REVIEW_HEAD_SHA:-$(jq -r '.pull_request.head.sha // empty' "${GITHUB_EVENT_PATH}")}"
+    fi
+    if [[ ! "${PR_REVIEW_URL:-}" =~ ^https://github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/pull/[1-9][0-9]*/?$ || ! "${PR_REVIEW_HEAD_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+      opencode_report_error "Review-only requires a concrete PR_REVIEW_URL and full PR_REVIEW_HEAD_SHA; provide them explicitly for comment or manual events."
+      return 1
+    fi
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub API and CLI reads, structured COMMENT review publication, and publication verification, invoke the trusted CLI adapter as bash ${HOME}/.config/opencode/scripts/pr-review-gh.sh <gh arguments>. Do not invoke gh or GitHub mutation tools directly, nor read, disclose, or print credentials. The adapter resolves and verifies the OpenCode App token before running gh, and fails closed if no verified token is available unless explicitly using use-github-token. Do not modify repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
   elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi

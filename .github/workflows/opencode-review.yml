@@ -55,8 +55,8 @@ on:
       pr-review-ref:
         required: false
         type: string
-        description: Immutable upstream pr-loop commit SHA
-        default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415
+        description: Full immutable pr-loop commit SHA
+        default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
       timeout-minutes:
         required: false
         type: number
@@ -168,5 +168,5 @@ jobs:
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
-          pr-review-ref: ${{ inputs.pr-review-ref || 'ddd538f6e9347b13cf6aaebfbda86ba704ee8415' }}
+          pr-review-ref: ${{ inputs.pr-review-ref || 'ddd538f6e9347b13cf6aaebfbda86ba704ee8415' }}  # v1.0.0
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

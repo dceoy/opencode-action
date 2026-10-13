@@ -616,7 +616,7 @@ EOF
   run env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" \
     ACTION_PATH="${repo_root}" PROMPT="security and performance" REVIEW_ONLY=true \
     USE_BUNDLED_TOOLKIT=true MODEL="sakura/preview/Kimi-K2.7-Code" \
-    AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdef \
+    AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
     bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
@@ -641,4 +641,26 @@ EOF
     bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"bundled /review-pr command was removed"* ]]
+}
+
+@test "review-only extracts concrete PR context from pull request event" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
+  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  event="${BATS_TEST_TMPDIR}/pr-event.json"
+  printf '%s' '{"pull_request":{"html_url":"https://github.com/org/repo/pull/123","head":{"sha":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"}}}' > "${event}"
+  run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA HOME="${fake_home}" ACTION_PATH="${repo_root}" \
+    REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true GITHUB_EVENT_PATH="${event}" \
+    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$PROMPT"' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"https://github.com/org/repo/pull/123 at frozen head abcdefabcdefabcdefabcdefabcdefabcdefabcd"* ]]
+}
+
+@test "review-only fails closed without a concrete target" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
+  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA -u GITHUB_EVENT_PATH HOME="${fake_home}" \
+    ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+    bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"requires a concrete PR_REVIEW_URL"* ]]
 }

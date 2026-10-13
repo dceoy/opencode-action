@@ -12,6 +12,7 @@ setup() {
   cat > "${fake_bin}/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+printf x >> "${GH_CALL_LOG}"
 if [[ "$*" == *"--method POST"* ]]; then
   cat > /dev/null
   if [[ "${GH_TOKEN:-}" == ghs_verified ]]; then
@@ -36,7 +37,7 @@ set_git_candidate() {
 
 run_wrapper() {
   run env -u GH_TOKEN -u GITHUB_TOKEN \
-    PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" "$@"
 }
 
@@ -58,7 +59,7 @@ run_wrapper() {
 
 @test "explicit workflow-token fallback is permitted" {
   set_git_candidate ghs_wrong
-  run env PATH="${fake_bin}:${PATH}" \
+  run env GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" \
     GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok USE_GITHUB_TOKEN=true \
     PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" api repos/dceoy/opencode-action/pulls/127/reviews
@@ -78,4 +79,35 @@ run_wrapper() {
     bash "${wrapper}" pr merge 127
   [ "${status}" -eq 2 ]
   [[ "${output}" == *"Unsupported gh pr subcommand"* ]]
+}
+
+@test "rejects arbitrary methods endpoints hosts and field mutations before credentials" {
+  for args in 'api repos/dceoy/opencode-action/pulls/127 --method DELETE' \
+    'api repos/other/repo/pulls/127' 'api graphql' \
+    'api repos/dceoy/opencode-action/pulls/127/reviews -f event=APPROVE' \
+    'api repos/dceoy/opencode-action/pulls/127 --hostname attacker.example' \
+    'api repos/dceoy/opencode-action/pulls/127 --method=POST'; do
+    # Intentional whitespace splitting supplies hostile CLI arguments.
+    # shellcheck disable=SC2086
+    run_wrapper ${args}
+    [ "${status}" -ne 0 ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  done
+}
+
+@test "accepts commit-bound COMMENT JSON and rejects approval wrong SHA and duplicate keys" {
+  set_git_candidate ghs_verified
+  payload="${BATS_TEST_TMPDIR}/review.json"
+  sha=abcdefabcdefabcdefabcdefabcdefabcdefabcd
+  export PR_REVIEW_HEAD_SHA="${sha}" PYTHONOPTIMIZE=1
+  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${sha}" > "${payload}"
+  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${payload}"
+  [ "${status}" -eq 0 ]
+  for json in '{"event":"APPROVE","body":"x"}' \
+    '{"event":"COMMENT","body":"x","commit_id":"wrong"}' \
+    '{"event":"APPROVE","event":"COMMENT","body":"x"}'; do
+    printf '%s' "${json}" > "${payload}"
+    run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${payload}"
+    [ "${status}" -ne 0 ]
+  done
 }

@@ -105,7 +105,7 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+.                                                          |
 | `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                      |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
-| `pr-review-ref`       | pinned SHA                | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
+| `pr-review-ref`       | pinned SHA (`v1.0.0`)                | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
@@ -119,6 +119,6 @@ Outputs are `opencode-version` and `cache-hit`. Review-only runs (`review-only: 
 
 The reusable [`opencode-review.yml`](.github/workflows/opencode-review.yml) installs the external `pr-loop/pr-review` skill and runs it with `review-only: true`. The former bundled `/review-pr` command is no longer supported. Use plain-text `prompt` instructions to focus the review (for example, `security and performance`). The skill freezes the reviewed head, validates findings, and publishes a verified `COMMENT` review.
 
-For direct action calls, set `review-only: 'true'` with `use-bundled-toolkit: 'true'`. The verified OpenCode GitHub App token is reused for upstream `pr-review` GitHub API calls through `pr-review-gh.sh`; it is not persisted outside the child `gh` process. `pr-review-ref` pins the `dceoy/pr-loop` commit (default: `ddd538f6e9347b13cf6aaebfbda86ba704ee8415`). Review-only runs isolate project configuration, but do not enforce the old command's fine-grained tool permission sandbox.
+For direct action calls, set `review-only: 'true'` with `use-bundled-toolkit: 'true'`. The verified OpenCode GitHub App token is reused for upstream `pr-review` GitHub API calls through `pr-review-gh.sh`; it is not persisted outside the child `gh` process. `pr-review-ref` pins the `dceoy/pr-loop` release (default: `ddd538f6e9347b13cf6aaebfbda86ba704ee8415`, release `v1.0.0`). Review-only runs isolate project configuration, but do not enforce the old command's fine-grained tool permission sandbox.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for usage, permissions, trust boundaries, and limitations.
