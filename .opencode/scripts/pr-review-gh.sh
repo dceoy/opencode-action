@@ -15,7 +15,7 @@ pr_review_gh_main() {
     api) ;;
     pr)
       case "${2:-}" in
-        view | diff | checks | status) ;;
+        view | diff | checks) ;;
         *)
           echo "::error::Unsupported gh pr subcommand in review-only mode." >&2
           return 2
@@ -57,18 +57,31 @@ pr_review_gh_main() {
       option="$1"
       shift
       case "${option}" in
-        --method|-X|--input|--jq|-q|--template|-t)
+        --method | -X | --input | --jq | -q | --template | -t)
           (($#)) || return 2
-          value="$1"; shift
+          value="$1"
+          shift
           case "${option}" in
-            --method|-X) [[ "${method}" == GET && "${value}" =~ ^(GET|POST)$ ]] || return 2; method="${value}" ;;
-            --input) [[ -z "${input}" ]] || return 2; input="${value}" ;;
+            --method | -X)
+              [[ "${method}" == GET && "${value}" =~ ^(GET|POST)$ ]] || return 2
+              method="${value}"
+              ;;
+            --input)
+              [[ -z "${input}" ]] || return 2
+              input="${value}"
+              ;;
             *) safe_args+=("${option}" "${value}") ;;
           esac
           ;;
-        --paginate|--slurp|--include|-i) safe_args+=("${option}") ;;
-        -*) echo "::error::Unsupported API option." >&2; return 2 ;;
-        *) [[ -z "${endpoint}" ]] || return 2; endpoint="${option}" ;;
+        --paginate | --slurp | --include | -i) safe_args+=("${option}") ;;
+        -*)
+          echo "::error::Unsupported API option." >&2
+          return 2
+          ;;
+        *)
+          [[ -z "${endpoint}" ]] || return 2
+          endpoint="${option}"
+          ;;
       esac
     done
     local prefix="repos/${repo}/pulls/${pr_number}"
@@ -104,7 +117,7 @@ print(json.dumps(p))
     else
       [[ -z "${input}" ]] || return 2
       case "${endpoint}" in
-        "${prefix}"|"${prefix}/files"|"${prefix}/commits"|"${prefix}/comments"|"${prefix}/reviews"|"repos/${repo}/issues/${pr_number}/comments") ;;
+        "${prefix}" | "${prefix}/files" | "${prefix}/commits" | "${prefix}/comments" | "${prefix}/reviews" | "repos/${repo}/issues/${pr_number}/comments") ;;
         *)
           if [[ "${endpoint}" == "${prefix}/reviews/"* && "${endpoint#"${prefix}/reviews/"}" =~ ^[1-9][0-9]*(/comments)?$ ]]; then
             :
@@ -122,10 +135,10 @@ print(json.dumps(p))
     fi
   else
     # Explicitly bind read-only PR CLI requests to the trusted URL.
-    [[ "${2}" != status && "${3:-}" == "${url}" ]] || return 2
+    [[ "${3:-}" == "${url}" ]] || return 2
     for option in "${@:4}"; do
       case "${option}" in
-        --repo|-R|--repo=*|-R*|--hostname*) return 2 ;;
+        --repo | -R | --repo=* | -R* | --hostname*) return 2 ;;
       esac
     done
   fi

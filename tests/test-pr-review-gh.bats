@@ -9,7 +9,7 @@ setup() {
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   git init -q "${temp_repo}"
   mkdir -p "${fake_bin}"
-  cat > "${fake_bin}/gh" <<'STUB'
+  cat > "${fake_bin}/gh" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf x >> "${GH_CALL_LOG}"
@@ -75,10 +75,12 @@ run_wrapper() {
 }
 
 @test "only allows review-oriented gh commands" {
-  run env PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
-    bash "${wrapper}" pr merge 127
-  [ "${status}" -eq 2 ]
-  [[ "${output}" == *"Unsupported gh pr subcommand"* ]]
+  for subcommand in merge status; do
+    run_wrapper pr "${subcommand}" "https://github.com/dceoy/opencode-action/pull/127"
+    [ "${status}" -eq 2 ]
+    [[ "${output}" == *"Unsupported gh pr subcommand"* ]]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  done
 }
 
 @test "rejects arbitrary methods endpoints hosts and field mutations before credentials" {
