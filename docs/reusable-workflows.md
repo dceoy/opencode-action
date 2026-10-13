@@ -74,22 +74,22 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 Both reusable workflows expose the action configuration plus a runner input:
 
-| Input                 | Default                                                                                                | Description                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| `model`               | Required                                                                                               | Model in `provider/model` format.                             |
-| `agent`               | `build`                                                                                                | Primary agent.                                                |
-| `share`               | `false`                                                                                                | Share the OpenCode session.                                   |
-| `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml`                                    | Fixed prompt.                                                 |
-| `use-github-token`    | `false`                                                                                                | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                                                        | Comma-separated trigger phrases.                              |
-| `variant`             | `''`                                                                                                   | Provider-specific model variant.                              |
-| `oidc-base-url`       | `https://api.opencode.ai`                                                                              | OIDC exchange base URL.                                       |
-| `opencode-version`    | `latest`                                                                                               | OpenCode version to install.                                  |
-| `use-bundled-toolkit` | `true`                                                                                                 | Use the bundled OpenCode toolkit.                             |
-| `review-only`         | `false` on bot; `true` on PR review workflow                                                           | Install and invoke the upstream review skill.                 |
-| `pr-review-ref`       | Workflow pin or caller SHA                                                                             | Immutable `pr-loop` commit providing the reviewer.            |
-| `timeout-minutes`     | `60`                                                                                                   | Maximum OpenCode runtime in minutes.                          |
-| `runs-on`             | `ubuntu-latest`                                                                                        | Runner label for the called job.                              |
+| Input                 | Default                                                             | Description                                                   |
+| --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `model`               | Required                                                            | Model in `provider/model` format.                             |
+| `agent`               | `build`                                                             | Primary agent.                                                |
+| `share`               | `false`                                                             | Share the OpenCode session.                                   |
+| `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
+| `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
+| `mentions`            | `/opencode,/oc`                                                     | Comma-separated trigger phrases.                              |
+| `variant`             | `''`                                                                | Provider-specific model variant.                              |
+| `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
+| `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
+| `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
+| `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
+| `pr-review-ref`       | Workflow pin or caller SHA                                          | Immutable `pr-loop` commit providing the reviewer.            |
+| `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
+| `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs.
 
