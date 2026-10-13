@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016
 # Verify that the upstream reviewer CLI adapter uses the authenticated identity.
 
 setup() {

@@ -34,6 +34,7 @@ The adapter extracts token candidates from Git `http.*.extraheader`, verifies th
 - **Explicit fallback (`use-github-token: true`)**: prefer a verified OpenCode App token; otherwise use the caller's existing workflow token and its author identity.
 
 The adapter verifies identity on each invocation rather than persisting a short-lived token between processes. The pending-review probe performs real GitHub API create/delete operations, although it never publishes a review. The skill prompt and adapter **do not constitute a process-level sandbox**: a coding agent with other GitHub tools or shell permissions could bypass the adapter. Use trusted runners and grant `pull-requests: write`.
+
 ## Review contract and boundaries
 
 Upstream `pr-review` freezes the base/head snapshot, validates findings against repository evidence, and publishes one verified `COMMENT` review by default. It never approves, requests changes, merges, or modifies repository contents. See [the upstream skill specification](https://github.com/dceoy/pr-loop/blob/main/skills/pr-review/SKILL.md) for the authoritative policy.
