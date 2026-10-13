@@ -697,13 +697,15 @@ EOF
 
 @test "real OpenCode enforces the review tool permission matrix" {
   command -v opencode > /dev/null || skip 'OpenCode binary unavailable'
-  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/scripts" "${fake_workspace}/.git"
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review/references" "${fake_home}/.config/opencode/scripts" "${fake_workspace}/.git"
   printf '%s\n' '---' 'name: pr-review' 'description: Runtime fixture' '---' 'Trusted fixture.' \
     > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
   printf '%s\n' '#!/usr/bin/env bash' 'echo ADAPTER_OK' > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh"
   printf 'Evidence\n' > "${fake_workspace}/evidence.txt"
+  printf 'Trusted reference\n' > "${fake_home}/.config/opencode/skills/pr-review/references/test.md"
   git init -q "${fake_workspace}"
   git -C "${fake_workspace}" config credential.sentinel CREDENTIAL_SENTINEL
+  ln -s .git/config "${fake_workspace}/credential-link.txt"
   printf 'CREDENTIAL_SENTINEL\n' > "${fake_workspace}/.env"
   config="${BATS_TEST_TMPDIR}/permission-config.json"
   env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \

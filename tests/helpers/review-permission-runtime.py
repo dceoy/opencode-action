@@ -13,9 +13,11 @@ command = next(k for k, v in config['permission']['bash'].items() if v == 'allow
 request = str(Path(home) / '.config/opencode/review-state/request.json')
 cases = [
     ('adapter', 'bash', {'command': command, 'description': 'allowed adapter'}, True),
-    ('read', 'read', {'filePath': str(Path(workspace) / 'evidence.txt')}, True),
+    ('read', 'read', {'filePath': str(Path(workspace) / 'evidence.txt')}, False),
     ('request', 'write', {'filePath': request, 'content': '{}\n'}, True),
     ('skill', 'skill', {'name': 'pr-review'}, True),
+    ('reference', 'read', {'filePath': str(Path(home) / '.config/opencode/skills/pr-review/references/test.md')}, True),
+    ('request_read', 'read', {'filePath': request}, True),
 ]
 for name, text in [
     ('arguments', command + ' api repos/org/repo/pulls/123'),
@@ -32,6 +34,7 @@ for name, text in [
     cases.append((name, 'bash', {'command': text, 'description': name}, False))
 for name, tool, args in [
     ('credential', 'read', {'filePath': str(Path(workspace) / '.git/config')}),
+    ('symlink_credential', 'read', {'filePath': str(Path(workspace) / 'credential-link.txt')}),
     ('dotenv', 'read', {'filePath': str(Path(workspace) / '.env')}),
     ('edit', 'write', {'filePath': str(Path(workspace) / 'changed.txt'), 'content': 'bad'}),
     ('grep', 'grep', {'pattern': 'CREDENTIAL', 'path': workspace}),

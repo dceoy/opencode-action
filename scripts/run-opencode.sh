@@ -273,7 +273,7 @@ opencode_report_failure() {
 }
 
 opencode_configure_run() {
-  local script_dir base_config review_state adapter_command request_relative
+  local script_dir base_config review_state adapter_command request_relative skill_relative
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -342,9 +342,10 @@ opencode_configure_run() {
     printf '{}\n' > "${review_state}/request.json"
     printf -v adapter_command 'bash %q' "${HOME}/.config/opencode/scripts/pr-review-gh.sh"
     request_relative="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "${review_state}/request.json" "${GITHUB_WORKSPACE:-${PWD}}")"
+    skill_relative="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "${HOME}/.config/opencode/skills/pr-review" "${GITHUB_WORKSPACE:-${PWD}}")"
     OPENCODE_RESOLVED_AGENT=action-pr-review
     export AGENT="${OPENCODE_RESOLVED_AGENT}"
-    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub reads, COMMENT publication, and verification, edit only ${review_state}/request.json then execute exactly: ${adapter_command} (no arguments, substitutions, redirections, or additional commands). Request JSON schema: {endpoint: scoped REST path, method: GET or POST (default GET), paginate: boolean (default false), payload: embedded review object for POST only}. Publish using the reviews endpoint with payload {event: COMMENT, body: nonempty review text including required run markers, commit_id: ${PR_REVIEW_HEAD_SHA}, comments: optional inline comments}. Reads support PR metadata, files, commits, comments, reviews, issue comments, immutable commits and comparisons. For full frozen file evidence, read git/trees/<40-character-SHA> and git/blobs/<40-character-SHA> under the target repository; follow nested trees as needed. Blob responses are decoded to text, and truncated trees fail. Tie every tree/blob to the frozen base/head and do not claim a clean review from incomplete evidence. Use read and glob for repository and skill references; grep, direct gh, git, network tools and task delegation are unavailable. The adapter verifies the OpenCode App token and fails closed unless workflow-token fallback is explicit. Do not read credentials or modify repository files. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub reads, COMMENT publication, and verification, edit only ${review_state}/request.json then execute exactly: ${adapter_command} (no arguments, substitutions, redirections, or additional commands). Request JSON schema: {endpoint: scoped REST path, method: GET or POST (default GET), paginate: boolean (default false), payload: embedded review object for POST only}. Publish using the reviews endpoint with payload {event: COMMENT, body: nonempty review text including required run markers, commit_id: ${PR_REVIEW_HEAD_SHA}, comments: optional inline comments}. Reads support PR metadata, files, commits, comments, reviews, issue comments, immutable commits and comparisons. For full frozen file evidence, read git/trees/<40-character-SHA> and git/blobs/<40-character-SHA> under the target repository; follow nested trees as needed. Blob responses are decoded to text, and truncated trees fail. Tie every tree/blob to the frozen base/head and do not claim a clean review from incomplete evidence. Use glob to locate repository paths and read only for trusted skill references; all repository file content must come from frozen blob evidence to avoid checkout symlinks bypassing credential-read rules; grep, direct gh, git, network tools and task delegation are unavailable. The adapter verifies the OpenCode App token and fails closed unless workflow-token fallback is explicit. Do not read credentials or modify repository files. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
   elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
@@ -362,10 +363,11 @@ opencode_configure_run() {
         --arg command "${adapter_command}" \
         --arg request "${review_state}/request.json" \
         --arg relative "${request_relative}" \
+        --arg skill_relative "${skill_relative}" \
         --argjson base "${base_config}" \
         '{"*": "deny",
           external_directory: {"*": "deny", "$HOME/.config/opencode/skills/pr-review/**": "allow", "$HOME/.config/opencode/skills/pr-review": "allow", "$HOME/.config/opencode/scripts/**": "allow", "$HOME/.config/opencode/scripts": "allow", "$HOME/.config/opencode/review-state/**": "allow", "$HOME/.config/opencode/review-state": "allow"},
-          read: {"*": "allow", ".git": "deny", ".git/**": "deny", "**/.git": "deny", "**/.git/**": "deny", "*.env": "deny", "*.env.*": "deny", "*.env.example": "allow"},
+          read: {"*": "deny", "$HOME/.config/opencode/skills/pr-review/**": "allow", ($skill_relative + "/**"): "allow", ($request): "allow", ($relative): "allow"},
           glob: "allow", skill: {"*": "deny", "pr-review": "allow"},
           edit: {"*": "deny", ($request): "allow", ($relative): "allow"}, bash: {"*": "deny", ($command): "allow"}
         } as $permissions |
