@@ -19,15 +19,26 @@ pr_review_copy_skill() {
   fi
   mkdir -p "${parent}"
   cp -R "${source_dir}" "${target_dir}"
-  mkdir -p "${parent}/../commands"
-  cat > "${parent}/../commands/pr-review.md" <<'COMMAND'
----
-description: Review a pull request using the installed pr-loop pr-review skill.
----
-Load and follow the installed pr-review skill from dceoy/pr-loop.
+  python3 - "${target_dir}/SKILL.md" <<'PYCODE'
+import re
+import sys
+from pathlib import Path
 
-Requested review scope: "$ARGUMENTS"
-COMMAND
+path = Path(sys.argv[1])
+text = path.read_text()
+parts = text.split("---", 2)
+if len(parts) != 3 or parts[0].strip():
+    raise SystemExit("pr-review skill must contain YAML frontmatter")
+frontmatter = parts[1]
+if re.search(r"^metadata:\s*$", frontmatter, re.MULTILINE):
+    if re.search(r"^  opencode/slash:.*$", frontmatter, re.MULTILINE):
+        frontmatter = re.sub(r"^  opencode/slash:.*$", '  opencode/slash: "true"', frontmatter, flags=re.MULTILINE)
+    else:
+        frontmatter = re.sub(r"^metadata:\s*$", 'metadata:\n  opencode/slash: "true"', frontmatter, count=1, flags=re.MULTILINE)
+else:
+    frontmatter += 'metadata:\n  opencode/slash: "true"\n'
+path.write_text("---" + frontmatter + "---" + parts[2])
+PYCODE
 }
 install_pr_review() {
   local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout

@@ -302,16 +302,6 @@ opencode_configure_run() {
 
   opencode_effective_prompt "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}"
   command_dirs=()
-  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
-    command_dirs=("${HOME}/.config/opencode/commands")
-    if [[ ! -f "${HOME}/.config/opencode/commands/pr-review.md" ]]; then
-      opencode_report_error "Review-only requires the installed /pr-review command."
-      return 1
-    fi
-    if [[ ! "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/ ]]; then
-      OPENCODE_EFFECTIVE_PROMPT="/pr-review ${OPENCODE_EFFECTIVE_PROMPT}"
-    fi
-  fi
   if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
     command_dirs=(
       "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
@@ -329,8 +319,10 @@ opencode_configure_run() {
       opencode_report_error "The bundled /review-pr command was removed. Specify review focus as plain text."
       return 1
     fi
-    if [[ "${OPENCODE_RESOLVED_COMMAND_FILE}" != "${HOME}/.config/opencode/commands/pr-review.md" ]]; then
-      opencode_report_error "Review-only accepts only the installed /pr-review command."
+    if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/pr-review([[:space:]](.*))?$ ]]; then
+      OPENCODE_EFFECTIVE_PROMPT="${BASH_REMATCH[2]:-}"
+    elif [[ "${OPENCODE_EFFECTIVE_PROMPT}" == /* ]]; then
+      opencode_report_error "Review-only accepts /pr-review or plain-text review focus."
       return 1
     fi
     if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
@@ -341,7 +333,7 @@ opencode_configure_run() {
       opencode_report_error "Review-only requires a concrete PR_REVIEW_URL and full PR_REVIEW_HEAD_SHA; provide them explicitly for comment or manual events."
       return 1
     fi
-    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub API and CLI reads, structured COMMENT review publication, and publication verification, invoke the trusted CLI adapter as bash ${HOME}/.config/opencode/scripts/pr-review-gh.sh <gh arguments>. Do not invoke gh or GitHub mutation tools directly, nor read, disclose, or print credentials. The adapter resolves and verifies the OpenCode App token before running gh, and fails closed if no verified token is available unless explicitly using use-github-token. Do not modify repository files or PR state beyond review feedback. Review command: ${OPENCODE_RESOLVED_PROMPT}"
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub API and CLI reads, structured COMMENT review publication, and publication verification, invoke the trusted CLI adapter as bash ${HOME}/.config/opencode/scripts/pr-review-gh.sh <gh arguments>. Do not invoke gh or GitHub mutation tools directly, nor read, disclose, or print credentials. The adapter resolves and verifies the OpenCode App token before running gh, and fails closed if no verified token is available unless explicitly using use-github-token. Do not modify repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
   elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
