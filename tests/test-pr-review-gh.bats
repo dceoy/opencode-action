@@ -17,6 +17,7 @@ setup() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf x >> "${GH_CALL_LOG}"
+printf "%s\n" "$*" >> "${GH_ARGS_LOG:-/dev/null}"
 if [[ "$*" == *"--method POST"* ]]; then
   cat > "${GH_PAYLOAD_LOG:-/dev/null}"
   if [[ "${GH_TOKEN:-}" == ghs_verified ]]; then
@@ -26,6 +27,16 @@ if [[ "$*" == *"--method POST"* ]]; then
   fi
 elif [[ "$*" == *"--method DELETE"* ]]; then
   exit 0
+elif [[ -n "${GH_PAGED_FIXTURE_DIR:-}" && "$*" == *"?per_page=10&page="* ]]; then
+  for arg in "$@"; do
+    if [[ "${arg}" == *"?per_page=10&page="* ]]; then
+      page="${arg##*page=}"
+      cat "${GH_PAGED_FIXTURE_DIR}/${page}.json"
+      break
+    fi
+  done
+elif [[ "$*" == *"?per_page=10&page="* ]]; then
+  printf '%s' '[]'
 elif [[ -n "${GH_RESPONSE_FILE:-}" ]]; then
   cat "${GH_RESPONSE_FILE}"
 elif [[ "$*" == *"/git/blobs/"* ]]; then
@@ -53,7 +64,7 @@ run_wrapper() {
 
 run_request() {
   run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
-    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
     PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     PR_REVIEW_HEAD_SHA="${request_head}" \
     bash -c 'cd "$1"; bash "$2" --request-stdin < "$3"' _ "${temp_repo}" "${wrapper}" "${request_file}"
@@ -137,7 +148,9 @@ run_request() {
   printf '%s' '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","paginate":true}' > "${request_file}"
   run_request
   [ "${status}" -eq 0 ]
-  [[ "${output}" == *"--paginate"* ]]
+  jq -e '.page == 1 and .next_page == null and .next_offset == null' <<< "${output}"
+  grep -q 'pulls/127/reviews?per_page=10&page=1' "${BATS_TEST_TMPDIR}/gh-args"
+  ! grep -q -- '--paginate' "${BATS_TEST_TMPDIR}/gh-args"
   request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
   printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
   run_request
@@ -220,7 +233,10 @@ PYCODE
 
 @test "structured paging rejects invalid bounds before credentials" {
   for bounds in '"offset":true' '"offset":-1' '"offset":1.5' '"offset":"0"' \
-    '"limit":false' '"limit":0' '"limit":4097' '"limit":1.5' '"limit":"10"'; do
+    '"limit":false' '"limit":0' '"limit":4097' '"limit":1.5' '"limit":"10"' \
+    '"paginate":true,"page":0' '"paginate":true,"page":10001' \
+    '"paginate":true,"page":true' '"paginate":true,"page":1.5' \
+    '"paginate":false,"page":1'; do
     printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127",%s}' "${bounds}" > "${request_file}"
     run_request
     [ "${status}" -ne 0 ]
@@ -231,4 +247,75 @@ PYCODE
   run_request
   [ "${status}" -ne 0 ]
   [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+}
+
+@test "paginated requests advance remote pages without downloading earlier pages again" {
+  set_git_candidate ghs_verified
+  fixture_dir="${BATS_TEST_TMPDIR}/pages"
+  mkdir -p "${fixture_dir}"
+  python3 - "${fixture_dir}" << 'PYCODE'
+import json
+import sys
+from pathlib import Path
+directory = Path(sys.argv[1])
+(directory / "1.json").write_text(json.dumps(
+    [{"id": i, "body": "Large evidence 日本語" * 80} for i in range(10)],
+    ensure_ascii=False))
+(directory / "2.json").write_text(json.dumps([{"id": 10, "body": "Final record"}]))
+PYCODE
+  run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" \
+    GH_PAGED_FIXTURE_DIR="${fixture_dir}" PATH="${fake_bin}:${PATH}" \
+    PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
+    python3 - "${wrapper}" "${temp_repo}" "${BATS_TEST_TMPDIR}/gh-args" << 'PYCODE'
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+wrapper, repo, log_path = sys.argv[1:]
+page, offset, texts = 1, 0, []
+while True:
+    request = {"endpoint": "repos/dceoy/opencode-action/pulls/127/files",
+               "paginate": True, "page": page, "offset": offset, "limit": 4096}
+    raw = subprocess.check_output(["bash", wrapper, "--request-stdin"],
+        input=json.dumps(request).encode(), cwd=repo)
+    result = json.loads(raw)
+    assert result["page"] == page
+    texts.append(result["content"])
+    if result["next_offset"] is not None:
+        assert result["next_page"] is None
+        offset = result["next_offset"]
+        continue
+    items = json.loads("".join(texts))
+    if page == 1:
+        assert len(items) == 10
+        assert result["next_page"] == 2
+    else:
+        assert len(items) == 1 and items[0]["id"] == 10
+        assert result["next_page"] is None
+        break
+    page, offset, texts = result["next_page"], 0, []
+
+requests = [line for line in Path(log_path).read_text().splitlines()
+            if "?per_page=10&page=" in line]
+assert len(requests) >= 3
+assert any("page=1 " in line for line in requests)
+assert any("page=2 " in line for line in requests)
+assert all("page=2 " not in line for line in requests[:-1])
+assert "page=2 " in requests[-1]
+assert all("--paginate" not in line for line in requests)
+PYCODE
+  [ "${status}" -eq 0 ]
+}
+
+@test "pagination rejects singleton and immutable endpoints before auth" {
+  for endpoint in repos/dceoy/opencode-action/pulls/127 \
+      repos/dceoy/opencode-action/git/blobs/abcdefabcdefabcdefabcdefabcdefabcdefabcd; do
+    printf '{"endpoint":"%s","paginate":true}' "${endpoint}" > "${request_file}"
+    run_request
+    [ "${status}" -ne 0 ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  done
 }
