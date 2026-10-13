@@ -24,12 +24,17 @@ script = sys.argv[1]
 with os.fdopen(3) as stream:
     request = json.load(stream, object_pairs_hook=unique)
 if not (isinstance(request, dict)
-        and set(request) <= {"endpoint", "method", "paginate", "payload", "offset", "limit"}
+        and set(request) <= {"endpoint", "method", "paginate", "page", "payload", "offset", "limit"}
         and isinstance(request.get("endpoint"), str)
         and request.get("method", "GET") in ("GET", "POST")
         and isinstance(request.get("paginate", False), bool)):
     raise ValueError("Invalid structured review request")
 method = request.get("method", "GET")
+paginate = request.get("paginate", False)
+page = request.get("page", 1)
+if not (type(page) is int and 1 <= page <= 10000
+        and (paginate or "page" not in request)):
+    raise ValueError("API page requires pagination and must be a positive integer")
 offset, limit = request.get("offset", 0), request.get("limit", 4096)
 if not (type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 4096):
     raise ValueError("Invalid response page bounds")
@@ -37,16 +42,18 @@ args = ["bash", script, "api", request["endpoint"], "--method", method]
 payload = None
 if method == "POST":
     if (not isinstance(request.get("payload"), dict) or request.get("paginate", False)
-            or "offset" in request or "limit" in request):
+            or "offset" in request or "limit" in request or "page" in request):
         raise ValueError("Publication requires an embedded JSON payload")
     args += ["--input", "-"]
     payload = json.dumps(request["payload"])
 elif "payload" in request:
     raise ValueError("Read requests cannot contain a payload")
-if request.get("paginate", False):
-    args += ["--paginate"]
+if paginate:
+    # Request exactly one GitHub API page per call, not all preceding pages.
+    # Only allow this on scoped collections in pr_review_gh_main.
+    args += ["--review-page", str(page)]
 immutable = "/git/blobs/" in request["endpoint"] or "/git/trees/" in request["endpoint"]
-if immutable and request.get("paginate", False):
+if immutable and paginate:
     raise ValueError("Immutable evidence does not support pagination")
 result = subprocess.run(args, input=payload, text=True, stdout=subprocess.PIPE)
 if result.returncode:
@@ -67,10 +74,20 @@ if immutable:
         if evidence.get("truncated"):
             raise ValueError("Truncated tree cannot establish complete evidence")
         content = json.dumps(evidence, ensure_ascii=False)
+next_page = None
+if paginate:
+    records = json.loads(content)
+    if not isinstance(records, list):
+        raise ValueError("Paginated API response must be an array")
+    # A full page may have a successor; a short page is terminal.
+    if len(records) == 10 and page < 10000:
+        next_page = page + 1
 if offset > len(content):
     raise ValueError("Response offset exceeds available evidence")
 end = min(offset + limit, len(content))
 print(json.dumps({"offset": offset, "next_offset": end if end < len(content) else None,
+                  "page": page if paginate else None,
+                  "next_page": next_page if end == len(content) else None,
                   "total_chars": len(content), "content": content[offset:end]}, ensure_ascii=False))
 PYCODE
 }
@@ -121,7 +138,7 @@ pr_review_gh_main() {
     return 1
   fi
 
-  local endpoint="" method=GET input="" payload="" option value
+  local endpoint="" method=GET input="" payload="" review_page="" option value
   local -a safe_args=()
   if [[ "$1" == api ]]; then
     shift
@@ -129,7 +146,7 @@ pr_review_gh_main() {
       option="$1"
       shift
       case "${option}" in
-        --method | -X | --input | --jq | -q | --template | -t)
+        --method | -X | --input | --jq | -q | --template | -t | --review-page)
           (($#)) || return 2
           value="$1"
           shift
@@ -141,6 +158,11 @@ pr_review_gh_main() {
             --input)
               [[ -z "${input}" ]] || return 2
               input="${value}"
+              ;;
+            --review-page)
+              [[ -z "${review_page}" && "${value}" =~ ^[1-9][0-9]*$ ]] || return 2
+              ((10#${value} <= 10000)) || return 2
+              review_page="${value}"
               ;;
             *) safe_args+=("${option}" "${value}") ;;
           esac
@@ -158,7 +180,7 @@ pr_review_gh_main() {
     done
     local prefix="repos/${repo}/pulls/${pr_number}"
     if [[ "${method}" == POST ]]; then
-      [[ "${endpoint}" == "${prefix}/reviews" && -n "${input}" ]] || return 2
+      [[ "${endpoint}" == "${prefix}/reviews" && -n "${input}" && -z "${review_page}" ]] || return 2
       [[ "${PR_REVIEW_HEAD_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]] || return 2
       if [[ "${input}" == - ]]; then
         payload="$(cat)"
@@ -205,6 +227,22 @@ print(json.dumps(p))
           fi
           ;;
       esac
+      if [[ -n "${review_page}" ]]; then
+        # Only lists can be paged. The endpoint is checked before the
+        # query string is appended, so no arbitrary URL can be supplied.
+        case "${endpoint}" in
+          "${prefix}/files" | "${prefix}/commits" | "${prefix}/comments" | "${prefix}/reviews" | "repos/${repo}/issues/${pr_number}/comments") ;;
+          *)
+            if [[ "${endpoint}" == "${prefix}/reviews/"* && "${endpoint#"${prefix}/reviews/"}" =~ ^[1-9][0-9]*/comments$ ]]; then
+              :
+            else
+              echo "::error::API pagination only supports PR collection endpoints." >&2
+              return 2
+            fi
+            ;;
+        esac
+        endpoint="${endpoint}?per_page=10&page=${review_page}"
+      fi
       set -- api "${endpoint}" --method GET "${safe_args[@]}"
     fi
   else
