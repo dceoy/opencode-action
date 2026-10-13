@@ -620,6 +620,7 @@ EOF
     bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
+  [[ "${output}" == *"pr-review-gh.sh"* ]]
   [[ "${output}" == *"security and performance"* ]]
   [[ "${output}" == *"abcdef"* ]]
   [[ "${output}" != *"UNTRUSTED"* ]]

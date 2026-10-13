@@ -319,7 +319,7 @@ opencode_configure_run() {
       opencode_report_error "The bundled /review-pr command was removed. Specify review focus as plain text."
       return 1
     fi
-    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL:-the pull request identified by the GitHub event} at frozen head ${PR_REVIEW_HEAD_SHA:-determined from the GitHub event}. Publish one verified COMMENT review without modifying repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL:-the pull request identified by the GitHub event} at frozen head ${PR_REVIEW_HEAD_SHA:-determined from the GitHub event}. For ALL GitHub API and CLI reads, structured COMMENT review publication, and publication verification, invoke the trusted CLI adapter as bash ${HOME}/.config/opencode/scripts/pr-review-gh.sh <gh arguments>. Do not invoke gh or GitHub mutation tools directly, nor read, disclose, or print credentials. The adapter resolves and verifies the OpenCode App token before running gh, and fails closed if no verified token is available unless explicitly using use-github-token. Do not modify repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
   elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
@@ -336,7 +336,7 @@ opencode_configure_run() {
       OPENCODE_CONFIG_CONTENT="$(jq -nc \
         --arg agent "${OPENCODE_RESOLVED_AGENT}" \
         --argjson base "${base_config}" \
-        '$base * {default_agent: $agent, permission: {external_directory: {"$HOME/.config/opencode/skills/pr-review/**": "allow"}, edit: {"*": "deny"}}}')"
+        '$base * {default_agent: $agent, permission: {external_directory: {"$HOME/.config/opencode/skills/pr-review/**": "allow", "$HOME/.config/opencode/scripts/pr-review-gh.sh": "allow", "$HOME/.config/opencode/scripts/resolve-app-token.sh": "allow"}, edit: {"*": "deny"}}}')"
     else
       OPENCODE_CONFIG_CONTENT="$(jq -nc \
         --arg agent "${OPENCODE_RESOLVED_AGENT}" \
