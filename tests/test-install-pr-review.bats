@@ -37,3 +37,26 @@ setup() {
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"full immutable 40-character commit SHA"* ]]
 }
+
+@test "normalizes uppercase release pins with portable shell syntax" {
+  export USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
+  install_home="${BATS_TEST_TMPDIR}/install-home"
+  fake_git="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_git}" "${install_home}"
+  cat > "${fake_git}/git" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *"rev-parse HEAD"* ]]; then
+  printf 'abcdefabcdefabcdefabcdefabcdefabcdefabcd\n'
+elif [[ "$*" == *"checkout -q --detach FETCH_HEAD"* ]]; then
+  mkdir -p "$2/skills"
+  cp -R "${SKILL_FIXTURE}" "$2/skills/pr-review"
+fi
+STUB
+  chmod +x "${fake_git}/git"
+  run env HOME="${install_home}" PATH="${fake_git}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    bash "${repo_root}/scripts/install-pr-review.sh"
+  [ "${status}" -eq 0 ]
+  [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
+  [[ "${output}" == *"Installed pr-loop/pr-review at abcdef"* ]]
+}

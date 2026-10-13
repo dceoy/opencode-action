@@ -215,7 +215,6 @@ EOF
   [ "$(cat "${invocation_file}")" = "github run" ]
 }
 
-
 @test "run configuration merges default_agent into existing JSONC" {
   run env \
     HOME="${fake_home}" \
@@ -238,10 +237,6 @@ EOF
 
   [ "${status}" -eq 0 ]
 }
-
-
-
-
 
 @test "OpenCode failure classification uses the terminal provider error" {
   output_file="${BATS_TEST_TMPDIR}/output"
@@ -663,4 +658,58 @@ EOF
     bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"requires a concrete PR_REVIEW_URL"* ]]
+}
+
+@test "review-only forces deny-default permissions regardless of caller agent" {
+  for caller in build plan ''; do
+    mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
+    touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+    rm -f "${fake_home}/.config/opencode/review-state/request.json"
+    run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+      MODEL=provider/model AGENT="${caller}" PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
+      PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+      bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
+    [ "${status}" -eq 0 ]
+    jq -e '.default_agent == "action-pr-review" and .formatter == false and .lsp == false and .permission["*"] == "deny" and
+      .agent["action-pr-review"].permission == .permission and .permission.bash["*"] == "deny" and
+      ([.permission.bash[] | select(. == "allow")] | length) == 1' <<< "${output}"
+  done
+}
+
+@test "review-only rejects inherited or symlinked request state" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/review-state"
+  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  for kind in file symlink; do
+    rm -f "${fake_home}/.config/opencode/review-state/request.json"
+    if [[ "${kind}" == file ]]; then
+      touch "${fake_home}/.config/opencode/review-state/request.json"
+    else
+      ln -s "${BATS_TEST_TMPDIR}/outside" "${fake_home}/.config/opencode/review-state/request.json"
+    fi
+    run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+      MODEL=provider/model PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
+      PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+      bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *"must be fresh"* ]]
+  done
+}
+
+@test "real OpenCode enforces the review tool permission matrix" {
+  command -v opencode > /dev/null || skip 'OpenCode binary unavailable'
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/scripts" "${fake_workspace}/.git"
+  printf '%s\n' '---' 'name: pr-review' 'description: Runtime fixture' '---' 'Trusted fixture.' \
+    > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  printf '%s\n' '#!/usr/bin/env bash' 'echo ADAPTER_OK' > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh"
+  printf 'Evidence\n' > "${fake_workspace}/evidence.txt"
+  git init -q "${fake_workspace}"
+  git -C "${fake_workspace}" config credential.sentinel CREDENTIAL_SENTINEL
+  printf 'CREDENTIAL_SENTINEL\n' > "${fake_workspace}/.env"
+  config="${BATS_TEST_TMPDIR}/permission-config.json"
+  env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+    MODEL=provider/model AGENT=build PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
+    PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"
+  run python3 "${repo_root}/tests/helpers/review-permission-runtime.py" "${config}" "${fake_home}" "${fake_workspace}"
+  [ "${status}" -eq 0 ]
 }

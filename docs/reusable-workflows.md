@@ -77,7 +77,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `model`               | Required                                                            | Model in `provider/model` format.                             |
-| `agent`               | `build`                                                             | Primary agent.                                                |
+| `agent`               | `build`                                                             | Primary agent; ignored for review-only runs.                  |
 | `share`               | `false`                                                             | Share the OpenCode session.                                   |
 | `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
 | `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |

@@ -9,12 +9,16 @@ setup() {
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   git init -q "${temp_repo}"
   mkdir -p "${fake_bin}"
+  request_home="${BATS_TEST_TMPDIR}/home"
+  request_head=""
+  request_file="${request_home}/.config/opencode/review-state/request.json"
+  mkdir -p "$(dirname "${request_file}")"
   cat > "${fake_bin}/gh" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf x >> "${GH_CALL_LOG}"
 if [[ "$*" == *"--method POST"* ]]; then
-  cat > /dev/null
+  cat > "${GH_PAYLOAD_LOG:-/dev/null}"
   if [[ "${GH_TOKEN:-}" == ghs_verified ]]; then
     printf '%s' '{"id":101,"user":{"login":"opencode-agent[bot]"}}'
   else
@@ -22,6 +26,10 @@ if [[ "$*" == *"--method POST"* ]]; then
   fi
 elif [[ "$*" == *"--method DELETE"* ]]; then
   exit 0
+elif [[ "$*" == *"/git/blobs/"* ]]; then
+  printf '%s' '{"encoding":"base64","content":"RnJvemVuIGV2aWRlbmNlCg=="}'
+elif [[ "$*" == *"/git/trees/"* ]]; then
+  printf '{"truncated":%s,"tree":[]}' "${GH_TREE_TRUNCATED:-false}"
 else
   printf 'GITHUB_IDENTITY_TOKEN=%s\n' "${GH_TOKEN:-}"
   printf 'ARGUMENTS=%s\n' "$*"
@@ -39,6 +47,14 @@ run_wrapper() {
   run env -u GH_TOKEN -u GITHUB_TOKEN \
     GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" "$@"
+}
+
+run_request() {
+  run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
+    PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
+    PR_REVIEW_HEAD_SHA="${request_head}" \
+    bash -c 'cd "$1"; bash "$2"' _ "${temp_repo}" "${wrapper}"
 }
 
 @test "publishes using verified OpenCode GitHub App token" {
@@ -112,4 +128,65 @@ run_wrapper() {
     run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${payload}"
     [ "${status}" -ne 0 ]
   done
+}
+
+@test "structured requests allow scoped reads and commit-bound publication" {
+  set_git_candidate ghs_verified
+  printf '%s' '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","paginate":true}' > "${request_file}"
+  run_request
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"--paginate"* ]]
+  request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
+  run_request
+  [ "${status}" -eq 0 ]
+  jq -e '.event == "COMMENT" and .body == "Reviewed"' "${BATS_TEST_TMPDIR}/payload"
+}
+
+@test "structured requests reject hostile schema and endpoints before credentials" {
+  for request in '{"endpoint":"repos/other/repo/pulls/127"}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127","method":"DELETE"}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127","args":["--jq","env"]}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127","paginate":"true"}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127","payload":{}}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"APPROVE"}}' \
+    '{"endpoint":"bad","endpoint":"repos/dceoy/opencode-action/pulls/127"}' \
+    '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"APPROVE","event":"COMMENT"}}'; do
+    printf '%s' "${request}" > "${request_file}"
+    run_request
+    [ "${status}" -ne 0 ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  done
+}
+
+@test "structured requests reject symlinked state and request paths" {
+  outside="${BATS_TEST_TMPDIR}/outside"
+  printf '{}' > "${outside}"
+  ln -s "${outside}" "${request_file}"
+  run_request
+  [ "${status}" -ne 0 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+  rm "${request_file}"
+  rmdir "$(dirname "${request_file}")"
+  ln -s "${BATS_TEST_TMPDIR}" "$(dirname "${request_file}")"
+  run_request
+  [ "${status}" -ne 0 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+}
+
+@test "structured requests return decoded immutable blobs and reject truncated trees" {
+  set_git_candidate ghs_verified
+  sha=abcdefabcdefabcdefabcdefabcdefabcdefabcd
+  printf '{"endpoint":"repos/dceoy/opencode-action/git/blobs/%s"}' "${sha}" > "${request_file}"
+  run_request
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Frozen evidence' ]
+  printf '{"endpoint":"repos/dceoy/opencode-action/git/trees/%s"}' "${sha}" > "${request_file}"
+  run_request
+  [ "${status}" -eq 0 ]
+  jq -e '.truncated == false' <<< "${output}"
+  export GH_TREE_TRUNCATED=true
+  run_request
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"Truncated tree"* ]]
 }

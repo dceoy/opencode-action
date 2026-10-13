@@ -19,7 +19,7 @@ pr_review_copy_skill() {
   fi
   mkdir -p "${parent}"
   cp -R "${source_dir}" "${target_dir}"
-  python3 - "${target_dir}/SKILL.md" <<'PYCODE'
+  python3 - "${target_dir}/SKILL.md" << 'PYCODE'
 import re
 import sys
 from pathlib import Path
@@ -50,12 +50,13 @@ install_pr_review() {
     echo "::error::pr-review-ref must be a full immutable 40-character commit SHA." >&2
     return 1
   fi
+  ref="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]')"
   checkout="$(mktemp -d)"
   trap 'rm -rf "${checkout}"' RETURN
   git -C "${checkout}" init -q
   git -C "${checkout}" -c protocol.version=2 fetch -q --no-tags --depth=1 https://github.com/dceoy/pr-loop.git "${ref}"
   git -C "${checkout}" checkout -q --detach FETCH_HEAD
-  if [[ "$(git -C "${checkout}" rev-parse HEAD)" != "${ref,,}" ]]; then
+  if [[ "$(git -C "${checkout}" rev-parse HEAD)" != "${ref}" ]]; then
     echo "::error::Downloaded pr-loop commit does not match the pinned SHA." >&2
     return 1
   fi

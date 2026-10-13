@@ -3,6 +3,68 @@
 # This runs inside opencode github run, after its OIDC token exchange.
 set -euo pipefail
 
+pr_review_request() {
+  # Only this exact no-argument command is available to the review agent.
+  python3 - "${BASH_SOURCE[0]}" "${HOME}/.config/opencode/review-state/request.json" << 'PYCODE'
+import base64
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+def unique(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+script, filename = sys.argv[1:]
+path = Path(filename)
+if path.parent.is_symlink() or path.is_symlink():
+    raise ValueError("Review request path must not be a symbolic link")
+with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW)) as stream:
+    request = json.load(stream, object_pairs_hook=unique)
+if not (isinstance(request, dict)
+        and set(request) <= {"endpoint", "method", "paginate", "payload"}
+        and isinstance(request.get("endpoint"), str)
+        and request.get("method", "GET") in ("GET", "POST")
+        and isinstance(request.get("paginate", False), bool)):
+    raise ValueError("Invalid structured review request")
+method = request.get("method", "GET")
+args = ["bash", script, "api", request["endpoint"], "--method", method]
+payload = None
+if method == "POST":
+    if not isinstance(request.get("payload"), dict) or request.get("paginate", False):
+        raise ValueError("Publication requires an embedded JSON payload")
+    args += ["--input", "-"]
+    payload = json.dumps(request["payload"])
+elif "payload" in request:
+    raise ValueError("Read requests cannot contain a payload")
+if request.get("paginate", False):
+    args += ["--paginate"]
+immutable = "/git/blobs/" in request["endpoint"] or "/git/trees/" in request["endpoint"]
+if immutable and request.get("paginate", False):
+    raise ValueError("Immutable evidence does not support pagination")
+result = subprocess.run(args, input=payload, text=True,
+                        stdout=subprocess.PIPE if immutable else None)
+if result.returncode:
+    raise SystemExit(result.returncode)
+if immutable:
+    evidence = json.loads(result.stdout)
+    if "/git/blobs/" in request["endpoint"]:
+        if evidence.get("encoding") != "base64":
+            raise ValueError("Unsupported blob encoding")
+        sys.stdout.buffer.write(base64.b64decode(evidence["content"]))
+    else:
+        if evidence.get("truncated"):
+            raise ValueError("Truncated tree cannot establish complete evidence")
+        print(json.dumps(evidence))
+PYCODE
+}
+
 pr_review_gh_main() {
   local script_dir repo pr_number url
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -125,6 +187,8 @@ print(json.dumps(p))
             :
           elif [[ "${endpoint}" == "repos/${repo}/compare/"* && "${endpoint#"repos/${repo}/compare/"}" =~ ^[0-9a-fA-F]{40}\.\.\.[0-9a-fA-F]{40}$ ]]; then
             :
+          elif [[ "${endpoint}" == "repos/${repo}/git/"* && "${endpoint#"repos/${repo}/git/"}" =~ ^(trees|blobs)/[0-9a-fA-F]{40}$ ]]; then
+            :
           else
             echo "::error::Unsupported API endpoint for this review." >&2
             return 2
@@ -154,5 +218,9 @@ print(json.dumps(p))
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  pr_review_gh_main "$@"
+  if (($# == 0)); then
+    pr_review_request
+  else
+    pr_review_gh_main "$@"
+  fi
 fi
