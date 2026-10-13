@@ -67,7 +67,7 @@ For smaller caller workflows, this repository provides reusable workflows for Op
 | Workflow                                                       | Purpose                                                                 |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments, manual dispatch, or a fixed prompt. |
-| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Run the bundled `/review-pr` flow for `pull_request` events.            |
+| [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Install and use `pr-loop`'s external `pr-review` skill for `pull_request` events.            |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
 
@@ -102,8 +102,10 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `variant`             | -                         | Provider-specific reasoning effort; leave empty unless supported. See [Custom providers](docs/custom-providers.md#variants-for-custom-providers).                       |
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                                             |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                                           |
-| `opencode-version`    | `latest`                  | OpenCode version to install. `/review-pr` requires 1.2.14+; the bundled Sakura provider's `chunkTimeout` needs 1.2.25+ (older pins fall back to the request `timeout`). |
+| `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+. |
 | `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                                            |
+| `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                                  |
+| `pr-review-ref`      | pinned SHA                | Immutable `pr-loop` commit supplying the review skill.                                                                                                                |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                                                  |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                                                 |
 
@@ -111,12 +113,12 @@ Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and 
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
-Outputs are `opencode-version` and `cache-hit`. `cache-hit` is empty on review-only runs (`prompt: /review-pr`), which always skip the cache and install fresh.
+Outputs are `opencode-version` and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache and install the external `pr-review` skill.
 
 ## Pull request reviews
 
-Set `prompt: /review-pr` to run the bundled read-only review through a dedicated permission-constrained primary agent. The command loads the internal `pr-review` skill, which builds a change/risk map, dispatches fresh read-only child sessions, independently validates candidate findings, and posts confirmed findings inline when they can be anchored to changed lines. Use `/review-pr` rather than loading `pr-review` directly when the enforced read-only boundary is required.
+The reusable [`opencode-review.yml`](.github/workflows/opencode-review.yml) installs the external `pr-loop/pr-review` skill and runs it with `review-only: true`. The former bundled `/review-pr` command is no longer supported. Use plain-text `prompt` instructions to focus the review (for example, `security and performance`). The skill freezes the reviewed head, validates findings, and publishes a verified `COMMENT` review.
 
-An unscoped review creates a small set of dynamic, risk-driven discovery tasks instead of routing to fixed specialist agents. Explicit aspects such as `security`, `tests`, `docs`, `performance`, or `simplify` constrain the selected review lenses. Discovery and validation run in separate fresh child sessions; the current OpenCode v1-compatible implementation uses one hidden `review-worker` definition for those sessions.
+For direct action calls, set `review-only: 'true'` with `use-bundled-toolkit: 'true'`. `pr-review-ref` pins the `dceoy/pr-loop` commit (default: `ddd538f6e9347b13cf6aaebfbda86ba704ee8415`). Review-only runs isolate project configuration, but do not enforce the old command's fine-grained tool permission sandbox.
 
-See [Pull request reviews](docs/pull-request-reviews.md) for setup, supported review aspects, submission behavior, and security guarantees.
+See [Pull request reviews](docs/pull-request-reviews.md) for usage, permissions, trust boundaries, and limitations.
