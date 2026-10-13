@@ -278,6 +278,10 @@ opencode_configure_run() {
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+    if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" || ! -f "${HOME}/.config/opencode/skills/pr-review/SKILL.md" ]]; then
+      opencode_report_error "Review-only mode requires the installed pr-loop pr-review skill and use-bundled-toolkit: true."
+      return 1
+    fi
     export XDG_CONFIG_HOME="${HOME}/.config"
     export OPENCODE_DISABLE_PROJECT_CONFIG=1
     # OPENCODE_DISABLE_PROJECT_CONFIG does not stop OpenCode's separate
@@ -297,9 +301,8 @@ opencode_configure_run() {
     "${MODEL:-}" "${VARIANT:-}" "${ACTION_PATH:-}/.opencode/opencode.jsonc" || return 1
 
   opencode_effective_prompt "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}"
-  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
-    command_dirs=("${ACTION_PATH}/.opencode/commands")
-  else
+  command_dirs=()
+  if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
     command_dirs=(
       "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
       "${HOME}/.config/opencode/commands"
@@ -311,7 +314,13 @@ opencode_configure_run() {
 
   opencode_resolve_prompt_and_agent \
     "${OPENCODE_EFFECTIVE_PROMPT}" "${AGENT:-}" "${command_dirs[@]}"
-  if [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
+  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+    if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/review-pr([[:space:]].*)?$ ]]; then
+      opencode_report_error "The bundled /review-pr command was removed. Specify review focus as plain text."
+      return 1
+    fi
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop. Review ${PR_REVIEW_URL:-the pull request identified by the GitHub event} at frozen head ${PR_REVIEW_HEAD_SHA:-determined from the GitHub event}. Publish one verified COMMENT review without modifying repository files or PR state beyond review feedback. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+  elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
 
