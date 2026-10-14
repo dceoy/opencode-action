@@ -74,16 +74,49 @@ install_pr_review() {
   fi
   opencode_validate_review_version "${OPENCODE_VERSION:-}" || return 1
   ref="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]')"
+  # Install only a pinned Git dependency in a temporary workspace, never in
+  # the untrusted caller checkout or inherited OpenCode config.
   checkout="$(mktemp -d)"
   trap 'rm -rf "${checkout}"' RETURN
-  git -C "${checkout}" init -q
-  git -C "${checkout}" -c protocol.version=2 fetch -q --no-tags --depth=1 https://github.com/dceoy/pr-loop.git "${ref}"
-  git -C "${checkout}" checkout -q --detach FETCH_HEAD
-  if [[ "$(git -C "${checkout}" rev-parse HEAD)" != "${ref}" ]]; then
-    echo "::error::Downloaded pr-loop commit does not match the pinned SHA." >&2
+  mkdir -p "${checkout}/.agents/skills"
+  cat > "${checkout}/package.json" << PACKAGE
+{
+  "name": "opencode-pr-review-skill",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.13.0",
+  "devDependencies": {
+    "pr-loop": "git+https://github.com/dceoy/pr-loop.git#${ref}"
+  }
+}
+PACKAGE
+  cat > "${checkout}/pnpm-workspace.yaml" << 'WORKSPACE'
+permissions:
+  'pr-loop@git+https://github.com/dceoy/pr-loop.git':
+    build: false
+    skills: true
+skills:
+  dirs:
+    - .agents/skills
+WORKSPACE
+
+  # pnpm 12.11+ links approved agent skills without running package scripts.
+  (cd "${checkout}" && corepack pnpm install --ignore-scripts --no-frozen-lockfile)
+
+  local linked_skill="${checkout}/.agents/skills/pnpm-pr-loop-pr-review" source_dir
+  if [[ ! -L "${linked_skill}" ]]; then
+    echo "::error::pnpm did not link the approved pr-loop/pr-review skill." >&2
     return 1
   fi
-  pr_review_copy_skill "${checkout}/skills/pr-review" "${HOME}/.config/opencode/skills/pr-review"
+  source_dir="$(realpath -e "${linked_skill}")" || return 1
+  case "${source_dir}" in
+    "${checkout}/node_modules/"*) ;;
+    *)
+      echo "::error::pnpm skill link points outside isolated node_modules." >&2
+      return 1
+      ;;
+  esac
+  pr_review_copy_skill "${source_dir}" "${HOME}/.config/opencode/skills/pr-review" || return 1
   echo "Installed pr-loop/pr-review at ${ref}"
 }
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
