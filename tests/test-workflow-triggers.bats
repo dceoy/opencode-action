@@ -64,9 +64,10 @@ PY
   [ "${status}" -ne 0 ]
 }
 
-@test "PR review has no ignored agent, mention, or bundle inputs" {
-  run grep -Eq '^      (agent|mentions|use-bundled-toolkit):' "${review}"
-  [ "${status}" -ne 0 ]
+@test "PR review retains public input compatibility across pr-loop migration" {
+  for input in agent mentions use-bundled-toolkit; do
+    grep -Eq "^      ${input}:" "${review}"
+    grep -Fq "inputs.${input}" "${review}"
+  done
   grep -Fq '          review-only: true' "${review}"
-  grep -Fq '          use-bundled-toolkit: true' "${review}"
 }
