@@ -38,20 +38,34 @@ STUB
   chmod +x "${fake_bin}/gh"
 }
 
-# GitHub-hosted Ubuntu runners provide Ruby's standard-library YAML parser.
+# Check YAML metadata structure with Python's standard library (no test-only runtime).
 assert_skill_frontmatter() {
-  ruby -ryaml -e '
-    source = File.read(ARGV.fetch(0))
-    match = source.match(/\A---\r?\n(.*?)\r?\n---(?:\r?\n|\z)/m)
-    abort "missing YAML frontmatter" unless match
-    data = YAML.safe_load(match[1])
-    abort "frontmatter is not a mapping" unless data.is_a?(Hash)
-    metadata = data.fetch("metadata")
-    abort "missing OpenCode slash metadata" unless metadata.is_a?(Hash) && metadata["opencode/slash"] == "true"
-    if ENV["EXPECT_GH_METADATA"] == "true"
-      abort "gh source metadata was lost" unless metadata.keys.any? { |key| key.start_with?("github-") }
-    end
-  ' "$1"
+  EXPECT_GH_METADATA="${EXPECT_GH_METADATA:-false}" python3 - "$1" <<'PYCODE'
+import os
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+parts = source.split("---", 2)
+assert len(parts) == 3 and not parts[0].strip(), "missing YAML frontmatter"
+lines = parts[1].splitlines()
+index = lines.index("metadata:")
+children = []
+for line in lines[index + 1:]:
+    if line.strip() and not line.startswith(" "):
+        break
+    if line.strip() and not line.lstrip().startswith("#"):
+        match = re.fullmatch(r"( +)([a-zA-Z0-9_./-]+):[ ]*(.+)", line)
+        assert match, f"invalid metadata entry: {line}"
+        children.append(match)
+assert children and len({m[1] for m in children}) == 1, "invalid YAML metadata indentation"
+values = {m[2]: m[3] for m in children}
+assert sum(m[2] == "opencode/slash" for m in children) == 1
+assert values["opencode/slash"] == '"true"'
+if os.environ["EXPECT_GH_METADATA"] == "true":
+    assert any(key.startswith("github-") for key in values), "gh metadata was lost"
+PYCODE
 }
 
 @test "validates the installed Skill and enables native slash invocation" {
