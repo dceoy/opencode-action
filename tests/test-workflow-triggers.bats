@@ -25,6 +25,7 @@ PY
     'please review this PR|please review|true' \
     'please do review this PR|please review|false' \
     '@opencode, fix this|@opencode|true' \
+    'I installed opencode locally|@opencode|false' \
     '/unrelated message|/opencode,/oc|false' \
     '/oc fix the issue|/team-review|false' \
     'https://github.com/octocat/example|/opencode,/oc|false' \

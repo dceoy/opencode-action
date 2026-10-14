@@ -178,9 +178,10 @@ jobs:
           mention_values = os.environ.get("MENTIONS", "").split(",")
           # Treat each configured mention as a standalone token or sequence:
           # split on whitespace, then strip surrounding punctuation from both
-          # inputs while preserving internal slash/hyphen (e.g. /oc, /team-review).
+          # inputs while preserving meaningful sigils (e.g. /oc, @opencode)
+          # and internal hyphens (e.g. /team-review).
           # Bounded sequences avoid matching URLs or longer words such as /octocat.
-          allowed = set(string.ascii_letters + string.digits + "_/-")
+          allowed = set(string.ascii_letters + string.digits + "_/-@")
           strip_chars = "".join(char for char in string.punctuation if char not in allowed)
 
           def tokenize(value):
