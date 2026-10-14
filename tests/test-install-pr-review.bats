@@ -38,27 +38,42 @@ setup() {
   [[ "${output}" == *"full immutable 40-character commit SHA"* ]]
 }
 
-@test "normalizes uppercase release pins with portable shell syntax" {
+@test "normalizes uppercase release pins and installs the pnpm-linked skill" {
   export OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
   install_home="${BATS_TEST_TMPDIR}/install-home"
-  fake_git="${BATS_TEST_TMPDIR}/bin"
-  mkdir -p "${fake_git}" "${install_home}"
-  cat > "${fake_git}/git" << 'STUB'
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}" "${install_home}"
+  cat > "${fake_bin}/corepack" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "$*" == *"rev-parse HEAD"* ]]; then
-  printf 'abcdefabcdefabcdefabcdefabcdefabcdefabcd\n'
-elif [[ "$*" == *"checkout -q --detach FETCH_HEAD"* ]]; then
-  mkdir -p "$2/skills"
-  cp -R "${SKILL_FIXTURE}" "$2/skills/pr-review"
-fi
+[[ "${1:-}" == pnpm && "${2:-}" == install ]] || exit 91
+grep -q 'pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd' package.json
+grep -q 'pr-loop@git+https://github.com/dceoy/pr-loop.git' pnpm-workspace.yaml
+grep -q 'skills: true' pnpm-workspace.yaml
+grep -q 'build: false' pnpm-workspace.yaml
+mkdir -p node_modules/pr-loop/skills .agents/skills
+cp -R "${SKILL_FIXTURE}" node_modules/pr-loop/skills/pr-review
+ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
 STUB
-  chmod +x "${fake_git}/git"
-  run env HOME="${install_home}" PATH="${fake_git}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+  chmod +x "${fake_bin}/corepack"
+  run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
     bash "${repo_root}/scripts/install-pr-review.sh"
   [ "${status}" -eq 0 ]
   [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
   [[ "${output}" == *"Installed pr-loop/pr-review at abcdef"* ]]
+}
+
+@test "fails closed when pnpm returns no approved skill link" {
+  fake_bin="${BATS_TEST_TMPDIR}/empty-pnpm"
+  mkdir -p "${fake_bin}"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${fake_bin}/corepack"
+  chmod +x "${fake_bin}/corepack"
+  run env HOME="${BATS_TEST_TMPDIR}/missing-home" PATH="${fake_bin}:${PATH}" \
+    USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    OPENCODE_VERSION=1.2.14 bash "${repo_root}/scripts/install-pr-review.sh"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"pnpm did not link"* ]]
+  [ ! -e "${BATS_TEST_TMPDIR}/missing-home/.config/opencode/skills/pr-review" ]
 }
 
 @test "review version accepts supported semantic versions" {
@@ -68,23 +83,23 @@ STUB
   done
 }
 
-@test "installer rejects unsupported versions before Git or skill writes" {
+@test "installer rejects unsupported versions before pnpm or skill writes" {
   fake_bin="${BATS_TEST_TMPDIR}/version-bin"
   mkdir -p "${fake_bin}"
-  cat > "${fake_bin}/git" << 'STUB'
+  cat > "${fake_bin}/corepack" << 'STUB'
 #!/usr/bin/env bash
-touch "${GIT_CALL_LOG}"
+touch "${PNPM_CALL_LOG}"
 exit 99
 STUB
-  chmod +x "${fake_bin}/git"
+  chmod +x "${fake_bin}/corepack"
   for version in 0.9.0 1.1.99 1.2.13 1.2.14-beta.1 latest invalid 1.2 ''; do
     run env HOME="${BATS_TEST_TMPDIR}/version-home" PATH="${fake_bin}:${PATH}" \
       USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      OPENCODE_VERSION="${version}" GIT_CALL_LOG="${BATS_TEST_TMPDIR}/git-calls" \
+      OPENCODE_VERSION="${version}" PNPM_CALL_LOG="${BATS_TEST_TMPDIR}/pnpm-calls" \
       bash "${repo_root}/scripts/install-pr-review.sh"
     [ "${status}" -ne 0 ]
     [[ "${output}" == *"Review-only mode requires"* ]]
-    [ ! -e "${BATS_TEST_TMPDIR}/git-calls" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/pnpm-calls" ]
     [ ! -e "${BATS_TEST_TMPDIR}/version-home/.config/opencode/skills/pr-review" ]
   done
 }
