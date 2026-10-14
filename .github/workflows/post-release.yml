@@ -71,6 +71,11 @@ jobs:
             echo 'Failed to resolve the pr-loop release commit.' >&2
             exit 1
           fi
+          # Never re-pin the review workflow to an older unpackageable release.
+          if ! gh api "repos/dceoy/pr-loop/contents/package.json?ref=${sha}" --jq '.path' > /dev/null 2>&1; then
+            echo "::notice::Skipping pr-loop ${tag}: release is not pnpm-installable."
+            exit 0
+          fi
           python - "${tag}" "${sha}" <<'PYCODE'
           import re
           import sys
