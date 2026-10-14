@@ -68,6 +68,21 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Create isolated review home
+      if: inputs.review-only == 'true'
+      shell: bash -euo pipefail {0}
+      env:
+        RUNNER_TEMP: ${{ runner.temp }}
+      run: |
+        review_home="$(mktemp -d "${RUNNER_TEMP%/}/opencode-review.XXXXXXXX")"
+        {
+          echo "OPENCODE_REVIEW_HOME=${review_home}"
+          echo "HOME=${review_home}"
+          echo "XDG_CONFIG_HOME=${review_home}/.config"
+          echo "XDG_DATA_HOME=${review_home}/.local/share"
+          echo "XDG_CACHE_HOME=${review_home}/.cache"
+          echo "XDG_STATE_HOME=${review_home}/.local/state"
+        } >> "${GITHUB_ENV}"
     - name: Get OpenCode version
       id: version
       shell: bash -euo pipefail {0}
@@ -173,3 +188,12 @@ runs:
         REVIEW_ONLY: ${{ inputs.review-only }}
       run: >
         "${ACTION_PATH}/scripts/run-opencode.sh"
+    - name: Clean isolated review home
+      if: always() && inputs.review-only == 'true'
+      shell: bash -euo pipefail {0}
+      env:
+        RUNNER_TEMP: ${{ runner.temp }}
+      run: |
+        if [[ -n "${OPENCODE_REVIEW_HOME:-}" && "${OPENCODE_REVIEW_HOME}" == "${RUNNER_TEMP%/}/opencode-review."* ]]; then
+          rm -rf -- "${OPENCODE_REVIEW_HOME}"
+        fi
