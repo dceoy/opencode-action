@@ -21,7 +21,7 @@ on:
         required: false
         type: string
         description: Review prompt
-        default: /review-pr
+        default: /pr-review
       use-github-token:
         required: false
         type: boolean
@@ -52,6 +52,11 @@ on:
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
+      pr-review-ref:
+        required: false
+        type: string
+        description: Full immutable pr-loop commit SHA
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -109,6 +114,8 @@ permissions:
   issues: write
   id-token: write
   actions: read
+env:
+  PR_LOOP_REF: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
 jobs:
   opencode-review:
     if: >
@@ -149,15 +156,19 @@ jobs:
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          PR_REVIEW_URL: ${{ github.event.pull_request.html_url }}
+          PR_REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
-          prompt: ${{ inputs.prompt || '/review-pr' }}
+          prompt: ${{ inputs.prompt || '/pr-review' }}
           use-github-token: ${{ inputs.use-github-token }}
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
+          review-only: true
+          pr-review-ref: ${{ inputs.pr-review-ref || env.PR_LOOP_REF }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

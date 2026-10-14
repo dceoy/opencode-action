@@ -273,11 +273,15 @@ opencode_report_failure() {
 }
 
 opencode_configure_run() {
-  local script_dir base_config
+  local script_dir base_config skill_relative
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+    if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" || ! -f "${HOME}/.config/opencode/skills/pr-review/SKILL.md" ]]; then
+      opencode_report_error "Review-only mode requires the installed pr-loop pr-review skill and use-bundled-toolkit: true."
+      return 1
+    fi
     export XDG_CONFIG_HOME="${HOME}/.config"
     export OPENCODE_DISABLE_PROJECT_CONFIG=1
     # OPENCODE_DISABLE_PROJECT_CONFIG does not stop OpenCode's separate
@@ -297,9 +301,8 @@ opencode_configure_run() {
     "${MODEL:-}" "${VARIANT:-}" "${ACTION_PATH:-}/.opencode/opencode.jsonc" || return 1
 
   opencode_effective_prompt "${PROMPT:-}" "${MENTIONS:-}" "${GITHUB_EVENT_PATH:-}"
-  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
-    command_dirs=("${ACTION_PATH}/.opencode/commands")
-  else
+  command_dirs=()
+  if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
     command_dirs=(
       "${GITHUB_WORKSPACE:-${PWD}}/.opencode/commands"
       "${HOME}/.config/opencode/commands"
@@ -311,7 +314,34 @@ opencode_configure_run() {
 
   opencode_resolve_prompt_and_agent \
     "${OPENCODE_EFFECTIVE_PROMPT}" "${AGENT:-}" "${command_dirs[@]}"
-  if [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
+  if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+    if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/review-pr([[:space:]].*)?$ ]]; then
+      opencode_report_error "The bundled /review-pr command was removed. Specify review focus as plain text."
+      return 1
+    fi
+    if [[ "${OPENCODE_EFFECTIVE_PROMPT}" =~ ^/pr-review([[:space:]](.*))?$ ]]; then
+      OPENCODE_EFFECTIVE_PROMPT="${BASH_REMATCH[2]:-}"
+    elif [[ "${OPENCODE_EFFECTIVE_PROMPT}" == /* ]]; then
+      opencode_report_error "Review-only accepts /pr-review or plain-text review focus."
+      return 1
+    fi
+    if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
+      export PR_REVIEW_URL="${PR_REVIEW_URL:-$(jq -r '.pull_request.html_url // empty' "${GITHUB_EVENT_PATH}")}"
+      export PR_REVIEW_HEAD_SHA="${PR_REVIEW_HEAD_SHA:-$(jq -r '.pull_request.head.sha // empty' "${GITHUB_EVENT_PATH}")}"
+    fi
+    if [[ ! "${PR_REVIEW_URL:-}" =~ ^https://github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/pull/[1-9][0-9]*/?$ || ! "${PR_REVIEW_HEAD_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+      opencode_report_error "Review-only requires a concrete PR_REVIEW_URL and full PR_REVIEW_HEAD_SHA; provide them explicitly for comment or manual events."
+      return 1
+    fi
+    if [[ ! -f "${HOME}/.config/opencode/tools/pr-review-api.js" || ! -f "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]]; then
+      opencode_report_error "Review-only requires the installed native pr-review-api tool and adapter."
+      return 1
+    fi
+    skill_relative="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "${HOME}/.config/opencode/skills/pr-review" "${GITHUB_WORKSPACE:-${PWD}}")"
+    OPENCODE_RESOLVED_AGENT=action-pr-review
+    export AGENT="${OPENCODE_RESOLVED_AGENT}"
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub reads, COMMENT publication, and verification, invoke the native pr-review-api tool with a request argument containing a JSON string. No shell or file modifications are available. Request JSON schema: {endpoint: scoped REST path, method: GET or POST (default GET), paginate: boolean (default false), page: positive integer 1..10000 for paginated GETs (default 1), offset: nonnegative integer (default 0), limit: integer 1..4096 (default 4096), payload: embedded review object for POST only}. Publish using the reviews endpoint with payload {event: COMMENT, body: nonempty review text including required run markers, commit_id: ${PR_REVIEW_HEAD_SHA}, comments: optional inline comments}. GET responses have offset, next_offset, page, next_page, total_chars and content. With paginate:true each call fetches only one GitHub API page of up to 10 records; reissue the same API page with next_offset until null, then continue with next_page and offset:0 until next_page is null. Commit check-runs and combined status endpoints support paginate:true with their full object responses preserved. Use paginate:false for other singleton and immutable endpoints. Never restart pagination at page 1 to retrieve subsequent API pages. offset/limit slice one API page, not all GitHub pages. Mutable metadata can change between reads, so verify the live snapshot before and after reconstruction. POST accepts no offset/limit and returns a review receipt; verify publication through paged GET reads. Reads support PR metadata, files, commits, comments, reviews, issue comments, immutable commits and comparisons. For full frozen file evidence, read git/trees/<40-character-SHA> and git/blobs/<40-character-SHA> under the target repository; follow nested trees as needed. Blob responses are decoded to text, and truncated trees fail. Tie every tree/blob to the frozen base/head and do not claim a clean review from incomplete evidence. Use glob to locate repository paths and read only for trusted skill references; all repository file content must come from frozen blob evidence to avoid checkout symlinks bypassing credential-read rules; grep, direct gh, git, network tools and task delegation are unavailable. The adapter verifies the OpenCode App token and fails closed unless workflow-token fallback is explicit. Do not read credentials or modify repository files. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+  elif [[ -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
 
@@ -320,10 +350,26 @@ opencode_configure_run() {
     if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
       base_config="$(opencode_jsonc_to_json <<< "${OPENCODE_CONFIG_CONTENT}")"
     fi
-    OPENCODE_CONFIG_CONTENT="$(jq -nc \
-      --arg agent "${OPENCODE_RESOLVED_AGENT}" \
-      --argjson base "${base_config}" \
-      '$base * {default_agent: $agent}')"
+    if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
+      # Force the same deny-default policy globally and on the primary agent.
+      # Built-in shell and modification tools are unavailable to the model.
+      OPENCODE_CONFIG_CONTENT="$(jq -nc \
+        --arg agent "${OPENCODE_RESOLVED_AGENT}" \
+        --arg skill_relative "${skill_relative}" \
+        --argjson base "${base_config}" \
+        '{"*": "deny",
+          external_directory: {"*": "deny", "$HOME/.config/opencode/skills/pr-review/**": "allow", "$HOME/.config/opencode/skills/pr-review": "allow"},
+          read: {"*": "deny", "$HOME/.config/opencode/skills/pr-review/**": "allow", ($skill_relative + "/**"): "allow"},
+          glob: "allow", skill: {"*": "deny", "pr-review": "allow"},
+          edit: "deny", bash: "deny", "pr-review-api": "allow"
+        } as $permissions |
+        $base * {default_agent: $agent, formatter: false, lsp: false, permission: $permissions, agent: {($agent): {mode: "primary", description: "Restricted upstream PR review", permission: $permissions}}}')"
+    else
+      OPENCODE_CONFIG_CONTENT="$(jq -nc \
+        --arg agent "${OPENCODE_RESOLVED_AGENT}" \
+        --argjson base "${base_config}" \
+        '$base * {default_agent: $agent}')"
+    fi
     export OPENCODE_CONFIG_CONTENT
   fi
 }

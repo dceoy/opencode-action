@@ -52,6 +52,24 @@ on:
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
+      review-only:
+        required: false
+        type: boolean
+        description: Install pr-loop/pr-review and isolate this review run
+        default: false
+      pr-review-url:
+        required: false
+        type: string
+        description: Explicit GitHub PR URL for manual review-only runs
+      pr-review-head-sha:
+        required: false
+        type: string
+        description: Full reviewed head SHA for manual review-only runs
+      pr-review-ref:
+        required: false
+        type: string
+        description: Full immutable pr-loop commit SHA
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -150,6 +168,24 @@ on:
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
+      review-only:
+        required: false
+        type: boolean
+        description: Install pr-loop/pr-review and isolate this review run
+        default: false
+      pr-review-url:
+        required: false
+        type: string
+        description: Explicit GitHub PR URL for manual review-only runs
+      pr-review-head-sha:
+        required: false
+        type: string
+        description: Full reviewed head SHA for manual review-only runs
+      pr-review-ref:
+        required: false
+        type: string
+        description: Full immutable pr-loop commit SHA
+        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -219,6 +255,8 @@ jobs:
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          PR_REVIEW_URL: ${{ inputs.pr-review-url || github.event.pull_request.html_url }}
+          PR_REVIEW_HEAD_SHA: ${{ inputs.pr-review-head-sha || github.event.pull_request.head.sha }}
         with:
           model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
           agent: ${{ inputs.agent || 'build' }}
@@ -230,4 +268,6 @@ jobs:
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
+          review-only: ${{ inputs.review-only }}
+          pr-review-ref: ${{ inputs.pr-review-ref }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

@@ -1,117 +1,54 @@
 # Pull request reviews
 
-The bundled `/review-pr` flow runs a strictly read-only, risk-driven multi-agent review and submits validated findings through GitHub's pull request review API. The command is the supported entrypoint: it selects the dedicated `review-pr-orchestrator` primary agent and loads the internal `pr-review` skill.
+The `opencode-review.yml` reusable workflow installs the external [`pr-review` skill](https://github.com/dceoy/pr-loop/tree/main/skills/pr-review) from `dceoy/pr-loop`. The bundled `/review-pr` slash command, dedicated agents, scripts, and local skill were removed.
 
-`pr-review` contains the review procedure, while `review-pr-orchestrator` contains the permission boundary. Loading the skill directly into another primary agent does not transfer those permissions, so direct skill loading must not be treated as an enforced read-only review path. The skill is marked non-slash and non-autoinvokable for OpenCode v2 discovery; the command remains the explicit review entrypoint.
+## Invocation
 
-## Setup
+The review workflow uses `review-only: true`, passing the pull request URL and exact head SHA from the event. The action installs the upstream skill under `~/.config/opencode/skills/pr-review/` at the immutable `pr-review-ref` commit and invokes it using a plain-text prompt. The installed skill enables native TUI `/pr-review` through `metadata.opencode/slash: "true"`; no separate command file is generated. GitHub runs explicitly instruct the model to load the skill with the native `skill` tool. The default `prompt` is `/pr-review`, which is normalized to review focus before that instruction is constructed. Override it with `/pr-review security and performance` or plain-text review focus; the old `/review-pr` command is not supported.
 
-Review workflows require OpenCode 1.2.14 or newer, `use-bundled-toolkit: true`, `pull-requests: write`, and an API key for the selected model provider. The bundled Sakura provider's `chunkTimeout` setting requires OpenCode 1.2.25 or newer; pins between 1.2.14 and 1.2.24 fall back to the top-level request `timeout` instead of the inter-chunk timeout. Request, chunk, and action timeouts are safety limits, not substitutes for bounding request size, and `chunkTimeout` cannot guarantee that a provider-side gateway or inference timeout will not end a request sooner.
+Review-only runs require OpenCode 1.2.14 or newer; unsupported or unresolved versions fail before the upstream skill is installed.
 
-Start from the pinned workflow in the [README quick start](../README.md#quick-start), then grant pull-request write access and configure the OpenCode step for review mode. The copied job remains triggered by `/oc` or `/opencode`; the fixed `prompt` below makes either accepted mention run `/review-pr`.
-
-Set the workflow permissions:
+For direct action usage, set `review-only: 'true'`, keep `use-bundled-toolkit: 'true'`, and supply `PR_REVIEW_URL` and `PR_REVIEW_HEAD_SHA` via the environment, or rely on a `pull_request` event. Comment events require both explicit variables. For manual `opencode-bot.yml` runs, provide `pr-review-url` and `pr-review-head-sha`; unresolved targets fail before OpenCode starts. Review requires a model API key and `pull-requests: write`; the default OpenCode App token flow additionally needs `id-token: write`.
 
 ```yaml
-permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      actions: read
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@main
+    with:
+      model: sakura/preview/Kimi-K2.7-Code
+      prompt: Focus on security and regression risks.
+    secrets:
+      SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
 ```
 
-Then configure the `Run OpenCode` step from the README quick start:
+## GitHub App token reuse
 
-```yaml
-env:
-  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-  GITHUB_TOKEN: ${{ github.token }}
-with:
-  model: openrouter/openrouter/free
-  prompt: /review-pr
-```
+The token resolver (`.opencode/scripts/resolve-app-token.sh`) is preserved independently of the removed review command. The trusted `pr-review-gh.sh` adapter is installed alongside it under `~/.config/opencode/scripts/`. The review prompt instructs the external `pr-review` skill to route GitHub operations through the trusted native API tool and adapter. Review-only runs use the action-defined `action-pr-review` primary agent regardless of the caller's `agent` input. It must run **inside** `opencode github run`: the OpenCode OIDC exchange and Git credential configuration are established at that point, not during action setup.
 
-For a smaller caller workflow, use the bundled [`opencode-review.yml` reusable workflow](reusable-workflows.md#pull-request-review).
+The adapter extracts token candidates from Git `http.*.extraheader`. Read-only requests never create pending reviews: with `use-github-token: true`, they preserve the caller's workflow credential; otherwise, they use the first candidate when present, or the existing environment credential when no candidate is found. Before publication, the adapter verifies a candidate with a temporary unsubmitted pending-review create/delete probe, then exports the verified credential to its child `gh` process as `GH_TOKEN` and `GITHUB_TOKEN`. The token is not written to a file or emitted as output.
 
-When `use-github-token: true`, pass `GH_TOKEN` or `GITHUB_TOKEN` and grant the workflow token the required permissions.
+- **Default (`use-github-token: false`)**: publication requires a verified OpenCode App token; unavailable or mismatched identity fails closed. Read-only requests may use the available scoped credential.
+- **Explicit fallback (`use-github-token: true`)**: publication prefers a verified OpenCode App token; otherwise it uses the caller's existing workflow token and its author identity. Read requests preserve that workflow token.
 
-## Review aspects
+For review-only runs, call the native `pr-review-api` tool with a `request` argument containing a JSON string such as `{ "endpoint": "repos/OWNER/REPO/pulls/NUMBER/reviews", "method": "GET", "paginate": true, "page": 1, "offset": 0, "limit": 4096 }`. The trusted tool invokes the adapter through fixed process arguments and stdin; the agent has no shell or file-modification tools. For publication, use `method: "POST"` with an embedded `payload` containing the commit-bound COMMENT review. Unknown fields, duplicate keys, invalid bounds and invalid payloads fail closed. No shell expressions, input paths or CLI flags are accepted.
 
-To select review aspects in this fixed-prompt setup, set `prompt` to `/review-pr` followed by one or more keywords:
+GET responses contain `offset`, `next_offset`, `page`, `next_page`, `total_chars` and `content`. With `paginate: true`, each request fetches **one** GitHub API page (up to 10 entries); `page` defaults to 1. Reissue the same page at `next_offset` and concatenate `content` until `next_offset` is null. If `next_page` is nonnull, continue with that API page starting at `offset: 0`. A short API page terminates pagination; an exactly full page may require one final empty-page request. This avoids downloading all preceding GitHub API pages for each response slice. Commit `check-runs` and combined `status` endpoints also support pagination; their complete response objects are preserved, with continuation based on the `check_runs` or `statuses` array. Use `paginate: false` for other singleton or immutable endpoints. `offset`/`limit` bound each tool response to at most 4096 characters. Immutable `git/trees/<SHA>` and `git/blobs/<SHA>` endpoints provide frozen file evidence; blobs are decoded as UTF-8, while truncated trees and non-text blobs fail. Mutable API responses can change between slices, so revalidate their snapshot before and after reconstruction. POST accepts no output-paging fields and returns a bounded review receipt; verify the complete persisted review through GET.
 
-| Command                           | Focus                                |
-| --------------------------------- | ------------------------------------ |
-| `/review-pr` or `/review-pr all`  | Full review                          |
-| `/review-pr security performance` | Security and performance             |
-| `/review-pr tests docs`           | Test coverage and documentation      |
-| `/review-pr code`                 | Correctness and code quality         |
-| `/review-pr quality`              | Code quality                         |
-| `/review-pr coverage`             | Test coverage                        |
-| `/review-pr documentation`        | Documentation accuracy               |
-| `/review-pr errors`               | Silent failures and error handling   |
-| `/review-pr comments`             | Comment and docstring accuracy       |
-| `/review-pr types`                | Type design                          |
-| `/review-pr simplify`             | Read-only simplification suggestions |
+The adapter retains a direct CLI interface for trusted callers. It permits scoped API reads and only `gh api repos/<repo>/pulls/<PR>/reviews --method POST --input <JSON-file-or-dash>` publication with `event: COMMENT`, a nonempty body, and the exact reviewed `commit_id`. Use `--input` JSON for publication; field flags, custom hosts, unknown options, other mutation methods, and other targets are rejected before token resolution. Read-only `gh pr view`, `diff`, and `checks` require the explicit target URL.
 
-An unscoped review first builds a change and risk map, covers baseline correctness, regression, tests, and documentation, then adds only lenses justified by the actual diff. It typically creates 2-6 dynamically named discovery tasks such as `authorization-boundary`, `migration-integrity`, `async-cleanup`, or `workflow-permissions`; these are task roles, not fixed agent identities. Explicit aspects are hard scope constraints rather than routes to specialist agent files.
+Automatic formatters and language servers are disabled in review-only runs.
 
-The current OpenCode v1-compatible runtime uses one hidden `review-worker` subagent definition with read/glob/grep permissions only. Each discovery task launches a fresh worker session, and every surviving candidate is checked in a separate fresh validation session that actively seeks counterevidence before the parent may publish it. When OpenCode v2's built-in read-only `explore` contract becomes the action runtime boundary, this compatibility worker can be removed without changing the review procedure.
+The adapter resolves credentials for each invocation rather than persisting a short-lived token between processes. Read-only requests use best-effort token resolution; the pending-review probe runs only before publication and performs real GitHub API create/delete operations, although it never publishes a review. The review agent denies tools by default and allows only the upstream skill, trusted reference reads and globbing, and the native API tool. It denies direct GitHub/network tools, general shell commands, grep, delegation, repository edits and all checkout file reads. Repository content is read through frozen Git blobs instead, so checkout symlinks cannot redirect file reads to runner credentials. These are OpenCode tool permissions, **not an operating-system sandbox**; use trusted runners and grant `pull-requests: write`.
 
-## Finding and submission behavior
+## Review contract and boundaries
 
-The parent primary agent retains the full pull request context for anchoring and normalization while each child receives only a bounded packet for its specific risk hypothesis. The review flow then:
+Upstream `pr-review` freezes the base/head snapshot, validates findings against repository evidence, and publishes one verified `COMMENT` review by default. It never approves, requests changes, merges, or modifies repository contents. See [the upstream skill specification](https://github.com/dceoy/pr-loop/blob/main/skills/pr-review/SKILL.md) for the authoritative policy.
 
-1. maps changed behavior and chooses only justified review lenses
-2. dispatches fresh read-only discovery tasks with bounded context
-3. deduplicates candidates by root cause
-4. validates candidates independently as `confirmed`, `rejected`, or `needs-human`
-5. arbitrates confirmed findings against the captured diff
-6. posts anchorable confirmed findings as inline review comments and keeps genuine unanchorable findings in the review body
+Review-only runs replace inherited global OpenCode configuration, disable project configuration and external skill discovery, and use a fresh OpenCode installation. They force the restricted review agent and its tool permissions instead of inheriting the caller's agent permissions. Review behavior remains in the pinned upstream skill; no bundled command or orchestrator is installed.
 
-A successful run validates the complete payload without a GitHub write, then creates one structured GitHub review and updates its body with the workflow run link. The validated payload is sealed against later edits, and the live initial submission can be attempted only once per run. `/review-pr` does not post through `gh pr comment` or the issue comment API.
-
-If no finding can be anchored, the command returns a concise Markdown fallback instead of an empty review. Validation identifies missing or invalid fields before submission. Submission failures fail the workflow without a retry rather than risking an unintended review artifact or reposting findings as an unstructured comment.
-
-`opencode github run` may separately post the command's final completion message, so a run can produce the structured review plus at most one top-level completion comment.
-
-## Security
-
-`opencode-action` treats the repository checkout, project OpenCode configuration, pull request content, and unverified git credentials as untrusted.
-
-### Review isolation
-
-When the effective prompt starts with `/review-pr`, the action installs a fresh bundled OpenCode configuration, disables project-provided configuration and externally discovered skills, removes inherited plugins and agents, and resolves the review command only from the action bundle.
-
-The bundled global OpenCode config does not grant trusted review paths to every agent. External-directory access to the fixed review helpers and dedicated state directory under `~/.config/opencode/` is allowed only by the `review-pr-orchestrator` permission profile. The read-only worker has no shell or edit permission. The helpers source the trusted-context and token-resolution libraries only from their installed sibling paths; repository-controlled files never enter that execution path.
-
-### Trusted pull request context
-
-One shared trusted-context helper derives the repository and pull request number from the GitHub Actions event and pins a base/head SHA pair for both read and write helpers. It captures event metadata for `pull_request` runs or obtains metadata and both SHAs together for `issue_comment` runs, so the saved metadata belongs to the immutable snapshot. The changed-file list is captured from the pinned comparison; if GitHub's comparison response reaches its 300-file limit, context fails closed rather than saving incomplete file metadata. The diff helper reads only the pinned `base_sha...head_sha` comparison. The submission helper validates the pinned head commit immediately before the write and repeats that readability check after token verification. If the live pull request head advances after the snapshot is captured, the run still submits against the pinned commit; GitHub may render affected comments as outdated, which is intentional.
-
-### Trusted host boundary
-
-Review isolation assumes the runner host and its administrator-controlled OpenCode state are trusted. The action clears project/caller review configuration and inherited toolkit state, but it does not attempt to reproduce OpenCode's full external, managed, plugin, or remote configuration discovery. Variant prevalidation therefore uses the bundled registry only when the isolated environment is conservatively known to make that registry authoritative; otherwise the requested variant is passed through unchanged. Use trusted or ephemeral runners for review workflows.
-
-### Token verification and precedence
-
-The default OIDC flow supplies an OpenCode GitHub App installation token. Credentials discovered through git configuration remain untrusted until their identity is verified.
-
-Before a structured review write, the action creates an empty pending review with each candidate, verifies that its author is `opencode-agent[bot]`, and immediately deletes it. The probe is not published, but it is a real create-and-delete API operation. Tokens and decoded authorization headers are never printed.
-
-Structured writes use this precedence:
-
-1. the first candidate verified as `opencode-agent[bot]`
-2. the caller's existing `GH_TOKEN` or `GITHUB_TOKEN` only when `use-github-token: true`
-3. otherwise, fail without submitting a review
-
-The explicit workflow-token fallback may make reviews appear under `github-actions[bot]` or another identity associated with that token. Unverified candidates may be used for read-only metadata access but never pass the structured-write gate.
-
-### Fail-closed behavior
-
-Review-only mode fails rather than weakening its guarantees when:
-
-- the bundled toolkit is disabled or the OpenCode version is unsupported
-- trusted pull request context cannot be established
-- the pinned commit or comparison cannot be read
-- no App token verifies and workflow-token fallback was not explicitly enabled
-- review payload validation or structured submission fails
-- the `~/.opencode` state directory is a symlink, checked before the OpenCode binary is cached or installed, since cleaning or reusing it would otherwise write through the link
+The upstream skill is pinned by default to `v1.0.0`. The SHA is fixed once in `opencode-review.yml` as `env.PR_LOOP_REF`; direct action and bot review-only calls must supply `pr-review-ref`. Set `pr-review-ref` to another complete commit SHA to override it. The post-release CI updates the default to the latest stable `pr-loop` release SHA and version comments via the release-pins PR. If installation, commit SHA verification (when specified), or required upstream files fail, the workflow fails rather than falling back to the removed bundled implementation. OpenCode GitHub integration can separately add a completion comment.
