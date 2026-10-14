@@ -79,30 +79,14 @@ install_pr_review() {
   checkout_dir="$(mktemp -d)"
   checkout="$(cd "${checkout_dir}" && pwd -P)"
   trap 'rm -rf "${checkout}"' RETURN
-  mkdir -p "${checkout}/.agents/skills"
-  cat > "${checkout}/package.json" << PACKAGE
-{
-  "name": "opencode-pr-review-skill",
-  "version": "0.0.0",
-  "private": true,
-  "packageManager": "pnpm@12.13.0",
-  "devDependencies": {
-    "pr-loop": "git+https://github.com/dceoy/pr-loop.git#${ref}"
-  }
-}
-PACKAGE
-  cat > "${checkout}/pnpm-workspace.yaml" << 'WORKSPACE'
-permissions:
-  'pr-loop@git+https://github.com/dceoy/pr-loop.git':
-    build: false
-    skills: true
-skills:
-  dirs:
-    - .agents/skills
-WORKSPACE
+  # Keep install policy static, injecting only the immutable dependency ref.
+  local manifest_dir
+  manifest_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/pr-review-pnpm" && pwd -P)"
+  cp "${manifest_dir}/package.json" "${manifest_dir}/pnpm-workspace.yaml" "${checkout}/"
 
-  # pnpm 12.11+ links approved agent skills without running package scripts.
-  (cd "${checkout}" && corepack pnpm install --ignore-scripts --no-frozen-lockfile)
+  # The dependency is installed outside the potentially untrusted PR checkout.
+  (cd "${checkout}" && corepack pnpm add --save-dev --ignore-scripts --no-frozen-lockfile \
+    "pr-loop@git+https://github.com/dceoy/pr-loop.git#${ref}")
 
   if ! python3 - "${checkout}/pnpm-lock.yaml" "${ref}" <<'PYCODE'
 import re

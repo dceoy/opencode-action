@@ -46,8 +46,10 @@ setup() {
   cat > "${fake_bin}/corepack" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "${1:-}" == pnpm && "${2:-}" == install ]] || exit 91
-grep -q 'pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd' package.json
+[[ "${1:-}" == pnpm && "${2:-}" == add ]] || exit 91
+[[ "$*" == *'pr-loop@git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd'* ]]
+grep -q '"packageManager": "pnpm@12.13.0"' package.json
+grep -q '"devDependencies": {}' package.json
 grep -q 'pr-loop@git+https://github.com/dceoy/pr-loop.git' pnpm-workspace.yaml
 grep -q 'skills: true' pnpm-workspace.yaml
 grep -q 'build: false' pnpm-workspace.yaml
@@ -170,4 +172,23 @@ STUB
     [ ! -e "${BATS_TEST_TMPDIR}/pnpm-calls" ]
     [ ! -e "${BATS_TEST_TMPDIR}/version-home/.config/opencode/skills/pr-review" ]
   done
+}
+
+@test "real pnpm installs the pinned review skill in CI" {
+  if [[ "${PR_REVIEW_PNPM_SMOKE:-false}" != true ]]; then
+    skip "real pnpm/network smoke test runs in CI only"
+  fi
+  ref="$(sed -n -E 's/^  PR_LOOP_REF: ([a-f0-9]{40}).*/\1/p' "${repo_root}/.github/workflows/opencode-review.yml")"
+  [[ "${ref}" =~ ^[a-f0-9]{40}$ ]]
+  install_home="${BATS_TEST_TMPDIR}/real-install-home"
+  mkdir -p "${install_home}"
+  run env HOME="${install_home}" USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${ref}" \
+    OPENCODE_VERSION=1.2.14 bash "${repo_root}/scripts/install-pr-review.sh"
+  if [ "${status}" -ne 0 ]; then
+    echo "${output}" >&3
+    false
+  fi
+  [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
+  [ -f "${install_home}/.config/opencode/skills/pr-review/references/github-posting.md" ]
+  grep -q 'opencode/slash: "true"' "${install_home}/.config/opencode/skills/pr-review/SKILL.md"
 }

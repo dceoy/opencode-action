@@ -1,0 +1,7 @@
+permissions:
+  'pr-loop@git+https://github.com/dceoy/pr-loop.git':
+    build: false
+    skills: true
+skills:
+  dirs:
+    - .agents/skills
