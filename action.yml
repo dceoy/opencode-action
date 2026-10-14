@@ -44,7 +44,7 @@ inputs:
     default: latest
   use-bundled-toolkit:
     required: false
-    description: Whether to use the action's bundled .opencode/ agents, commands, skills, and supporting configuration.
+    description: Whether to copy the action's bundled provider configuration and review support files.
     default: 'true'
   review-only:
     required: false
