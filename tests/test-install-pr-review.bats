@@ -9,56 +9,107 @@ setup() {
   for name in review-lenses finding-validation github-posting; do
     touch "${source_dir}/references/${name}.md"
   done
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+  cat > "${fake_bin}/gh" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == skill && "${2:-}" == install && "${3:-}" == --help ]]; then
+  exit "${GH_HELP_EXIT:-0}"
+fi
+[[ "${1:-}" == skill && "${2:-}" == install ]] || exit 90
+[[ "${3:-}" == skills/pr-review ]] || exit 91
+[[ "${4:-}" == --pin && "${5:-}" == "${PR_REVIEW_REF,,}" ]] || exit 92
+[[ "${6:-}" == --agent && "${7:-}" == opencode && "${8:-}" == --scope && "${9:-}" == user ]] || exit 93
+if [[ -n "${GH_CALL_LOG:-}" ]]; then
+  printf 'install\n' >> "${GH_CALL_LOG}"
+fi
+[[ "${GH_FAIL:-false}" != true ]] || exit 94
+destination="${HOME}/.config/opencode/skills/pr-review"
+mkdir -p "${destination}"
+cp -R "${SKILL_FIXTURE}/." "${destination}/"
+if [[ "${GH_MISSING_FILE:-false}" == true ]]; then
+  rm "${destination}/references/github-posting.md"
+fi
+if [[ "${GH_SYMLINK:-false}" == true ]]; then
+  ln -s /etc/passwd "${destination}/references/unsafe.md"
+fi
+STUB
+  chmod +x "${fake_bin}/gh"
 }
-@test "copies upstream skill with relative references" {
-  pr_review_copy_skill "${source_dir}" "${target_dir}"
-  [ -f "${target_dir}/SKILL.md" ]
+
+@test "validates the installed Skill and enables native slash invocation" {
+  mkdir -p "${target_dir}"
+  cp -R "${source_dir}/." "${target_dir}/"
+  pr_review_finalize_skill "${target_dir}"
   [ -f "${target_dir}/references/github-posting.md" ]
-  [ ! -e "${BATS_TEST_TMPDIR}/config/commands/pr-review.md" ]
   [[ "$(cat "${target_dir}/SKILL.md")" == *'opencode/slash: "true"'* ]]
 }
-@test "fails closed when upstream reference is missing" {
+
+@test "retains upstream installation metadata when adding slash metadata" {
+  printf '%s\n' '---' 'name: pr-review' 'metadata:' '  github-source: dceoy/pr-loop' '---' > "${source_dir}/SKILL.md"
+  pr_review_finalize_skill "${source_dir}"
+  grep -q 'github-source: dceoy/pr-loop' "${source_dir}/SKILL.md"
+  grep -q 'opencode/slash: "true"' "${source_dir}/SKILL.md"
+}
+
+@test "fails closed on missing required reference and source symlinks" {
   rm "${source_dir}/references/github-posting.md"
-  run pr_review_copy_skill "${source_dir}" "${target_dir}"
+  run pr_review_finalize_skill "${source_dir}"
   [ "${status}" -ne 0 ]
-  [ ! -e "${target_dir}" ]
-}
-@test "rejects symlinks and existing destinations" {
+  touch "${source_dir}/references/github-posting.md"
   ln -s /etc/passwd "${source_dir}/references/unsafe.md"
-  run pr_review_copy_skill "${source_dir}" "${target_dir}"
-  [ "${status}" -ne 0 ]
-  rm "${source_dir}/references/unsafe.md"
-  mkdir -p "${target_dir}"
-  run pr_review_copy_skill "${source_dir}" "${target_dir}"
+  run pr_review_finalize_skill "${source_dir}"
   [ "${status}" -ne 0 ]
 }
-@test "rejects mutable branch refs" {
+
+@test "rejects mutable branch refs before invoking gh" {
   run env USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=main bash "${repo_root}/scripts/install-pr-review.sh"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"full immutable 40-character commit SHA"* ]]
 }
 
-@test "normalizes uppercase release pins with portable shell syntax" {
-  export OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
+@test "normalizes uppercase pins and invokes native gh skill installer" {
   install_home="${BATS_TEST_TMPDIR}/install-home"
-  fake_git="${BATS_TEST_TMPDIR}/bin"
-  mkdir -p "${fake_git}" "${install_home}"
-  cat > "${fake_git}/git" << 'STUB'
-#!/usr/bin/env bash
-set -euo pipefail
-if [[ "$*" == *"rev-parse HEAD"* ]]; then
-  printf 'abcdefabcdefabcdefabcdefabcdefabcdefabcd\n'
-elif [[ "$*" == *"checkout -q --detach FETCH_HEAD"* ]]; then
-  mkdir -p "$2/skills"
-  cp -R "${SKILL_FIXTURE}" "$2/skills/pr-review"
-fi
-STUB
-  chmod +x "${fake_git}/git"
-  run env HOME="${install_home}" PATH="${fake_git}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+  mkdir -p "${install_home}"
+  run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD \
     bash "${repo_root}/scripts/install-pr-review.sh"
   [ "${status}" -eq 0 ]
   [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
   [[ "${output}" == *"Installed pr-loop/pr-review at abcdef"* ]]
+}
+
+@test "rejects existing or symlinked Skill destinations without invoking gh" {
+  install_home="${BATS_TEST_TMPDIR}/existing-home"
+  mkdir -p "${install_home}/.config/opencode/skills/pr-review"
+  run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" bash "${repo_root}/scripts/install-pr-review.sh"
+  [ "${status}" -ne 0 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+}
+
+@test "rejects missing gh skill capability before writing files" {
+  install_home="${BATS_TEST_TMPDIR}/missing-gh-home"
+  run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    GH_HELP_EXIT=1 bash "${repo_root}/scripts/install-pr-review.sh"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"GitHub CLI v2.90.0 or newer"* ]]
+  [ ! -e "${install_home}/.config/opencode/skills/pr-review" ]
+}
+
+@test "cleans up missing files, unsafe symlinks, and failed installs" {
+  for failure in GH_FAIL GH_MISSING_FILE GH_SYMLINK; do
+    install_home="${BATS_TEST_TMPDIR}/failure-${failure}"
+    mkdir -p "${install_home}"
+    run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+      OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+      "${failure}=true" bash "${repo_root}/scripts/install-pr-review.sh"
+    [ "${status}" -ne 0 ]
+    [ ! -e "${install_home}/.config/opencode/skills/pr-review" ]
+  done
 }
 
 @test "review version accepts supported semantic versions" {
@@ -68,23 +119,33 @@ STUB
   done
 }
 
-@test "installer rejects unsupported versions before Git or skill writes" {
-  fake_bin="${BATS_TEST_TMPDIR}/version-bin"
-  mkdir -p "${fake_bin}"
-  cat > "${fake_bin}/git" << 'STUB'
-#!/usr/bin/env bash
-touch "${GIT_CALL_LOG}"
-exit 99
-STUB
-  chmod +x "${fake_bin}/git"
+@test "installer rejects unsupported versions before calling gh" {
   for version in 0.9.0 1.1.99 1.2.13 1.2.14-beta.1 latest invalid 1.2 ''; do
     run env HOME="${BATS_TEST_TMPDIR}/version-home" PATH="${fake_bin}:${PATH}" \
       USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      OPENCODE_VERSION="${version}" GIT_CALL_LOG="${BATS_TEST_TMPDIR}/git-calls" \
+      OPENCODE_VERSION="${version}" GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" \
       bash "${repo_root}/scripts/install-pr-review.sh"
     [ "${status}" -ne 0 ]
     [[ "${output}" == *"Review-only mode requires"* ]]
-    [ ! -e "${BATS_TEST_TMPDIR}/git-calls" ]
-    [ ! -e "${BATS_TEST_TMPDIR}/version-home/.config/opencode/skills/pr-review" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
   done
+}
+
+@test "real gh skill installs the pinned Skill in CI" {
+  if [[ "${GH_SKILL_SMOKE:-false}" != true ]]; then
+    skip "real gh skill/network smoke test runs only in CI"
+  fi
+  ref="$(sed -n -E 's/^  PR_LOOP_REF: ([a-f0-9]{40}).*/\1/p' "${repo_root}/.github/workflows/opencode-review.yml")"
+  [[ "${ref}" =~ ^[a-f0-9]{40}$ ]]
+  install_home="${BATS_TEST_TMPDIR}/real-install-home"
+  mkdir -p "${install_home}"
+  run env HOME="${install_home}" USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${ref}" \
+    OPENCODE_VERSION=1.2.14 bash "${repo_root}/scripts/install-pr-review.sh"
+  if [ "${status}" -ne 0 ]; then
+    echo "${output}" >&3
+    false
+  fi
+  [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
+  [ -f "${install_home}/.config/opencode/skills/pr-review/references/github-posting.md" ]
+  grep -q 'opencode/slash: "true"' "${install_home}/.config/opencode/skills/pr-review/SKILL.md"
 }
