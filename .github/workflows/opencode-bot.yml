@@ -174,25 +174,31 @@ jobs:
           import os
           import string
 
-          body = os.environ.get("COMMENT_BODY", "").lower()
-          mentions = {
-              value.strip().lower()
-              for value in os.environ.get("MENTIONS", "").split(",")
-              if value.strip()
-          }
-          # Treat each configured mention as a standalone token: split on
-          # whitespace, then strip surrounding punctuation while preserving
-          # internal slash/hyphen characters (e.g. /oc, /team-review). This
-          # avoids matching substrings inside URLs or longer words such as
-          # /octocat or /october.
+          body = os.environ.get("COMMENT_BODY", "")
+          mention_values = os.environ.get("MENTIONS", "").split(",")
+          # Treat each configured mention as a standalone token or sequence:
+          # split on whitespace, then strip surrounding punctuation from both
+          # inputs while preserving internal slash/hyphen (e.g. /oc, /team-review).
+          # Bounded sequences avoid matching URLs or longer words such as /octocat.
           allowed = set(string.ascii_letters + string.digits + "_/-")
           strip_chars = "".join(char for char in string.punctuation if char not in allowed)
-          tokens = {
-              token.strip(strip_chars)
-              for token in body.split()
-              if token.strip(strip_chars)
-          }
-          matched = bool(mentions and tokens & mentions)
+
+          def tokenize(value):
+              tokens = []
+              for part in value.lower().split():
+                  token = part.strip(strip_chars)
+                  if token:
+                      tokens.append(token)
+              return tokens
+
+          body_tokens = tokenize(body)
+          mention_phrases = [tokenize(value) for value in mention_values]
+          mention_phrases = [phrase for phrase in mention_phrases if phrase]
+          matched = any(
+              phrase == body_tokens[index : index + len(phrase)]
+              for phrase in mention_phrases
+              for index in range(len(body_tokens) - len(phrase) + 1)
+          )
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"matched={str(matched).lower()}\n")
           PY
