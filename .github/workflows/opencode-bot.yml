@@ -172,10 +172,27 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import string
 
           body = os.environ.get("COMMENT_BODY", "").lower()
-          mentions = (value.strip().lower() for value in os.environ.get("MENTIONS", "").split(","))
-          matched = any(mention in body for mention in mentions if mention)
+          mentions = {
+              value.strip().lower()
+              for value in os.environ.get("MENTIONS", "").split(",")
+              if value.strip()
+          }
+          # Treat each configured mention as a standalone token: split on
+          # whitespace, then strip surrounding punctuation while preserving
+          # internal slash/hyphen characters (e.g. /oc, /team-review). This
+          # avoids matching substrings inside URLs or longer words such as
+          # /octocat or /october.
+          allowed = set(string.ascii_letters + string.digits + "_/-")
+          strip_chars = "".join(char for char in string.punctuation if char not in allowed)
+          tokens = {
+              token.strip(strip_chars)
+              for token in body.split()
+              if token.strip(strip_chars)
+          }
+          matched = bool(mentions and tokens & mentions)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"matched={str(matched).lower()}\n")
           PY

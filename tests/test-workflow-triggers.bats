@@ -7,7 +7,7 @@ setup() {
   bot="${repo_root}/.github/workflows/opencode-bot.yml"
   review="${repo_root}/.github/workflows/opencode-review.yml"
   check_script="${BATS_TEST_TMPDIR}/comment-trigger.py"
-  python3 - "${bot}" "${check_script}" <<'PY'
+  python3 - "${bot}" "${check_script}" << 'PY'
 import sys
 import textwrap
 from pathlib import Path
@@ -21,8 +21,12 @@ PY
 @test "comment triggers honor the custom mentions independently of the required model" {
   for example in '/TEAM-REVIEW please examine|/team-review|true' \
     '/oc fix the issue|/opencode,/oc|true' \
+    '/OC, take a look|/opencode,/oc|true' \
     '/unrelated message|/opencode,/oc|false' \
-    '/oc fix the issue|/team-review|false'; do
+    '/oc fix the issue|/team-review|false' \
+    'https://github.com/octocat/example|/opencode,/oc|false' \
+    'have you seen /october updates?|/opencode,/oc|false' \
+    'path/octocat/example|/opencode,/oc|false'; do
     IFS='|' read -r body mentions expected <<< "${example}"
     output_file="${BATS_TEST_TMPDIR}/trigger-output"
     : > "${output_file}"
