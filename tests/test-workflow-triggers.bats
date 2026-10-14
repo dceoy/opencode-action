@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016  # Literal workflow expressions are matched as text.
 # Regression tests for the workflow trigger contract, independent of model selection.
 
 setup() {
