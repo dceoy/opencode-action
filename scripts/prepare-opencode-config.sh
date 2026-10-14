@@ -12,6 +12,10 @@ _opencode_copy_missing_config() {
   done < <(find "${source_dir}" -mindepth 1 -print0)
   while IFS= read -r -d '' source; do
     relative="${source#"${source_dir}/"}"
+    # These helpers are exclusively for the restricted review agent.
+    case "${relative}" in
+      tools/pr-review-api.js | scripts/pr-review-gh.sh | scripts/resolve-app-token.sh) continue ;;
+    esac
     destination="${destination_dir}/${relative}"
     if [[ -d "${source}" ]]; then
       mkdir -p "${destination}"
@@ -33,17 +37,15 @@ opencode_prepare_config() {
   fi
   case "${review_only}" in
     true)
-      if [[ -L "${HOME}/.opencode" || -L "${HOME}/.opencode/bin" ]]; then
-        echo "::error::OpenCode state or bin is a symlink; refusing review-only isolation." >&2
+      # action.yml supplies a fresh temporary HOME in review-only mode.
+      # Never delete inherited OpenCode state on a persistent runner.
+      if [[ -e "${config_dir}" || -L "${config_dir}" ]]; then
+        echo "::error::Review-only requires a fresh, empty OpenCode config directory." >&2
         return 1
       fi
       export XDG_CONFIG_HOME="${HOME}/.config"
-      rm -rf "${config_dir}"
       mkdir -p "${config_dir}"
       cp -r "${action_path}/.opencode/." "${config_dir}/"
-      if [[ -d "${HOME}/.opencode" ]]; then
-        find "${HOME}/.opencode" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-      fi
       ;;
     false)
       mkdir -p "${config_dir}"
