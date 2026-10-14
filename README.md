@@ -103,7 +103,7 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
 | `opencode-version`    | `latest`                  | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+.                                                          |
-| `use-bundled-toolkit` | `true`                    | Use the bundled agents, commands, skills, and configuration.                                                                                      |
+| `use-bundled-toolkit` | `true`                    | Use the bundled provider configuration and review support tools.                                                                                      |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
@@ -113,7 +113,7 @@ Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and 
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
-Outputs are `opencode-version` and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache and install the external `pr-review` skill.
+Outputs are `opencode-version` and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache, install the external `pr-review` skill, and use a disposable temporary HOME (including isolated XDG paths).
 
 ## Pull request reviews
 
