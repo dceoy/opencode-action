@@ -78,14 +78,14 @@ EOF
   run env HOME="${install_home}" PATH="${mock_bin}:${PATH}" PR_REVIEW_REF="${pin}" \
     USE_BUNDLED_TOOLKIT=true PR_REVIEW_INSTALL_TOKEN=installer-token GH_TOKEN=caller-token \
     GH_TOKEN_CAPTURE="${token_capture}" bash -euo pipefail -c \
-    'source "$1"; printf "%s:%s" "${GH_TOKEN}" "${PR_REVIEW_INSTALL_TOKEN:-}" > "$2"' \
+    'review_home="${HOME}"; source "$1"; printf "%s:%s" "${GH_TOKEN}" "${PR_REVIEW_INSTALL_TOKEN:-}" > "$2"' \
     _ "${install_step}" "${caller_capture}"
   [ "${status}" -eq 0 ]
   [ "$(cat "${token_capture}")" = installer-token ]
   [ "$(cat "${caller_capture}")" = caller-token: ]
 }
 
-@test "review-only installs and runs a fresh binary without persisting its temporary PATH" {
+@test "review-only preserves shared installer tools and runs a fresh binary" {
   for example in 'matching|1.2.14' 'different|1.2.13'; do
     IFS='|' read -r case_name inherited_version <<< "${example}"
     case_root="${BATS_TEST_TMPDIR}/${case_name}"
@@ -97,6 +97,9 @@ EOF
     run_capture="${case_root}/run-capture"
     home_capture="${case_root}/home-capture"
     installer_path_capture="${case_root}/installer-path"
+    required_tools_capture="${case_root}/required-tools"
+    which_capture="${case_root}/which-capture"
+    tar_capture="${case_root}/tar-capture"
     old_binary_capture="${case_root}/old-binary-used"
     installer_fixture="${case_root}/installer.sh"
     mkdir -p "${original_home}/.opencode/bin" "${runner_temp}" "${mock_bin}" "${mock_action}/scripts"
@@ -106,8 +109,9 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 echo used >> "${OLD_BINARY_CAPTURE}"
-echo "opencode ${INHERITED_VERSION}"
+echo "${INHERITED_VERSION}"
 EOF
+    cp "${original_home}/.opencode/bin/opencode" "${mock_bin}/opencode"
     cat > "${mock_bin}/gh" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -122,6 +126,14 @@ EOF
 set -euo pipefail
 cat "${INSTALLER_FIXTURE}"
 EOF
+    cat > "${mock_bin}/tar" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" > "${TAR_CAPTURE}"
+EOF
+    for tool in bash mktemp rm tr find grep mkdir cat chmod touch; do
+      ln -s "$(command -v "${tool}")" "${mock_bin}/${tool}"
+    done
     cat > "${mock_action}/scripts/prepare-opencode-config.sh" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -153,9 +165,13 @@ done
 [[ "${GITHUB_PATH}" == /dev/null ]]
 echo "${HOME}" > "${HOME_CAPTURE}"
 echo "${PATH}" > "${INSTALLER_PATH_CAPTURE}"
+for required_tool in bash tar curl; do
+  command -v "${required_tool}" >> "${REQUIRED_TOOLS_CAPTURE}"
+done
+tar --version > /dev/null
+which opencode > "${WHICH_CAPTURE}"
 if command -v opencode >/dev/null 2>&1; then
   installed_version="$(opencode --version 2>/dev/null || echo '')"
-  installed_version="${installed_version##* }"
   if [[ "${installed_version}" == "${specific_version}" ]]; then
     exit 0
   fi
@@ -163,26 +179,34 @@ fi
 mkdir -p "${HOME}/.opencode/bin"
 cat > "${HOME}/.opencode/bin/opencode" << BINARY
 #!/usr/bin/env bash
-echo "opencode ${specific_version}"
+echo "${specific_version}"
 BINARY
 chmod +x "${HOME}/.opencode/bin/opencode"
 EOF
-    chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/gh" "${mock_bin}/curl" \
+    chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/opencode" "${mock_bin}/gh" \
+      "${mock_bin}/curl" "${mock_bin}/tar" \
       "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
 
     run env HOME="${original_home}" RUNNER_TEMP="${runner_temp}" REVIEW_ONLY=true \
       USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${pin}" PR_REVIEW_INSTALL_TOKEN="" \
       OPENCODE_VERSION=1.2.14 ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
-      PATH="${original_home}/.opencode/bin:${mock_bin}:${PATH}" INSTALLER_FIXTURE="${installer_fixture}" \
+      PATH="${original_home}/.opencode/bin:${mock_bin}" INSTALLER_FIXTURE="${installer_fixture}" \
       HOME_CAPTURE="${home_capture}" INSTALLER_PATH_CAPTURE="${installer_path_capture}" \
+      REQUIRED_TOOLS_CAPTURE="${required_tools_capture}" WHICH_CAPTURE="${which_capture}" \
+      TAR_CAPTURE="${tar_capture}" \
       OLD_BINARY_CAPTURE="${old_binary_capture}" INHERITED_VERSION="${inherited_version}" \
       RUN_CAPTURE="${run_capture}" bash "${run_step}"
     [ "${status}" -eq 0 ]
     [ ! -e "${old_binary_capture}" ]
-    [[ "$(cat "${installer_path_capture}")" != *"${original_home}/.opencode/bin"* ]]
-    [ "$(cat "${path_file}")" = '/existing/github/path' ]
-    [ "$(sed -n '3p' "${run_capture}")" = 'opencode 1.2.14' ]
     review_home="$(cat "${home_capture}")"
+    [ "$(cat "${installer_path_capture}")" = "${review_home}/.installer-bin:${original_home}/.opencode/bin:${mock_bin}" ]
+    [ "$(cat "${required_tools_capture}")" = "${mock_bin}/bash
+${mock_bin}/tar
+${mock_bin}/curl" ]
+    [ "$(cat "${which_capture}")" = "${review_home}/.installer-bin/opencode" ]
+    [ "$(cat "${tar_capture}")" = '--version' ]
+    [ "$(cat "${path_file}")" = '/existing/github/path' ]
+    [ "$(sed -n '3p' "${run_capture}")" = '1.2.14' ]
     [ "$(sed -n '1p' "${run_capture}")" = "${review_home}" ]
     [ "$(sed -n '2p' "${run_capture}")" = "${review_home}/.opencode/bin/opencode" ]
     [ ! -e "${review_home}" ]
