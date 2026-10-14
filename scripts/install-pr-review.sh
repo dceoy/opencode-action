@@ -40,6 +40,28 @@ else:
 path.write_text("---" + frontmatter + "---" + parts[2])
 PYCODE
 }
+opencode_validate_review_version() {
+  local original_version="${1:-}" version major minor patch prerelease
+  version="${original_version#v}"
+
+  if [[ ! "${version}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?(\+([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?$ ]]; then
+    echo "::error::Review-only mode requires a semantic OpenCode version at or above 1.2.14 (got '${original_version}')." >&2
+    return 1
+  fi
+
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  patch="${BASH_REMATCH[3]}"
+  prerelease="${BASH_REMATCH[5]:-}"
+  if ((10#${major} < 1 || (\
+    10#${major} == 1 && 10#${minor} < 2) || (\
+    10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14))) \
+      || [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
+    echo "::error::Review-only mode requires OpenCode 1.2.14 or newer (got '${original_version}')." >&2
+    return 1
+  fi
+}
+
 install_pr_review() {
   local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
@@ -50,6 +72,7 @@ install_pr_review() {
     echo "::error::pr-review-ref must be a full immutable 40-character commit SHA." >&2
     return 1
   fi
+  opencode_validate_review_version "${OPENCODE_VERSION:-}" || return 1
   ref="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]')"
   checkout="$(mktemp -d)"
   trap 'rm -rf "${checkout}"' RETURN

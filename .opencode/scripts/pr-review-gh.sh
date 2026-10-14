@@ -77,8 +77,17 @@ if immutable:
 next_page = None
 if paginate:
     records = json.loads(content)
+    collection = None
+    if request["endpoint"].endswith("/check-runs"):
+        collection = "check_runs"
+    elif request["endpoint"].endswith("/status"):
+        collection = "statuses"
+    if collection:
+        if not isinstance(records, dict):
+            raise ValueError("Paginated CI response must be an object")
+        records = records.get(collection)
     if not isinstance(records, list):
-        raise ValueError("Paginated API response must be an array")
+        raise ValueError("Paginated API response must contain the expected array")
     # A full page may have a successor; a short page is terminal.
     if len(records) == 10 and page < 10000:
         next_page = page + 1
@@ -228,15 +237,17 @@ print(json.dumps(p))
           ;;
       esac
       if [[ -n "${review_page}" ]]; then
-        # Only lists can be paged. The endpoint is checked before the
+        # Only supported collections can be paged. The endpoint is checked before the
         # query string is appended, so no arbitrary URL can be supplied.
         case "${endpoint}" in
           "${prefix}/files" | "${prefix}/commits" | "${prefix}/comments" | "${prefix}/reviews" | "repos/${repo}/issues/${pr_number}/comments") ;;
           *)
             if [[ "${endpoint}" == "${prefix}/reviews/"* && "${endpoint#"${prefix}/reviews/"}" =~ ^[1-9][0-9]*/comments$ ]]; then
               :
+            elif [[ "${endpoint}" == "repos/${repo}/commits/"* && "${endpoint#"repos/${repo}/commits/"}" =~ ^[0-9a-fA-F]{40}/(status|check-runs)$ ]]; then
+              :
             else
-              echo "::error::API pagination only supports PR collection endpoints." >&2
+              echo "::error::API pagination only supports scoped collection endpoints." >&2
               return 2
             fi
             ;;

@@ -39,7 +39,7 @@ setup() {
 }
 
 @test "normalizes uppercase release pins with portable shell syntax" {
-  export USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
+  export OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
   install_home="${BATS_TEST_TMPDIR}/install-home"
   fake_git="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "${fake_git}" "${install_home}"
@@ -59,4 +59,32 @@ STUB
   [ "${status}" -eq 0 ]
   [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
   [[ "${output}" == *"Installed pr-loop/pr-review at abcdef"* ]]
+}
+
+@test "review version accepts supported semantic versions" {
+  for version in 1.2.14 v1.2.14 1.2.14+build.1 1.2.15 1.3.0 2.0.0 1.3.0-beta.1; do
+    run opencode_validate_review_version "${version}"
+    [ "${status}" -eq 0 ]
+  done
+}
+
+@test "installer rejects unsupported versions before Git or skill writes" {
+  fake_bin="${BATS_TEST_TMPDIR}/version-bin"
+  mkdir -p "${fake_bin}"
+  cat > "${fake_bin}/git" << 'STUB'
+#!/usr/bin/env bash
+touch "${GIT_CALL_LOG}"
+exit 99
+STUB
+  chmod +x "${fake_bin}/git"
+  for version in 0.9.0 1.1.99 1.2.13 1.2.14-beta.1 latest invalid 1.2 ''; do
+    run env HOME="${BATS_TEST_TMPDIR}/version-home" PATH="${fake_bin}:${PATH}" \
+      USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+      OPENCODE_VERSION="${version}" GIT_CALL_LOG="${BATS_TEST_TMPDIR}/git-calls" \
+      bash "${repo_root}/scripts/install-pr-review.sh"
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *"Review-only mode requires"* ]]
+    [ ! -e "${BATS_TEST_TMPDIR}/git-calls" ]
+    [ ! -e "${BATS_TEST_TMPDIR}/version-home/.config/opencode/skills/pr-review" ]
+  done
 }

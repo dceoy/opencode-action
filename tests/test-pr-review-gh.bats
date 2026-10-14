@@ -346,10 +346,71 @@ PYCODE
 
 @test "pagination rejects singleton and immutable endpoints before auth" {
   for endpoint in repos/dceoy/opencode-action/pulls/127 \
+    repos/dceoy/opencode-action/commits/abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+    repos/other/repo/commits/abcdefabcdefabcdefabcdefabcdefabcdefabcd/check-runs \
+    repos/dceoy/opencode-action/commits/invalid/status \
+    'repos/dceoy/opencode-action/commits/abcdefabcdefabcdefabcdefabcdefabcdefabcd/status?per_page=100' \
     repos/dceoy/opencode-action/git/blobs/abcdefabcdefabcdefabcdefabcdefabcdefabcd; do
     printf '{"endpoint":"%s","paginate":true}' "${endpoint}" > "${request_file}"
     run_request
     [ "${status}" -ne 0 ]
     [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
   done
+}
+
+@test "CI object pagination preserves metadata and traverses bounded response slices" {
+  fixture_dir="${BATS_TEST_TMPDIR}/ci-pages"
+  mkdir -p "${fixture_dir}"
+  run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" \
+    GH_PAGED_FIXTURE_DIR="${fixture_dir}" PATH="${fake_bin}:${PATH}" \
+    PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
+    python3 - "${wrapper}" "${temp_repo}" "${fixture_dir}" "${BATS_TEST_TMPDIR}/gh-args" << 'PYCODE'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+wrapper, repo, fixtures, log = sys.argv[1:]
+fixtures = Path(fixtures)
+for suffix, collection in [("check-runs", "check_runs"), ("status", "statuses")]:
+    endpoint = "repos/dceoy/opencode-action/commits/" + "a" * 40 + "/" + suffix
+    for count in [10, 1, 0]:
+        expected = {"total_count": count, "state": "success", collection:
+                    [{"id": i, "body": "CI evidence 日本語" * 80} for i in range(count)]}
+        (fixtures / "2.json").write_text(json.dumps(expected, ensure_ascii=False))
+        offset, chunks = 0, []
+        while True:
+            request = {"endpoint": endpoint, "paginate": True, "page": 2, "offset": offset}
+            result = json.loads(subprocess.check_output(["bash", wrapper, "--request-stdin"],
+                input=json.dumps(request).encode(), cwd=repo))
+            assert result["page"] == 2
+            assert len(result["content"]) <= 4096
+            chunks.append(result["content"])
+            offset = result["next_offset"]
+            if offset is None:
+                assert result["next_page"] == (3 if count == 10 else None)
+                break
+            assert result["next_page"] is None
+        assert json.loads("".join(chunks)) == expected
+        if count == 10:
+            assert len(chunks) > 1
+            (fixtures / "3.json").write_text(json.dumps({collection: []}))
+            request = {"endpoint": endpoint, "paginate": True, "page": 3}
+            result = json.loads(subprocess.check_output(["bash", wrapper, "--request-stdin"],
+                input=json.dumps(request).encode(), cwd=repo))
+            assert result["next_page"] is None and result["next_offset"] is None
+            assert json.loads(result["content"]) == {collection: []}
+    for malformed in [[], {}, {collection: None}, {collection: {}}]:
+        (fixtures / "2.json").write_text(json.dumps(malformed))
+        request = {"endpoint": endpoint, "paginate": True, "page": 2}
+        result = subprocess.run(["bash", wrapper, "--request-stdin"],
+            input=json.dumps(request).encode(), cwd=repo, capture_output=True)
+        assert result.returncode != 0, (suffix, malformed)
+requests = Path(log).read_text().splitlines()
+assert all("?per_page=10&page=" in line for line in requests)
+assert all("page=1 " not in line and "--paginate" not in line for line in requests)
+assert all("--method GET" in line for line in requests)
+PYCODE
+  [ "${status}" -eq 0 ]
 }

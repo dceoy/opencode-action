@@ -102,6 +102,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         PR_REVIEW_REF: ${{ inputs.pr-review-ref }}
+        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
       run: >
         "${ACTION_PATH}/scripts/install-pr-review.sh"
     - name: Cache OpenCode
