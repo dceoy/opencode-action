@@ -74,6 +74,7 @@ runs:
       env:
         INPUT_VERSION: ${{ inputs.opencode-version }}
         GITHUB_TOKEN: ${{ github.token }}
+        REVIEW_ONLY: ${{ inputs.review-only }}
       run: |
         if [[ "${INPUT_VERSION}" == "latest" ]]; then
           if [[ -n "${GITHUB_TOKEN:-}" ]]; then
@@ -86,6 +87,18 @@ runs:
           OPENCODE_VERSION="${INPUT_VERSION}"
         fi
         OPENCODE_VERSION="${OPENCODE_VERSION#v}"
+        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+          if [[ ! "${OPENCODE_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?(\+([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?$ ]]; then
+            echo "::error::Review-only requires OpenCode 1.2.14 or newer (got '${OPENCODE_VERSION}')." >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}" prerelease="${BASH_REMATCH[5]:-}"
+          if (( 10#${major} < 1 || (10#${major} == 1 && 10#${minor} < 2) || (10#${major} == 1 && 10#${minor} == 2 && 10#${patch} < 14) )) ||
+             [[ "${major}.${minor}.${patch}" == "1.2.14" && -n "${prerelease}" ]]; then
+            echo "::error::Review-only requires OpenCode 1.2.14 or newer (got '${OPENCODE_VERSION}')." >&2
+            exit 1
+          fi
+        fi
         echo "opencode-version=${OPENCODE_VERSION}" | tee -a "${GITHUB_OUTPUT}"
     - name: Copy bundled OpenCode config
       if: inputs.use-bundled-toolkit == 'true'
@@ -99,13 +112,29 @@ runs:
       if: inputs.review-only == 'true'
       shell: bash -euo pipefail {0}
       env:
-        ACTION_PATH: ${{ github.action_path }}
         USE_BUNDLED_TOOLKIT: ${{ inputs.use-bundled-toolkit }}
         PR_REVIEW_REF: ${{ inputs.pr-review-ref }}
-        OPENCODE_VERSION: ${{ steps.version.outputs.opencode-version }}
         GH_TOKEN: ${{ github.token }}
-      run: >
-        "${ACTION_PATH}/scripts/install-pr-review.sh"
+      run: |
+        if [[ "${USE_BUNDLED_TOOLKIT}" != "true" || ! "${PR_REVIEW_REF}" =~ ^[[:xdigit:]]{40}$ ]]; then
+          echo "::error::Review-only requires the bundled toolkit and a full immutable pr-review commit SHA." >&2
+          exit 1
+        fi
+        skill_dir="${HOME}/.config/opencode/skills/pr-review"
+        if [[ -L "${HOME}/.config" || -L "${HOME}/.config/opencode" ||
+              -L "${HOME}/.config/opencode/skills" || -e "${skill_dir}" || -L "${skill_dir}" ]]; then
+          echo "::error::Unsafe or existing pr-review destination." >&2
+          exit 1
+        fi
+        ref="$(printf '%s' "${PR_REVIEW_REF}" | tr '[:upper:]' '[:lower:]')"
+        gh skill install dceoy/pr-loop skills/pr-review --pin "${ref}" --agent opencode --scope user
+        for file in SKILL.md references/review-lenses.md references/finding-validation.md references/github-posting.md; do
+          test -f "${skill_dir}/${file}"
+        done
+        if find "${skill_dir}" -type l -print -quit | grep -q .; then
+          echo "::error::pr-review skill contains symlinks." >&2
+          exit 1
+        fi
     - name: Cache OpenCode
       id: cache
       if: inputs.review-only != 'true'
