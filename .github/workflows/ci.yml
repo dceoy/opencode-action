@@ -80,6 +80,7 @@ jobs:
       - shell-lint
       - bats-test
       - github-codeql-analysis
+      - pnpm-skill-install
     permissions:
       contents: write
       pull-requests: write
@@ -97,6 +98,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Verify pinned pr-review skill installation
         shell: bash -euo pipefail {0}
         run: |

@@ -53,6 +53,7 @@ grep -q 'skills: true' pnpm-workspace.yaml
 grep -q 'build: false' pnpm-workspace.yaml
 mkdir -p node_modules/pr-loop/skills .agents/skills
 cp -R "${SKILL_FIXTURE}" node_modules/pr-loop/skills/pr-review
+printf '%s\n' "pr-loop: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd" > pnpm-lock.yaml
 ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
 STUB
   chmod +x "${fake_bin}/corepack"
@@ -63,10 +64,34 @@ STUB
   [[ "${output}" == *"Installed pr-loop/pr-review at abcdef"* ]]
 }
 
+@test "fails closed when pnpm resolves a different commit" {
+  fake_bin="${BATS_TEST_TMPDIR}/mismatched-pnpm"
+  install_home="${BATS_TEST_TMPDIR}/mismatched-home"
+  mkdir -p "${fake_bin}" "${install_home}"
+  cat > "${fake_bin}/corepack" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p node_modules/pr-loop/skills .agents/skills
+cp -R "${SKILL_FIXTURE}" node_modules/pr-loop/skills/pr-review
+printf '%s\n' 'pr-loop: git+https://github.com/dceoy/pr-loop.git#0000000000000000000000000000000000000000' > pnpm-lock.yaml
+ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
+STUB
+  chmod +x "${fake_bin}/corepack"
+  run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    OPENCODE_VERSION=1.2.14 USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD \
+    bash "${repo_root}/scripts/install-pr-review.sh"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"does not resolve pr-loop to the pinned commit"* ]]
+  [ ! -e "${install_home}/.config/opencode/skills/pr-review" ]
+}
+
 @test "fails closed when pnpm returns no approved skill link" {
   fake_bin="${BATS_TEST_TMPDIR}/empty-pnpm"
   mkdir -p "${fake_bin}"
-  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${fake_bin}/corepack"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\\n" "pr-loop: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd" > pnpm-lock.yaml' \
+    'exit 0' > "${fake_bin}/corepack"
   chmod +x "${fake_bin}/corepack"
   run env HOME="${BATS_TEST_TMPDIR}/missing-home" PATH="${fake_bin}:${PATH}" \
     USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \

@@ -103,6 +103,11 @@ WORKSPACE
   # pnpm 12.11+ links approved agent skills without running package scripts.
   (cd "${checkout}" && corepack pnpm install --ignore-scripts --no-frozen-lockfile)
 
+  if ! grep -Fq "git+https://github.com/dceoy/pr-loop.git#${ref}" "${checkout}/pnpm-lock.yaml"; then
+    echo "::error::pnpm lockfile does not resolve pr-loop to the pinned commit." >&2
+    return 1
+  fi
+
   local linked_skill="${checkout}/.agents/skills/pnpm-pr-loop-pr-review" source_dir
   if [[ ! -L "${linked_skill}" ]]; then
     echo "::error::pnpm did not link the approved pr-loop/pr-review skill." >&2
