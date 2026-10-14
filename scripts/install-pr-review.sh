@@ -63,7 +63,7 @@ opencode_validate_review_version() {
 }
 
 install_pr_review() {
-  local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout
+  local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout checkout_dir
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     echo "::error::review-only requires use-bundled-toolkit: true." >&2
     return 1
@@ -76,7 +76,8 @@ install_pr_review() {
   ref="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]')"
   # Install only a pinned Git dependency in a temporary workspace, never in
   # the untrusted caller checkout or inherited OpenCode config.
-  checkout="$(mktemp -d)"
+  checkout_dir="$(mktemp -d)"
+  checkout="$(cd "${checkout_dir}" && pwd -P)"
   trap 'rm -rf "${checkout}"' RETURN
   mkdir -p "${checkout}/.agents/skills"
   cat > "${checkout}/package.json" << PACKAGE

@@ -70,7 +70,10 @@ LOCK
 ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
 STUB
   chmod +x "${fake_bin}/corepack"
+  mkdir -p "${BATS_TEST_TMPDIR}/real-tmp"
+  ln -s "${BATS_TEST_TMPDIR}/real-tmp" "${BATS_TEST_TMPDIR}/linked-tmp"
   run env HOME="${install_home}" PATH="${fake_bin}:${PATH}" SKILL_FIXTURE="${source_dir}" \
+    TMPDIR="${BATS_TEST_TMPDIR}/linked-tmp" \
     bash "${repo_root}/scripts/install-pr-review.sh"
   [ "${status}" -eq 0 ]
   [ -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md" ]
