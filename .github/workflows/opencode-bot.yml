@@ -3,79 +3,79 @@ name: OpenCode bot
 on:
   workflow_call:
     inputs:
-      model:
+      model: &input-model
         required: true
         type: string
         description: Model to use with OpenCode
-      agent:
+      agent: &input-agent
         required: false
         type: string
         description: Primary agent to use
         default: build
-      share:
+      share: &input-share
         required: false
         type: boolean
         description: Share the OpenCode session
         default: false
-      prompt:
+      prompt: &input-prompt
         required: false
         type: string
         description: Custom prompt to override the event comment
         default: ''
-      use-github-token:
+      use-github-token: &input-use-github-token
         required: false
         type: boolean
         description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange
         default: false
-      mentions:
+      mentions: &input-mentions
         required: false
         type: string
         description: Comma-separated list of trigger phrases
         default: /opencode,/oc
-      variant:
+      variant: &input-variant
         required: false
         type: string
         description: Provider-specific model variant
         default: ''
-      oidc-base-url:
+      oidc-base-url: &input-oidc-base-url
         required: false
         type: string
         description: Base URL for OIDC token exchange
         default: https://api.opencode.ai
-      opencode-version:
+      opencode-version: &input-opencode-version
         required: false
         type: string
         description: OpenCode version to install
         default: latest
-      use-bundled-toolkit:
+      use-bundled-toolkit: &input-use-bundled-toolkit
         required: false
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
-      review-only:
+      review-only: &input-review-only
         required: false
         type: boolean
         description: Install pr-loop/pr-review and isolate this review run
         default: false
-      pr-review-url:
+      pr-review-url: &input-pr-review-url
         required: false
         type: string
         description: Explicit GitHub PR URL for manual review-only runs
-      pr-review-head-sha:
+      pr-review-head-sha: &input-pr-review-head-sha
         required: false
         type: string
         description: Full reviewed head SHA for manual review-only runs
-      pr-review-ref:
+      pr-review-ref: &input-pr-review-ref
         required: false
         type: string
         description: Full immutable pr-loop commit SHA
         default: ''
-      timeout-minutes:
+      timeout-minutes: &input-timeout-minutes
         required: false
         type: number
         description: Maximum minutes to let OpenCode run
         default: 60
-      runs-on:
+      runs-on: &input-runs-on
         required: false
         type: string
         description: Runner to use
@@ -119,83 +119,22 @@ on:
         description: GitHub token for repository access
   workflow_dispatch:  # checkov:skip=CKV_GHA_7: Parameterized manual dispatch is an intentional trusted-operator interface.
     inputs:
-      model:
-        required: true
-        type: string
-        description: Model to use with OpenCode
-      agent:
-        required: false
-        type: string
-        description: Primary agent to use
-        default: build
-      share:
-        required: false
-        type: boolean
-        description: Share the OpenCode session
-        default: false
-      prompt:
-        required: false
-        type: string
-        description: Custom prompt to override the event comment
-        default: ''
-      use-github-token:
-        required: false
-        type: boolean
-        description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange
-        default: false
-      mentions:
-        required: false
-        type: string
-        description: Comma-separated list of trigger phrases
-        default: /opencode,/oc
-      variant:
-        required: false
-        type: string
-        description: Provider-specific model variant
-        default: ''
-      oidc-base-url:
-        required: false
-        type: string
-        description: Base URL for OIDC token exchange
-        default: https://api.opencode.ai
-      opencode-version:
-        required: false
-        type: string
-        description: OpenCode version to install
-        default: latest
-      use-bundled-toolkit:
-        required: false
-        type: boolean
-        description: Use the action's bundled OpenCode toolkit
-        default: true
-      review-only:
-        required: false
-        type: boolean
-        description: Install pr-loop/pr-review and isolate this review run
-        default: false
-      pr-review-url:
-        required: false
-        type: string
-        description: Explicit GitHub PR URL for manual review-only runs
-      pr-review-head-sha:
-        required: false
-        type: string
-        description: Full reviewed head SHA for manual review-only runs
-      pr-review-ref:
-        required: false
-        type: string
-        description: Full immutable pr-loop commit SHA
-        default: ''
-      timeout-minutes:
-        required: false
-        type: number
-        description: Maximum minutes to let OpenCode run
-        default: 60
-      runs-on:
-        required: false
-        type: string
-        description: Runner to use
-        default: ubuntu-latest
+      model: *input-model
+      agent: *input-agent
+      share: *input-share
+      prompt: *input-prompt
+      use-github-token: *input-use-github-token
+      mentions: *input-mentions
+      variant: *input-variant
+      oidc-base-url: *input-oidc-base-url
+      opencode-version: *input-opencode-version
+      use-bundled-toolkit: *input-use-bundled-toolkit
+      review-only: *input-review-only
+      pr-review-url: *input-pr-review-url
+      pr-review-head-sha: *input-pr-review-head-sha
+      pr-review-ref: *input-pr-review-ref
+      timeout-minutes: *input-timeout-minutes
+      runs-on: *input-runs-on
   issue_comment:
     types:
       - created
@@ -215,13 +154,7 @@ jobs:
         (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
         && github.event.comment.user.type != 'Bot'
         && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
-        && (
-          inputs.model != ''
-          || startsWith(github.event.comment.body, '/oc')
-          || contains(github.event.comment.body, ' /oc')
-          || startsWith(github.event.comment.body, '/opencode')
-          || contains(github.event.comment.body, ' /opencode')
-        )
+
       ) || (
         github.event_name != 'issue_comment'
         && github.event_name != 'pull_request_review_comment'
@@ -229,18 +162,69 @@ jobs:
       )
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
+      - name: Check configured comment mentions
+        id: comment-trigger
+        if: github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment'
+        shell: bash
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          MENTIONS: ${{ inputs.mentions || '/opencode,/oc' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import string
+
+          body = os.environ.get("COMMENT_BODY", "")
+          mention_values = os.environ.get("MENTIONS", "").split(",")
+          # Treat each configured mention as a standalone token or sequence:
+          # split on whitespace, then strip surrounding punctuation from both
+          # inputs while preserving meaningful sigils (e.g. /oc, @opencode)
+          # and internal hyphens (e.g. /team-review).
+          # Bounded sequences avoid matching URLs or longer words such as /octocat.
+          allowed = set(string.ascii_letters + string.digits + "_/-@")
+          strip_chars = "".join(char for char in string.punctuation if char not in allowed)
+
+          def tokenize(value):
+              tokens = []
+              for part in value.lower().split():
+                  token = part.strip(strip_chars)
+                  if token:
+                      tokens.append(token)
+              return tokens
+
+          body_tokens = tokenize(body)
+          mention_phrases = [tokenize(value) for value in mention_values]
+          mention_phrases = [phrase for phrase in mention_phrases if phrase]
+          matched = any(
+              phrase == body_tokens[index : index + len(phrase)]
+              for phrase in mention_phrases
+              for index in range(len(body_tokens) - len(phrase) + 1)
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"matched={str(matched).lower()}\n")
+          PY
       - name: Checkout repository
+        if: >-
+          (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+          || steps.comment-trigger.outputs.matched == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 1
           token: ${{ secrets.GH_TOKEN || github.token }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
           persist-credentials: ${{ inputs.use-github-token }}
       - name: Configure Git identity
-        if: inputs.use-github-token
+        if: >-
+          inputs.use-github-token && (
+            (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+            || steps.comment-trigger.outputs.matched == 'true'
+          )
         run: |
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
       - name: Run OpenCode
+        if: >-
+          (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+          || steps.comment-trigger.outputs.matched == 'true'
         uses: $/.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

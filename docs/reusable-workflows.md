@@ -37,7 +37,7 @@ jobs:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 ```
 
-For comment events, the reusable workflow accepts comments only from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations. On non-comment events, a non-empty `prompt` is required.
+For comment events, the reusable workflow accepts comments only from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations **and** requires a configured `mentions` phrase in the comment body (case-insensitive). Supplying the required `model` input does not bypass either condition. On non-comment events, a non-empty `prompt` is required.
 
 ## Pull request review
 
@@ -91,7 +91,7 @@ Both reusable workflows expose the action configuration plus a runner input:
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs.
+Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs. Its input mappings reference the `workflow_call` definitions via GitHub Actions YAML anchors to avoid drift.
 
 GitHub.com's `$/path` self repository syntax resolves to the repository and commit of the workflow where it appears, including when that workflow is called from another repository. These workflows use `$/.` because the action is defined at the repository root. GitHub Enterprise Server does not support this syntax.
 

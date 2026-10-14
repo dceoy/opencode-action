@@ -120,14 +120,9 @@ jobs:
   opencode-review:
     if: >
       github.event_name == 'pull_request'
-      && (
-        inputs.model != ''
-        || (
-          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
-          && (! github.event.pull_request.draft)
-          && github.event.pull_request.user.type != 'Bot'
-        )
-      )
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      && (! github.event.pull_request.draft)
+      && github.event.pull_request.user.type != 'Bot'
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository

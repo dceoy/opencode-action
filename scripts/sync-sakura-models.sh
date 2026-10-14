@@ -8,7 +8,8 @@ default_model='preview/Kimi-K2.7-Code'
 
 is_known_non_chat_model() {
   case "$1" in
-    multilingual-e5-large | preview/Qwen3-Embedding-4B-FP16 | whisper-large-v3-turbo)
+    # Skip unambiguous non-chat model families before probing completions.
+    multilingual-e5-large | *[Ee]mbedding* | *[Ww]hisper*)
       return 0
       ;;
     *)

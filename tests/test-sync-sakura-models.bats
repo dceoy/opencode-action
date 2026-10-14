@@ -59,10 +59,10 @@ if [[ "${url}" == */models ]]; then
     printf '%s\n' '{"data":[{"id":"multilingual-e5-large"},{"id":"preview/Qwen3-Embedding-4B-FP16"},{"id":"whisper-large-v3-turbo"}]}'
     ;;
   ambiguous-400)
-    printf '%s\n' '{"data":[{"id":"embedding-x"}]}'
+    printf '%s\n' '{"data":[{"id":"unknown-non-chat"}]}'
     ;;
   mixed-models)
-    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"multilingual-e5-large"},{"id":"preview/Qwen3-Embedding-4B-FP16"},{"id":"whisper-large-v3-turbo"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
+    printf '%s\n' '{"data":[{"id":"chat-b"},{"id":"multilingual-e5-large"},{"id":"preview/Qwen3-Embedding-4B-FP16"},{"id":"preview/New-Embedding-4B"},{"id":"whisper-large-v3-turbo"},{"id":"chat-a"},{"id":"preview/Kimi-K2.7-Code"}]}'
     ;;
   brace-model)
   printf '%s\n' '{"data":[{"id":"chat-{brace}"},{"id":"preview/Kimi-K2.7-Code"}]}'
@@ -105,7 +105,7 @@ probe-transport)
   exit 7
   ;;
 *)
-  if [[ "${model}" == embedding-x ]]; then
+  if [[ "${model}" == unknown-non-chat ]]; then
   status=400
   body='{"error":"unsupported"}'
   else
@@ -160,7 +160,7 @@ MOCK
   for model in chat-a chat-b preview/Kimi-K2.7-Code; do
     grep -Fq "\"${model}\"" "${config_path}"
   done
-  for model in multilingual-e5-large preview/Qwen3-Embedding-4B-FP16 whisper-large-v3-turbo; do
+  for model in multilingual-e5-large preview/Qwen3-Embedding-4B-FP16 preview/New-Embedding-4B whisper-large-v3-turbo; do
     run grep -Fq "\"${model}\"" "${config_path}"
     [ "${status}" -eq 1 ]
     run grep -Fqx "${model}" "${probe_log}"
@@ -176,7 +176,7 @@ MOCK
     'probe-error|Failed to probe Sakura model chat-a (HTTP 429).'
     'probe-transport|Failed to probe Sakura model chat-a.'
     'all-non-chat|Sakura returned no usable chat models; refusing to update the config.'
-    'ambiguous-400|Failed to probe Sakura model embedding-x (HTTP 400); refusing to classify it as non-chat.'
+    'ambiguous-400|Failed to probe Sakura model unknown-non-chat (HTTP 400); refusing to classify it as non-chat.'
     'missing-default|Required Sakura model preview/Kimi-K2.7-Code is unavailable; refusing to update the config.'
   )
 
