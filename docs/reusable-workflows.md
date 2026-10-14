@@ -41,7 +41,7 @@ For comment events, the reusable workflow accepts comments only from `OWNER`, `M
 
 ## Pull request review
 
-Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its `prompt` defaults to a plain-text review instruction.
+Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its default `/pr-review` prompt loads the skill, while plain-text prompts can narrow review focus.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -72,20 +72,20 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 ## Inputs
 
-Both reusable workflows expose the action configuration plus a runner input:
+Both reusable workflows expose the action configuration plus a runner input. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `model`               | Required                                                            | Model in `provider/model` format.                             |
-| `agent`               | `build`                                                             | Primary agent; ignored for review-only runs.                  |
+| `agent`               | `build`                                                             | Primary agent; review-only runs override it.                  |
 | `share`               | `false`                                                             | Share the OpenCode session.                                   |
 | `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
 | `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                     | Comma-separated trigger phrases.                              |
+| `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
-| `use-bundled-toolkit` | `true`                                                              | Use the bundled OpenCode toolkit.                             |
+| `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
 | `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | Workflow pin or caller SHA                                          | Immutable `pr-loop` commit providing the reviewer.            |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
