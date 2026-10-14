@@ -170,7 +170,7 @@ runs:
             exit 1
           fi
           ref="$(printf '%s' "${PR_REVIEW_REF}" | tr '[:upper:]' '[:lower:]')"
-          review_install_token="${PR_REVIEW_INSTALL_TOKEN:?PR_REVIEW_INSTALL_TOKEN is required}"
+          review_install_token="${PR_REVIEW_INSTALL_TOKEN:-}"
           unset PR_REVIEW_INSTALL_TOKEN
           GH_TOKEN="${review_install_token}" gh skill install dceoy/pr-loop skills/pr-review --pin "${ref}" --agent opencode --scope user
           unset review_install_token
