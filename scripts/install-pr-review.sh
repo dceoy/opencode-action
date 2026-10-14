@@ -1,24 +1,18 @@
 #!/usr/bin/env bash
-# Install only pr-loop's pr-review skill and its relative reference files.
-pr_review_copy_skill() {
-  local source_dir="${1}" target_dir="${2}" parent
-  parent="$(dirname "${target_dir}")"
+# Install a SHA-pinned upstream Skill directly into isolated OpenCode user config.
+pr_review_finalize_skill() {
+  local target_dir="${1}" rel
   for rel in SKILL.md references/review-lenses.md references/finding-validation.md references/github-posting.md; do
-    if [[ ! -f "${source_dir}/${rel}" ]]; then
+    if [[ ! -f "${target_dir}/${rel}" ]]; then
       echo "::error::Missing pr-review skill file: ${rel}" >&2
       return 1
     fi
   done
-  if find "${source_dir}" -type l -print -quit | grep -q .; then
-    echo "::error::pr-review source contains symbolic links." >&2
+  if find "${target_dir}" -type l -print -quit | grep -q .; then
+    echo "::error::pr-review skill contains symbolic links." >&2
     return 1
   fi
-  if [[ -L "${parent}" || -e "${target_dir}" || -L "${target_dir}" ]]; then
-    echo "::error::Refusing to overwrite or follow an existing pr-review skill destination." >&2
-    return 1
-  fi
-  mkdir -p "${parent}"
-  cp -R "${source_dir}" "${target_dir}"
+  # OpenCode requires explicit slash metadata; gh adds source metadata separately.
   python3 - "${target_dir}/SKILL.md" << 'PYCODE'
 import re
 import sys
@@ -40,6 +34,7 @@ else:
 path.write_text("---" + frontmatter + "---" + parts[2])
 PYCODE
 }
+
 opencode_validate_review_version() {
   local original_version="${1:-}" version major minor patch prerelease
   version="${original_version#v}"
@@ -63,7 +58,7 @@ opencode_validate_review_version() {
 }
 
 install_pr_review() {
-  local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" checkout
+  local ref="${PR_REVIEW_REF:?PR_REVIEW_REF is required}" target_dir
   if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" ]]; then
     echo "::error::review-only requires use-bundled-toolkit: true." >&2
     return 1
@@ -74,16 +69,26 @@ install_pr_review() {
   fi
   opencode_validate_review_version "${OPENCODE_VERSION:-}" || return 1
   ref="$(printf '%s' "${ref}" | tr '[:upper:]' '[:lower:]')"
-  checkout="$(mktemp -d)"
-  trap 'rm -rf "${checkout}"' RETURN
-  git -C "${checkout}" init -q
-  git -C "${checkout}" -c protocol.version=2 fetch -q --no-tags --depth=1 https://github.com/dceoy/pr-loop.git "${ref}"
-  git -C "${checkout}" checkout -q --detach FETCH_HEAD
-  if [[ "$(git -C "${checkout}" rev-parse HEAD)" != "${ref}" ]]; then
-    echo "::error::Downloaded pr-loop commit does not match the pinned SHA." >&2
+  target_dir="${HOME}/.config/opencode/skills/pr-review"
+  if [[ -L "${HOME}/.config" || -L "${HOME}/.config/opencode" ||
+        -L "${HOME}/.config/opencode/skills" || -e "${target_dir}" || -L "${target_dir}" ]]; then
+    echo "::error::Refusing unsafe or existing pr-review destination." >&2
     return 1
   fi
-  pr_review_copy_skill "${checkout}/skills/pr-review" "${HOME}/.config/opencode/skills/pr-review"
+  if ! gh skill install --help > /dev/null 2>&1; then
+    echo "::error::gh skill requires GitHub CLI v2.90.0 or newer." >&2
+    return 1
+  fi
+  # gh handles commit pinning and copies the exact Skill without npm lifecycle scripts.
+  if ! gh skill install dceoy/pr-loop skills/pr-review --pin "${ref}" --agent opencode --scope user; then
+    rm -rf "${target_dir}"
+    echo "::error::Failed to install the pinned pr-review Skill." >&2
+    return 1
+  fi
+  if ! pr_review_finalize_skill "${target_dir}"; then
+    rm -rf "${target_dir}"
+    return 1
+  fi
   echo "Installed pr-loop/pr-review at ${ref}"
 }
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
