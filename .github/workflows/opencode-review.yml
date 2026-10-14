@@ -115,7 +115,7 @@ permissions:
   id-token: write
   actions: read
 env:
-  PR_LOOP_REF: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
+  PR_LOOP_REF: f4748ae3d1e8eb6d7a2794eff9c1ff32c35dedd4  # v1.0.0
 jobs:
   opencode-review:
     if: >
