@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run GitHub CLI commands through a verified OpenCode GitHub App identity.
+# Run scoped GitHub reads and commit-bound review publication.
 # This runs inside opencode github run, after its OIDC token exchange.
 set -euo pipefail
 
@@ -257,10 +257,13 @@ print(json.dumps(p))
 
   # shellcheck source=.opencode/scripts/resolve-app-token.sh
   source "${script_dir}/resolve-app-token.sh"
-  opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}" || return 1
   if [[ "${method}" == POST ]]; then
+    opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}" || return 1
     exec gh "$@" <<< "${payload}"
   else
+    # Evidence may take many bounded reads. Identity verification creates and
+    # deletes a pending review, so reserve it for the final publication.
+    opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
     exec gh "$@"
   fi
 }

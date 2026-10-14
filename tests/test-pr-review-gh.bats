@@ -10,7 +10,7 @@ setup() {
   git init -q "${temp_repo}"
   mkdir -p "${fake_bin}"
   request_home="${BATS_TEST_TMPDIR}/home"
-  request_head=""
+  request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
   request_file="${BATS_TEST_TMPDIR}/request.json"
   mkdir -p "$(dirname "${request_file}")"
   cat > "${fake_bin}/gh" << 'STUB'
@@ -58,7 +58,9 @@ set_git_candidate() {
 
 run_wrapper() {
   run env -u GH_TOKEN -u GITHUB_TOKEN \
-    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" \
+    GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" PATH="${fake_bin}:${PATH}" \
+    PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" PR_REVIEW_HEAD_SHA="${request_head}" \
     bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" "$@"
 }
 
@@ -70,30 +72,58 @@ run_request() {
     bash -c 'cd "$1"; bash "$2" --request-stdin < "$3"' _ "${temp_repo}" "${wrapper}" "${request_file}"
 }
 
+assert_no_matching_lines() {
+  local pattern="$1" file="$2" count
+  count="$(grep -Ec -- "${pattern}" "${file}" || true)"
+  [ "${count}" -eq 0 ]
+}
+
 @test "publishes using verified OpenCode GitHub App token" {
   set_git_candidate ghs_verified
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews
+  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
+  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
   [ "${status}" -eq 0 ]
-  [[ "${output}" == *"GITHUB_IDENTITY_TOKEN=ghs_verified"* ]]
-  [[ "${output}" == *"ARGUMENTS=api repos/dceoy/opencode-action/pulls/127/reviews"* ]]
+  [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 2 ]
+  [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
+  jq -e '.event == "COMMENT" and .body == "Reviewed"' "${BATS_TEST_TMPDIR}/payload"
 }
 
 @test "rejects an unverified candidate with default policy" {
   set_git_candidate ghs_wrong
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews
+  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
+  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Unable to resolve and verify an OpenCode GitHub App token"* ]]
   [[ "${output}" != *"GITHUB_IDENTITY_TOKEN="* ]]
+  [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
+  [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
+  jq -e 'keys | length == 0' "${BATS_TEST_TMPDIR}/payload"
+}
+
+@test "read requests use a candidate token without creating identity probes" {
+  set_git_candidate ghs_wrong
+  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"GITHUB_IDENTITY_TOKEN=ghs_wrong"* ]]
+  [ "$(wc -c < "${BATS_TEST_TMPDIR}/gh-calls")" -eq 1 ]
+  grep -q -- '--method GET' "${BATS_TEST_TMPDIR}/gh-args"
+  assert_no_matching_lines '--method (POST|DELETE)' "${BATS_TEST_TMPDIR}/gh-args"
 }
 
 @test "explicit workflow-token fallback is permitted" {
   set_git_candidate ghs_wrong
+  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
   run env GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" \
+    GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
     GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok USE_GITHUB_TOKEN=true \
     PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
-    bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" api repos/dceoy/opencode-action/pulls/127/reviews
+    PR_REVIEW_HEAD_SHA="${request_head}" \
+    bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" \
+    api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
   [ "${status}" -eq 0 ]
-  [[ "${output}" == *"GITHUB_IDENTITY_TOKEN=workflow_tok"* ]]
+  [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 2 ]
+  [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
+  jq -e '.event == "COMMENT" and .body == "Reviewed"' "${BATS_TEST_TMPDIR}/payload"
 }
 
 @test "rejects invalid event PR URL before accessing credentials" {
@@ -150,8 +180,8 @@ run_request() {
   [ "${status}" -eq 0 ]
   jq -e '.page == 1 and .next_page == null and .next_offset == null' <<< "${output}"
   grep -q 'pulls/127/reviews?per_page=10&page=1' "${BATS_TEST_TMPDIR}/gh-args"
-  run ! grep -q -- '--paginate' "${BATS_TEST_TMPDIR}/gh-args"
-  [ "${status}" -eq 0 ]
+  assert_no_matching_lines '--method (POST|DELETE)' "${BATS_TEST_TMPDIR}/gh-args"
+  assert_no_matching_lines '--paginate' "${BATS_TEST_TMPDIR}/gh-args"
   request_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
   printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
   run_request
@@ -195,7 +225,7 @@ run_request() {
 @test "structured response pages reconstruct oversized metadata and Unicode blobs" {
   set_git_candidate ghs_verified
   run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
-    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" \
+    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" PATH="${fake_bin}:${PATH}" \
     PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
     python3 - "${wrapper}" "${temp_repo}" "${BATS_TEST_TMPDIR}" << 'PYCODE'
 import base64
@@ -228,6 +258,9 @@ for kind in ["metadata", "blob"]:
         if offset is None:
             break
     assert "".join(chunks) == text
+args = Path(temporary, "gh-args").read_text().splitlines()
+assert args and all("--method GET" in line for line in args)
+assert not any("--method POST" in line or "--method DELETE" in line for line in args)
 PYCODE
   [ "${status}" -eq 0 ]
 }
@@ -313,7 +346,7 @@ PYCODE
 
 @test "pagination rejects singleton and immutable endpoints before auth" {
   for endpoint in repos/dceoy/opencode-action/pulls/127 \
-      repos/dceoy/opencode-action/git/blobs/abcdefabcdefabcdefabcdefabcdefabcdefabcd; do
+    repos/dceoy/opencode-action/git/blobs/abcdefabcdefabcdefabcdefabcdefabcdefabcd; do
     printf '{"endpoint":"%s","paginate":true}' "${endpoint}" > "${request_file}"
     run_request
     [ "${status}" -ne 0 ]
