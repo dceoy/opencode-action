@@ -2,6 +2,7 @@
 setup() {
   repo_root="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
   install_step="${BATS_TEST_TMPDIR}/install.sh"
+  run_step="${BATS_TEST_TMPDIR}/run-opencode.sh"
   version_step="${BATS_TEST_TMPDIR}/version.sh"
   awk -v name="Get OpenCode version" '
     $0 == "    - name: " name { step=1; next }
@@ -18,6 +19,12 @@ setup() {
     install { sub(/^        /, ""); print }
   ' "${repo_root}/action.yml" > "${install_step}"
   [ -s "${install_step}" ]
+  awk '
+    $0 == "    - name: Run OpenCode" { step=1; next }
+    step && /^      run: \|$/ { script=1; next }
+    script { sub(/^        /, ""); print }
+  ' "${repo_root}/action.yml" > "${run_step}"
+  [ -s "${run_step}" ]
   install_home="${BATS_TEST_TMPDIR}/home"
   mkdir -p "${install_home}"
   pin=ddd538f6e9347b13cf6aaebfbda86ba704ee8415
@@ -76,6 +83,210 @@ EOF
   [ "${status}" -eq 0 ]
   [ "$(cat "${token_capture}")" = installer-token ]
   [ "$(cat "${caller_capture}")" = caller-token: ]
+}
+
+@test "review-only installs and runs a fresh binary without persisting its temporary PATH" {
+  for example in 'matching|1.2.14' 'different|1.2.13'; do
+    IFS='|' read -r case_name inherited_version <<< "${example}"
+    case_root="${BATS_TEST_TMPDIR}/${case_name}"
+    original_home="${case_root}/original-home"
+    runner_temp="${case_root}/runner-temp"
+    mock_bin="${case_root}/bin"
+    mock_action="${case_root}/action"
+    path_file="${case_root}/github-path"
+    run_capture="${case_root}/run-capture"
+    home_capture="${case_root}/home-capture"
+    installer_path_capture="${case_root}/installer-path"
+    old_binary_capture="${case_root}/old-binary-used"
+    installer_fixture="${case_root}/installer.sh"
+    mkdir -p "${original_home}/.opencode/bin" "${runner_temp}" "${mock_bin}" "${mock_action}/scripts"
+    echo 'preserve this home' > "${original_home}/sentinel"
+    echo '/existing/github/path' > "${path_file}"
+    cat > "${original_home}/.opencode/bin/opencode" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo used >> "${OLD_BINARY_CAPTURE}"
+echo "opencode ${INHERITED_VERSION}"
+EOF
+    cat > "${mock_bin}/gh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+skill_dir="${HOME}/.config/opencode/skills/pr-review"
+mkdir -p "${skill_dir}/references"
+for file in SKILL.md references/review-lenses.md references/finding-validation.md references/github-posting.md; do
+  touch "${skill_dir}/${file}"
+done
+EOF
+    cat > "${mock_bin}/curl" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cat "${INSTALLER_FIXTURE}"
+EOF
+    cat > "${mock_action}/scripts/prepare-opencode-config.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
+    cat > "${mock_action}/scripts/run-opencode.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+{
+  echo "${HOME}"
+  command -v opencode
+  opencode --version
+} > "${RUN_CAPTURE}"
+EOF
+    cat > "${installer_fixture}" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+specific_version=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --version)
+      specific_version="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+[[ "${GITHUB_PATH}" == /dev/null ]]
+echo "${HOME}" > "${HOME_CAPTURE}"
+echo "${PATH}" > "${INSTALLER_PATH_CAPTURE}"
+if command -v opencode >/dev/null 2>&1; then
+  installed_version="$(opencode --version 2>/dev/null || echo '')"
+  installed_version="${installed_version##* }"
+  if [[ "${installed_version}" == "${specific_version}" ]]; then
+    exit 0
+  fi
+fi
+mkdir -p "${HOME}/.opencode/bin"
+cat > "${HOME}/.opencode/bin/opencode" << BINARY
+#!/usr/bin/env bash
+echo "opencode ${specific_version}"
+BINARY
+chmod +x "${HOME}/.opencode/bin/opencode"
+EOF
+    chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/gh" "${mock_bin}/curl" \
+      "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
+
+    run env HOME="${original_home}" RUNNER_TEMP="${runner_temp}" REVIEW_ONLY=true \
+      USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${pin}" PR_REVIEW_INSTALL_TOKEN="" \
+      OPENCODE_VERSION=1.2.14 ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
+      PATH="${original_home}/.opencode/bin:${mock_bin}:${PATH}" INSTALLER_FIXTURE="${installer_fixture}" \
+      HOME_CAPTURE="${home_capture}" INSTALLER_PATH_CAPTURE="${installer_path_capture}" \
+      OLD_BINARY_CAPTURE="${old_binary_capture}" INHERITED_VERSION="${inherited_version}" \
+      RUN_CAPTURE="${run_capture}" bash "${run_step}"
+    [ "${status}" -eq 0 ]
+    [ ! -e "${old_binary_capture}" ]
+    [[ "$(cat "${installer_path_capture}")" != *"${original_home}/.opencode/bin"* ]]
+    [ "$(cat "${path_file}")" = '/existing/github/path' ]
+    [ "$(sed -n '3p' "${run_capture}")" = 'opencode 1.2.14' ]
+    review_home="$(cat "${home_capture}")"
+    [ "$(sed -n '1p' "${run_capture}")" = "${review_home}" ]
+    [ "$(sed -n '2p' "${run_capture}")" = "${review_home}/.opencode/bin/opencode" ]
+    [ ! -e "${review_home}" ]
+    [ -f "${original_home}/.opencode/bin/opencode" ]
+    [ "$(cat "${original_home}/sentinel")" = 'preserve this home' ]
+  done
+}
+
+@test "review-only fails if the installer does not create a binary in its fresh home" {
+  case_root="${BATS_TEST_TMPDIR}/missing-binary"
+  original_home="${case_root}/original-home"
+  runner_temp="${case_root}/runner-temp"
+  mock_bin="${case_root}/bin"
+  mock_action="${case_root}/action"
+  path_file="${case_root}/github-path"
+  home_capture="${case_root}/home-capture"
+  run_capture="${case_root}/run-capture"
+  mkdir -p "${original_home}" "${runner_temp}" "${mock_bin}" "${mock_action}/scripts"
+  echo '/existing/github/path' > "${path_file}"
+  cat > "${mock_bin}/gh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+skill_dir="${HOME}/.config/opencode/skills/pr-review"
+mkdir -p "${skill_dir}/references"
+for file in SKILL.md references/review-lenses.md references/finding-validation.md references/github-posting.md; do
+  touch "${skill_dir}/${file}"
+done
+EOF
+  cat > "${mock_bin}/curl" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cat "${INSTALLER_FIXTURE}"
+EOF
+  cat > "${case_root}/installer.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${GITHUB_PATH}" == /dev/null ]]
+echo "${HOME}" > "${HOME_CAPTURE}"
+EOF
+  cat > "${mock_action}/scripts/prepare-opencode-config.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
+  cat > "${mock_action}/scripts/run-opencode.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo started > "${RUN_CAPTURE}"
+EOF
+  chmod +x "${mock_bin}/gh" "${mock_bin}/curl" "${case_root}/installer.sh" \
+    "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
+
+  run env HOME="${original_home}" RUNNER_TEMP="${runner_temp}" REVIEW_ONLY=true \
+    USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${pin}" PR_REVIEW_INSTALL_TOKEN="" \
+    OPENCODE_VERSION=1.2.14 ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
+    PATH="${mock_bin}:${PATH}" INSTALLER_FIXTURE="${case_root}/installer.sh" \
+    HOME_CAPTURE="${home_capture}" RUN_CAPTURE="${run_capture}" bash "${run_step}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"did not install a binary in the isolated HOME"* ]]
+  [ ! -e "${run_capture}" ]
+  [ "$(cat "${path_file}")" = '/existing/github/path' ]
+  [ ! -e "$(cat "${home_capture}")" ]
+}
+
+@test "normal runs keep using the caller OpenCode binary without the review installer" {
+  case_root="${BATS_TEST_TMPDIR}/normal-run"
+  original_home="${case_root}/home"
+  mock_bin="${case_root}/bin"
+  mock_action="${case_root}/action"
+  path_file="${case_root}/github-path"
+  run_capture="${case_root}/run-capture"
+  curl_capture="${case_root}/curl-capture"
+  mkdir -p "${original_home}/.opencode/bin" "${mock_bin}" "${mock_action}/scripts"
+  echo '/existing/github/path' > "${path_file}"
+  cat > "${original_home}/.opencode/bin/opencode" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo 'opencode 1.2.14'
+EOF
+  cat > "${mock_bin}/curl" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo invoked > "${CURL_CAPTURE}"
+exit 1
+EOF
+  cat > "${mock_action}/scripts/run-opencode.sh" << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+{
+  echo "${HOME}"
+  command -v opencode
+  opencode --version
+} > "${RUN_CAPTURE}"
+EOF
+  chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/curl" "${mock_action}/scripts/run-opencode.sh"
+
+  run env HOME="${original_home}" REVIEW_ONLY=false ACTION_PATH="${mock_action}" \
+    GITHUB_PATH="${path_file}" PATH="${original_home}/.opencode/bin:${mock_bin}:${PATH}" \
+    RUN_CAPTURE="${run_capture}" CURL_CAPTURE="${curl_capture}" bash "${run_step}"
+  [ "${status}" -eq 0 ]
+  [ ! -e "${curl_capture}" ]
+  [ "$(sed -n '1p' "${run_capture}")" = "${original_home}" ]
+  [ "$(sed -n '2p' "${run_capture}")" = "${original_home}/.opencode/bin/opencode" ]
+  [ "$(sed -n '3p' "${run_capture}")" = 'opencode 1.2.14' ]
+  [ "$(cat "${path_file}")" = '/existing/github/path' ]
 }
 
 @test "real gh skill installs only the SHA-pinned review skill" {

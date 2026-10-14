@@ -181,7 +181,24 @@ runs:
             echo "::error::pr-review skill contains symlinks." >&2
             exit 1
           fi
-          curl -fsSL https://opencode.ai/install | bash -s -- --version "${OPENCODE_VERSION}"
+          review_install_path=""
+          IFS=: read -r -a inherited_path_entries <<< "${PATH}"
+          for path_entry in "${inherited_path_entries[@]}"; do
+            [[ -n "${path_entry}" ]] || continue
+            if [[ -x "${path_entry}/opencode" || -x "${path_entry}/opencode.exe" ]]; then
+              continue
+            fi
+            if [[ -n "${review_install_path}" ]]; then
+              review_install_path+=:
+            fi
+            review_install_path+="${path_entry}"
+          done
+          curl -fsSL https://opencode.ai/install |
+            PATH="${review_install_path}" GITHUB_PATH=/dev/null bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
+          if [[ ! -x "${HOME}/.opencode/bin/opencode" && ! -x "${HOME}/.opencode/bin/opencode.exe" ]]; then
+            echo "::error::OpenCode installer did not install a binary in the isolated HOME." >&2
+            exit 1
+          fi
           export PATH="${HOME}/.opencode/bin:${PATH}"
         fi
         "${ACTION_PATH}/scripts/run-opencode.sh"
