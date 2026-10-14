@@ -317,7 +317,7 @@ EOF
   if [[ "${GH_SKILL_SMOKE:-false}" != true ]]; then
     skip "real gh skill install runs in CI"
   fi
-  pin="$(sed -n -E 's/^  PR_LOOP_REF: ([a-f0-9]{40}).*/\1/p' "${repo_root}/.github/workflows/opencode-review.yml")"
+  pin="$(cut -d ' ' -f 1 "${repo_root}/.github/pr-loop-ref")"
   [[ "${pin}" =~ ^[a-f0-9]{40}$ ]]
   run env HOME="${install_home}" PR_REVIEW_REF="${pin}" USE_BUNDLED_TOOLKIT=true \
     PR_REVIEW_INSTALL_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}" bash "${install_step}"
