@@ -108,7 +108,7 @@ WORKSPACE
     echo "::error::pnpm did not link the approved pr-loop/pr-review skill." >&2
     return 1
   fi
-  source_dir="$(realpath -e "${linked_skill}")" || return 1
+  source_dir="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve(strict=True))' "${linked_skill}")" || return 1
   case "${source_dir}" in
     "${checkout}/node_modules/"*) ;;
     *)
