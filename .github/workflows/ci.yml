@@ -58,6 +58,7 @@ jobs:
         corepack pnpm install --frozen-lockfile
         (cd node_modules/opencode-ai && node postinstall.mjs)
         echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> "${GITHUB_PATH}"
+        echo "GH_SKILL_SMOKE=true" >> "${GITHUB_ENV}"
   github-codeql-analysis:
     if: >
       github.event_name == 'push'
