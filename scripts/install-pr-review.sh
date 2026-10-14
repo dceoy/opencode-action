@@ -23,15 +23,31 @@ text = path.read_text()
 parts = text.split("---", 2)
 if len(parts) != 3 or parts[0].strip():
     raise SystemExit("pr-review skill must contain YAML frontmatter")
-frontmatter = parts[1]
-if re.search(r"^metadata:\s*$", frontmatter, re.MULTILINE):
-    if re.search(r"^  opencode/slash:.*$", frontmatter, re.MULTILINE):
-        frontmatter = re.sub(r"^  opencode/slash:.*$", '  opencode/slash: "true"', frontmatter, flags=re.MULTILINE)
+lines = parts[1].splitlines(keepends=True)
+for index, line in enumerate(lines):
+    if line.strip() != "metadata:" or line[:1].isspace():
+        continue
+    end = index + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1].isspace()):
+        end += 1
+    children = [
+        child for child in lines[index + 1 : end]
+        if child.strip() and not child.lstrip().startswith("#")
+    ]
+    # gh skill indents its github-* entries by four spaces, not two.
+    indent = min((re.match(r"[ \t]+", child).group(0) for child in children), key=len) if children else "  "
+    for child_index in range(index + 1, end):
+        if lines[child_index].startswith(f"{indent}opencode/slash:"):
+            lines[child_index] = f'{indent}opencode/slash: "true"\n'
+            break
     else:
-        frontmatter = re.sub(r"^metadata:\s*$", 'metadata:\n  opencode/slash: "true"', frontmatter, count=1, flags=re.MULTILINE)
+        lines.insert(index + 1, f'{indent}opencode/slash: "true"\n')
+    break
 else:
-    frontmatter += 'metadata:\n  opencode/slash: "true"\n'
-path.write_text("---" + frontmatter + "---" + parts[2])
+    if any(re.match(r"^metadata\s*:", line) for line in lines):
+        raise SystemExit("Unsupported metadata frontmatter format")
+    lines.extend(['metadata:\n', '  opencode/slash: "true"\n'])
+path.write_text("---" + "".join(lines) + "---" + parts[2])
 PYCODE
 }
 
