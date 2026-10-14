@@ -138,11 +138,28 @@ jobs:
         if: inputs.pr-review-ref == ''
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [[ "${GITHUB_REPOSITORY}" == 'dceoy/opencode-action' && -f .github/pr-loop-ref ]]; then
-            pin="$(cat .github/pr-loop-ref)"
-          else
-            pin="$(gh api 'repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=main' -H 'Accept: application/vnd.github.raw+json')"
+          ref="${WORKFLOW_SHA}"
+          if [[ "${GITHUB_REPOSITORY}" == 'dceoy/opencode-action' && "${EVENT_NAME}" == 'pull_request' ]]; then
+            ref="${PR_BASE_SHA}"
+          fi
+          if [[ ! "${ref}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Invalid reusable workflow/base commit SHA.' >&2
+            exit 1
+          fi
+          if ! pin="$(gh api "repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=${ref}" \
+                       -H 'Accept: application/vnd.github.raw+json' 2>/dev/null)"; then
+            # During migration, the trusted base revision may still use the legacy inline pin.
+            if [[ "${GITHUB_REPOSITORY}" != 'dceoy/opencode-action' || "${EVENT_NAME}" != 'pull_request' ]]; then
+              echo 'Could not resolve default pr-loop pin.' >&2
+              exit 1
+            fi
+            legacy="$(gh api "repos/dceoy/opencode-action/contents/.github/workflows/opencode-review.yml?ref=${ref}" \
+                         -H 'Accept: application/vnd.github.raw+json')"
+            pin="$(sed -n -E 's/^  PR_LOOP_REF: ([0-9a-f]{40})  # (v[0-9]+\.[0-9]+\.[0-9]+)$/\1  # \2/p' <<< "${legacy}")"
           fi
           read -r sha marker version extra <<< "${pin}"
           if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ || "${marker}" != '#' ||
