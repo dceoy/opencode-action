@@ -114,8 +114,6 @@ permissions:
   issues: write
   id-token: write
   actions: read
-env:
-  PR_LOOP_REF: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
 jobs:
   opencode-review:
     if: >
@@ -136,6 +134,19 @@ jobs:
         run: |
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
+      - name: Resolve default pr-loop pin
+        if: inputs.pr-review-ref == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pin="$(gh api 'repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=main' -H 'Accept: application/vnd.github.raw+json')"
+          read -r sha marker version extra <<< "${pin}"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ || "${marker}" != '#' ||
+                ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || -n "${extra:-}" ]]; then
+            echo 'Invalid default pr-loop release pin.' >&2
+            exit 1
+          fi
+          printf 'PR_LOOP_REF=%s\n' "${sha}" >> "${GITHUB_ENV}"
       - name: Run OpenCode
         uses: $/.
         env:
