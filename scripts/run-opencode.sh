@@ -308,9 +308,6 @@ opencode_configure_run() {
       "${HOME}/.config/opencode/commands"
     )
   fi
-  if [[ "${USE_BUNDLED_TOOLKIT:-false}" == "true" && "${REVIEW_ONLY:-false}" != "true" ]]; then
-    command_dirs+=("${ACTION_PATH}/.opencode/commands")
-  fi
 
   opencode_resolve_prompt_and_agent \
     "${OPENCODE_EFFECTIVE_PROMPT}" "${AGENT:-}" "${command_dirs[@]}"

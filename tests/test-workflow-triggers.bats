@@ -63,3 +63,10 @@ PY
   run grep -F 'GITHUB_ENV' "${action}"
   [ "${status}" -ne 0 ]
 }
+
+@test "PR review has no ignored agent, mention, or bundle inputs" {
+  run grep -Eq '^      (agent|mentions|use-bundled-toolkit):' "${review}"
+  [ "${status}" -ne 0 ]
+  grep -Fq '          review-only: true' "${review}"
+  grep -Fq '          use-bundled-toolkit: true' "${review}"
+}

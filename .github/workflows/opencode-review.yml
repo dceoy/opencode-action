@@ -7,11 +7,6 @@ on:
         required: true
         type: string
         description: Model to use with OpenCode
-      agent:
-        required: false
-        type: string
-        description: Primary agent to use
-        default: build
       share:
         required: false
         type: boolean
@@ -27,11 +22,6 @@ on:
         type: boolean
         description: Use GITHUB_TOKEN directly instead of OpenCode App token exchange
         default: false
-      mentions:
-        required: false
-        type: string
-        description: Comma-separated list of trigger phrases
-        default: /opencode,/oc
       variant:
         required: false
         type: string
@@ -47,11 +37,6 @@ on:
         type: string
         description: OpenCode version to install
         default: latest
-      use-bundled-toolkit:
-        required: false
-        type: boolean
-        description: Use the action's bundled OpenCode toolkit
-        default: true
       pr-review-ref:
         required: false
         type: string
@@ -155,15 +140,13 @@ jobs:
           PR_REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
-          agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt || '/pr-review' }}
           use-github-token: ${{ inputs.use-github-token }}
-          mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
-          use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
+          use-bundled-toolkit: true
           review-only: true
           pr-review-ref: ${{ inputs.pr-review-ref || env.PR_LOOP_REF }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

@@ -1,29 +1,5 @@
 #!/usr/bin/env bash
-# Copy the bundled provider configuration; review runs replace inherited state.
-_opencode_copy_missing_config() {
-  local source_dir="${1}" destination_dir="${2}" source relative destination
-  while IFS= read -r -d '' source; do
-    relative="${source#"${source_dir}/"}"
-    destination="${destination_dir}/${relative}"
-    if [[ -d "${source}" && -L "${destination}" ]]; then
-      echo "::error::'${destination}' is a symlink; refusing to copy config through it." >&2
-      return 1
-    fi
-  done < <(find "${source_dir}" -mindepth 1 -print0)
-  while IFS= read -r -d '' source; do
-    relative="${source#"${source_dir}/"}"
-    # These helpers are exclusively for the restricted review agent.
-    case "${relative}" in
-      tools/pr-review-api.js | scripts/pr-review-gh.sh | scripts/resolve-app-token.sh) continue ;;
-    esac
-    destination="${destination_dir}/${relative}"
-    if [[ -d "${source}" ]]; then
-      mkdir -p "${destination}"
-    elif [[ ! -e "${destination}" && ! -L "${destination}" ]]; then
-      cp -P "${source}" "${destination}"
-    fi
-  done < <(find "${source_dir}" -mindepth 1 -print0)
-}
+# Install only provider configuration for regular runs; isolate review support.
 opencode_prepare_config() {
   local action_path="${1}" review_only="${2:-false}" config_dir
   config_dir="${HOME}/.config/opencode"
@@ -49,7 +25,11 @@ opencode_prepare_config() {
       ;;
     false)
       mkdir -p "${config_dir}"
-      _opencode_copy_missing_config "${action_path}/.opencode" "${config_dir}" || return 1
+      # Only the provider registry belongs in general OpenCode runs. The
+      # native API bridge and token resolver are restricted review-only tools.
+      if [[ ! -e "${config_dir}/opencode.jsonc" && ! -L "${config_dir}/opencode.jsonc" ]]; then
+        cp "${action_path}/.opencode/opencode.jsonc" "${config_dir}/opencode.jsonc"
+      fi
       ;;
     *)
       echo "::error::Invalid review-only mode '${review_only}'." >&2

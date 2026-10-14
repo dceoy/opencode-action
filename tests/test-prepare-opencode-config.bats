@@ -5,7 +5,8 @@ setup() {
   fake_home="${BATS_TEST_TMPDIR}/home"
   fake_action="${BATS_TEST_TMPDIR}/action"
   mkdir -p "${fake_home}" "${fake_action}/.opencode"
-  mkdir -p "${fake_action}/.opencode/tools" "${fake_action}/.opencode/scripts"
+  mkdir -p "${fake_action}/.opencode/tools" "${fake_action}/.opencode/scripts" "${fake_action}/.opencode/commands"
+  printf '%s\n' 'obsolete' > "${fake_action}/.opencode/commands/legacy.md"
   cp "${repo_root}/.opencode/tools/pr-review-api.js" "${fake_action}/.opencode/tools/"
   cp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${fake_action}/.opencode/scripts/"
   printf '%s\n' bundled > "${fake_action}/.opencode/opencode.jsonc"
@@ -38,6 +39,16 @@ setup() {
   [ ! -e "${HOME}/.config/opencode/tools/pr-review-api.js" ]
   [ ! -e "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]
   [ ! -e "${HOME}/.config/opencode/scripts/resolve-app-token.sh" ]
+  [ ! -e "${HOME}/.config/opencode/commands/legacy.md" ]
+}
+
+@test "normal preparation keeps existing provider configuration and symlinks" {
+  mkdir -p "${HOME}/.config/opencode" "${BATS_TEST_TMPDIR}/outside"
+  printf '%s\n' caller > "${BATS_TEST_TMPDIR}/outside/opencode.jsonc"
+  ln -s "${BATS_TEST_TMPDIR}/outside/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
+  opencode_prepare_config "${fake_action}" false
+  [ -L "${HOME}/.config/opencode/opencode.jsonc" ]
+  [ "$(cat "${HOME}/.config/opencode/opencode.jsonc")" = caller ]
 }
 @test "review-only refuses a symlinked home config" {
   mkdir -p "${BATS_TEST_TMPDIR}/outside"
