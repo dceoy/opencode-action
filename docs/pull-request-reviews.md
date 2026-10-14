@@ -1,6 +1,6 @@
 # Pull request reviews
 
-The `opencode-review.yml` reusable workflow installs the external [`pr-review` skill](https://github.com/dceoy/pr-loop/tree/main/skills/pr-review) from `dceoy/pr-loop`. The bundled `/review-pr` slash command, dedicated agents, scripts, and local skill were removed.
+The `opencode-review.yml` reusable workflow restricts reviews to eligible non-draft, non-bot pull requests opened by trusted repository collaborators, independently of the supplied model. It installs the external [`pr-review` skill](https://github.com/dceoy/pr-loop/tree/main/skills/pr-review) from `dceoy/pr-loop`. The bundled `/review-pr` slash command, dedicated agents, scripts, and local skill were removed.
 
 ## Invocation
 
@@ -49,6 +49,6 @@ The adapter resolves credentials for each invocation rather than persisting a sh
 
 Upstream `pr-review` freezes the base/head snapshot, validates findings against repository evidence, and publishes one verified `COMMENT` review by default. It never approves, requests changes, merges, or modifies repository contents. See [the upstream skill specification](https://github.com/dceoy/pr-loop/blob/main/skills/pr-review/SKILL.md) for the authoritative policy.
 
-Review-only runs replace inherited global OpenCode configuration, disable project configuration and external skill discovery, and use a fresh OpenCode installation. They force the restricted review agent and its tool permissions instead of inheriting the caller's agent permissions. Review behavior remains in the pinned upstream skill; no bundled command or orchestrator is installed.
+Review-only runs use a disposable HOME under the runner's temporary directory, including separate XDG paths, and clean it up at the end. Existing runner OpenCode configuration and binaries are never removed. They disable project configuration and external skill discovery, and use a fresh OpenCode installation. They force the restricted review agent and its tool permissions instead of inheriting the caller's agent permissions. Review behavior remains in the pinned upstream skill; no bundled command or orchestrator is installed.
 
 The upstream skill is pinned by default to `v1.0.0`. The SHA is fixed once in `opencode-review.yml` as `env.PR_LOOP_REF`; direct action and bot review-only calls must supply `pr-review-ref`. Set `pr-review-ref` to another complete commit SHA to override it. The post-release CI updates the default to the latest stable `pr-loop` release SHA and version comments via the release-pins PR. `gh skill` installs the specified pinned commit without npm lifecycle scripts or local YAML rewrites. The action checks that the destination is unused, required reference files exist, and the installed Skill contains no symlinks. Failure is terminal; there is no bundled fallback. The existing Bats CI job exercises the exact inline installation command with a real SHA-pinned install. OpenCode GitHub integration can separately add a completion comment.
