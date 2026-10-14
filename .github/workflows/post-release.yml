@@ -82,7 +82,7 @@ jobs:
           if current is None:
               raise SystemExit('Cannot locate the default pr-loop release pin')
           path.write_text(path.read_text().replace(current[0], f'  PR_LOOP_REF: {sha}  # {tag}\n'))
-          for name in ['README.md', 'docs/pull-request-reviews.md']:
+          for name in ['docs/pull-request-reviews.md']:
               path = Path(name)
               text = path.read_text().replace(current[1], sha)
               path.write_text(re.sub(r'(?<![\w.])' + re.escape(current[2]) + r'(?![\w.])', lambda _: tag, text))
