@@ -45,3 +45,12 @@ PY
   [ "$(grep -Fc "steps.comment-trigger.outputs.matched == 'true'" "${bot}")" -ge 2 ]
   grep -Fq "inputs.mentions || '/opencode,/oc'" "${bot}"
 }
+
+@test "review-only environment overrides never escape the composite run step" {
+  action="${repo_root}/action.yml"
+  grep -Fq 'review_home="$(mktemp -d' "${action}"
+  grep -Fq 'export HOME="${review_home}"' "${action}"
+  grep -Fq "trap 'rm -rf -- " "${action}"
+  run grep -F 'GITHUB_ENV' "${action}"
+  [ "${status}" -ne 0 ]
+}
