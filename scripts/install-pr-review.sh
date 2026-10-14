@@ -85,7 +85,7 @@ install_pr_review() {
   cp "${manifest_dir}/package.json" "${manifest_dir}/pnpm-workspace.yaml" "${checkout}/"
 
   # The dependency is installed outside the potentially untrusted PR checkout.
-  (cd "${checkout}" && corepack pnpm add --workspace-root --save-dev --ignore-scripts --no-frozen-lockfile \
+  (cd "${checkout}" && corepack pnpm add --workspace-root --save-dev --ignore-scripts \
     "pr-loop@git+https://github.com/dceoy/pr-loop.git#${ref}")
 
   if ! python3 - "${checkout}/pnpm-lock.yaml" "${ref}" <<'PYCODE'
