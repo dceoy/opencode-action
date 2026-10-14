@@ -18,9 +18,9 @@ if [[ "${1:-}" == skill && "${2:-}" == install && "${3:-}" == --help ]]; then
   exit "${GH_HELP_EXIT:-0}"
 fi
 [[ "${1:-}" == skill && "${2:-}" == install ]] || exit 90
-[[ "${3:-}" == skills/pr-review ]] || exit 91
-[[ "${4:-}" == --pin && "${5:-}" == "${PR_REVIEW_REF,,}" ]] || exit 92
-[[ "${6:-}" == --agent && "${7:-}" == opencode && "${8:-}" == --scope && "${9:-}" == user ]] || exit 93
+[[ "${3:-}" == dceoy/pr-loop && "${4:-}" == skills/pr-review ]] || exit 91
+[[ "${5:-}" == --pin && "${6:-}" == "${PR_REVIEW_REF,,}" ]] || exit 92
+[[ "${7:-}" == --agent && "${8:-}" == opencode && "${9:-}" == --scope && "${10:-}" == user ]] || exit 93
 if [[ -n "${GH_CALL_LOG:-}" ]]; then
   printf 'install\n' >> "${GH_CALL_LOG}"
 fi
