@@ -81,7 +81,7 @@ Both reusable workflows expose the action configuration plus a runner input. The
 | `share`               | `false`                                                             | Share the OpenCode session.                                   |
 | `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
 | `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.        |
+| `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
