@@ -24,15 +24,23 @@ SH
 
 @test "default pr-loop pin is resolved to a full immutable SHA" {
   pin="$(cat "${repo_root}/.github/pr-loop-ref")"
-  run env MOCK_PR_LOOP_PIN="${pin}" bash -euo pipefail "${script}"
+  run env GITHUB_REPOSITORY='external/caller' MOCK_PR_LOOP_PIN="${pin}" bash -euo pipefail "${script}"
   [ "${status}" -eq 0 ]
   expected="${pin%% *}"
   grep -Fx "PR_LOOP_REF=${expected}" "${GITHUB_ENV}"
 }
 
 @test "rejects invalid release pin without exporting it" {
-  run env MOCK_PR_LOOP_PIN='v1.0.0' bash -euo pipefail "${script}"
+  run env GITHUB_REPOSITORY='external/caller' MOCK_PR_LOOP_PIN='v1.0.0' bash -euo pipefail "${script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Invalid default pr-loop release pin."* ]]
   [ ! -e "${GITHUB_ENV}" ]
+}
+
+@test "uses the checkout pin for review runs in the same repository" {
+  cd "${repo_root}"
+  pin="$(cat .github/pr-loop-ref)"
+  run env GITHUB_REPOSITORY='dceoy/opencode-action' MOCK_PR_LOOP_PIN='invalid' bash -euo pipefail "${script}"
+  [ "${status}" -eq 0 ]
+  grep -Fx "PR_LOOP_REF=${pin%% *}" "${GITHUB_ENV}"
 }

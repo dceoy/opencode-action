@@ -139,7 +139,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pin="$(gh api 'repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=main' -H 'Accept: application/vnd.github.raw+json')"
+          if [[ "${GITHUB_REPOSITORY}" == 'dceoy/opencode-action' && -f .github/pr-loop-ref ]]; then
+            pin="$(cat .github/pr-loop-ref)"
+          else
+            pin="$(gh api 'repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=main' -H 'Accept: application/vnd.github.raw+json')"
+          fi
           read -r sha marker version extra <<< "${pin}"
           if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ || "${marker}" != '#' ||
                 ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || -n "${extra:-}" ]]; then
