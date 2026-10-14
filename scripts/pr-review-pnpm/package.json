@@ -3,5 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@12.13.0",
-  "devDependencies": {}
+  "devDependencies": {
+    "pr-loop": "git+https://github.com/dceoy/pr-loop.git#__PR_LOOP_REF__"
+  }
 }

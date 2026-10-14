@@ -82,11 +82,13 @@ install_pr_review() {
   # Keep install policy static, injecting only the immutable dependency ref.
   local manifest_dir
   manifest_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/pr-review-pnpm" && pwd -P)"
-  cp "${manifest_dir}/package.json" "${manifest_dir}/pnpm-workspace.yaml" "${checkout}/"
+  # Render only the validated immutable ref; all installer policy remains static.
+  sed "s/__PR_LOOP_REF__/${ref}/" "${manifest_dir}/package.json" > "${checkout}/package.json"
+  cp "${manifest_dir}/pnpm-workspace.yaml" "${checkout}/"
+  mkdir -p "${checkout}/.agents/skills"
 
   # The dependency is installed outside the potentially untrusted PR checkout.
-  (cd "${checkout}" && corepack pnpm add --workspace-root --save-dev --ignore-scripts \
-    "pr-loop@git+https://github.com/dceoy/pr-loop.git#${ref}")
+  (cd "${checkout}" && corepack pnpm install --ignore-scripts --no-frozen-lockfile)
 
   if ! python3 - "${checkout}/pnpm-lock.yaml" "${ref}" <<'PYCODE'
 import re

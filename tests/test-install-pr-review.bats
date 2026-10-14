@@ -46,10 +46,9 @@ setup() {
   cat > "${fake_bin}/corepack" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "${1:-}" == pnpm && "${2:-}" == add ]] || exit 91
-[[ "$*" == *'pr-loop@git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd'* ]]
+[[ "${1:-}" == pnpm && "${2:-}" == install ]] || exit 91
+grep -q 'pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd' package.json
 grep -q '"packageManager": "pnpm@12.13.0"' package.json
-grep -q '"devDependencies": {}' package.json
 grep -q 'pr-loop@git+https://github.com/dceoy/pr-loop.git' pnpm-workspace.yaml
 grep -q 'skills: true' pnpm-workspace.yaml
 grep -q 'build: false' pnpm-workspace.yaml
