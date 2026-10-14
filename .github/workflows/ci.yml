@@ -89,3 +89,23 @@ jobs:
     uses: dceoy/gha-for-devops/.github/workflows/dependabot-auto-merge.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       unconditional: true
+
+  pnpm-skill-install:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Verify pinned pr-review skill installation
+        shell: bash -euo pipefail {0}
+        run: |
+          ref="$(sed -n -E 's/^  PR_LOOP_REF: ([a-f0-9]{40}).*/\1/p' .github/workflows/opencode-review.yml)"
+          [[ "$ref" =~ ^[a-f0-9]{40}$ ]]
+          install_home="${RUNNER_TEMP}/pr-review-install-home"
+          mkdir -p "${install_home}"
+          HOME="${install_home}" USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${ref}" OPENCODE_VERSION=1.2.14 \
+            bash scripts/install-pr-review.sh
+          test -f "${install_home}/.config/opencode/skills/pr-review/SKILL.md"
+          test -f "${install_home}/.config/opencode/skills/pr-review/references/github-posting.md"
+          grep -q 'opencode/slash: "true"' "${install_home}/.config/opencode/skills/pr-review/SKILL.md"
