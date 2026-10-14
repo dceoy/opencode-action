@@ -53,7 +53,20 @@ grep -q 'skills: true' pnpm-workspace.yaml
 grep -q 'build: false' pnpm-workspace.yaml
 mkdir -p node_modules/pr-loop/skills .agents/skills
 cp -R "${SKILL_FIXTURE}" node_modules/pr-loop/skills/pr-review
-printf '%s\n' "pr-loop: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd" > pnpm-lock.yaml
+cat > pnpm-lock.yaml <<LOCK
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    devDependencies:
+      pr-loop:
+        specifier: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd
+        version: https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd
+
+packages:
+  pr-loop@https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd}
+LOCK
 ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
 STUB
   chmod +x "${fake_bin}/corepack"
@@ -73,7 +86,20 @@ STUB
 set -euo pipefail
 mkdir -p node_modules/pr-loop/skills .agents/skills
 cp -R "${SKILL_FIXTURE}" node_modules/pr-loop/skills/pr-review
-printf '%s\n' 'pr-loop: git+https://github.com/dceoy/pr-loop.git#0000000000000000000000000000000000000000' > pnpm-lock.yaml
+cat > pnpm-lock.yaml <<LOCK
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    devDependencies:
+      pr-loop:
+        specifier: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd
+        version: https://codeload.github.com/dceoy/pr-loop/tar.gz/0000000000000000000000000000000000000000
+
+packages:
+  pr-loop@https://codeload.github.com/dceoy/pr-loop/tar.gz/0000000000000000000000000000000000000000:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/dceoy/pr-loop/tar.gz/0000000000000000000000000000000000000000}
+LOCK
 ln -s ../../node_modules/pr-loop/skills/pr-review .agents/skills/pnpm-pr-loop-pr-review
 STUB
   chmod +x "${fake_bin}/corepack"
@@ -88,10 +114,24 @@ STUB
 @test "fails closed when pnpm returns no approved skill link" {
   fake_bin="${BATS_TEST_TMPDIR}/empty-pnpm"
   mkdir -p "${fake_bin}"
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'printf "%s\\n" "pr-loop: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd" > pnpm-lock.yaml' \
-    'exit 0' > "${fake_bin}/corepack"
+  cat > "${fake_bin}/corepack" << 'STUB'
+#!/usr/bin/env bash
+cat > pnpm-lock.yaml <<LOCK
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    devDependencies:
+      pr-loop:
+        specifier: git+https://github.com/dceoy/pr-loop.git#abcdefabcdefabcdefabcdefabcdefabcdefabcd
+        version: https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd
+
+packages:
+  pr-loop@https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/dceoy/pr-loop/tar.gz/abcdefabcdefabcdefabcdefabcdefabcdefabcd}
+LOCK
+exit 0
+STUB
   chmod +x "${fake_bin}/corepack"
   run env HOME="${BATS_TEST_TMPDIR}/missing-home" PATH="${fake_bin}:${PATH}" \
     USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF=abcdefabcdefabcdefabcdefabcdefabcdefabcd \

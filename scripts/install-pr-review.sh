@@ -103,7 +103,36 @@ WORKSPACE
   # pnpm 12.11+ links approved agent skills without running package scripts.
   (cd "${checkout}" && corepack pnpm install --ignore-scripts --no-frozen-lockfile)
 
-  if ! grep -Fq "git+https://github.com/dceoy/pr-loop.git#${ref}" "${checkout}/pnpm-lock.yaml"; then
+  if ! python3 - "${checkout}/pnpm-lock.yaml" "${ref}" <<'PYCODE'
+import re
+import sys
+from pathlib import Path
+
+lockfile = Path(sys.argv[1]).read_text()
+ref = sys.argv[2]
+git_source = f"git+https://github.com/dceoy/pr-loop.git#{ref}"
+tarball_source = f"https://codeload.github.com/dceoy/pr-loop/tar.gz/{ref}"
+
+# Verify the root importer's resolved version, not just its requested specifier.
+match = re.search(r"^      pr-loop:\n(?P<body>(?:        .*\n)+)", lockfile, re.MULTILINE)
+if not match:
+    raise SystemExit(1)
+body = match.group("body")
+specifier = re.search(r"^        specifier: (.+)$", body, re.MULTILINE)
+version = re.search(r"^        version: (.+)$", body, re.MULTILINE)
+if not specifier or not version or specifier.group(1) != git_source:
+    raise SystemExit(1)
+resolved = version.group(1)
+if resolved not in (git_source, tarball_source):
+    raise SystemExit(1)
+
+package = re.search(rf"^  pr-loop@{re.escape(resolved)}:\n(?P<body>(?:    .*\n)*)", lockfile, re.MULTILINE)
+if not package:
+    raise SystemExit(1)
+if resolved == tarball_source and f"tarball: {tarball_source}" not in package.group("body"):
+    raise SystemExit(1)
+PYCODE
+  then
     echo "::error::pnpm lockfile does not resolve pr-loop to the pinned commit." >&2
     return 1
   fi
