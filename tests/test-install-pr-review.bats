@@ -30,6 +30,13 @@ setup() {
   pin="$(sed -n -E '/^  pr-review-ref:$/,/^  timeout-minutes:$/s/^    default: ([a-f0-9]{40}).*$/\1/p' "${repo_root}/action.yml")"
 }
 
+@test "reusable review workflow inherits the action's pinned default" {
+  [[ "${pin}" =~ ^[0-9a-f]{40}$ ]]
+  workflow="${repo_root}/.github/workflows/opencode-review.yml"
+  ! grep -Eq '^[[:space:]]+pr-review-ref:' "${workflow}"
+  ! grep -Fq 'Resolve default pr-loop pin' "${workflow}"
+}
+
 @test "rejects invalid OpenCode review-only versions" {
   for version in 0.9.0 1.2.13 1.2.14-beta.1 invalid; do
     run env INPUT_VERSION="${version}" REVIEW_ONLY=true GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"

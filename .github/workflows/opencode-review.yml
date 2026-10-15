@@ -52,11 +52,6 @@ on:
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
-      pr-review-ref:
-        required: false
-        type: string
-        description: Full immutable pr-loop commit SHA
-        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -134,37 +129,6 @@ jobs:
         run: |
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
-      - name: Resolve default pr-loop pin
-        if: inputs.pr-review-ref == ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WORKFLOW_SHA: ${{ job.workflow_sha }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          ref="${WORKFLOW_SHA}"
-          if [[ "${GITHUB_REPOSITORY}" == 'dceoy/opencode-action' && "${EVENT_NAME}" == 'pull_request' ]]; then
-            ref="${PR_BASE_SHA}"
-          fi
-          if [[ ! "${ref}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo 'Invalid reusable workflow/base commit SHA.' >&2
-            exit 1
-          fi
-          metadata="$(gh api "repos/dceoy/opencode-action/contents/action.yml?ref=${ref}" \
-                         -H 'Accept: application/vnd.github.raw+json')"
-          pin="$(sed -n -E '/^  pr-review-ref:$/,/^  timeout-minutes:$/s/^    default: ([0-9a-f]{40})(  # v[0-9]+\.[0-9]+\.[0-9]+)?$/\1/p' <<< "${metadata}")"
-          if [[ -z "${pin}" && "${GITHUB_REPOSITORY}" == 'dceoy/opencode-action' &&
-                "${EVENT_NAME}" == 'pull_request' ]]; then
-            # During migration, the trusted base still has the legacy inline pin.
-            legacy="$(gh api "repos/dceoy/opencode-action/contents/.github/workflows/opencode-review.yml?ref=${ref}" \
-                         -H 'Accept: application/vnd.github.raw+json')"
-            pin="$(sed -n -E 's/^  PR_LOOP_REF: ([0-9a-f]{40})  # v[0-9]+\.[0-9]+\.[0-9]+$/\1/p' <<< "${legacy}")"
-          fi
-          if [[ ! "${pin}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo 'Invalid default pr-loop release pin.' >&2
-            exit 1
-          fi
-          printf 'PR_LOOP_REF=%s\n' "${pin}" >> "${GITHUB_ENV}"
       - name: Run OpenCode
         uses: $/.
         env:
@@ -194,5 +158,4 @@ jobs:
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
-          pr-review-ref: ${{ inputs.pr-review-ref || env.PR_LOOP_REF }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}
