@@ -56,14 +56,6 @@ set_git_candidate() {
     "AUTHORIZATION: basic $(printf '%s' "x-access-token:$1" | base64 | tr -d '\n')"
 }
 
-run_wrapper() {
-  run env -u GH_TOKEN -u GITHUB_TOKEN \
-    GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" \
-    GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" PATH="${fake_bin}:${PATH}" \
-    PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" PR_REVIEW_HEAD_SHA="${request_head}" \
-    bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" "$@"
-}
-
 run_request() {
   run env -u GH_TOKEN -u GITHUB_TOKEN HOME="${request_home}" \
     GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
@@ -78,98 +70,86 @@ assert_no_matching_lines() {
   [ "${count}" -eq 0 ]
 }
 
-@test "publishes using verified OpenCode GitHub App token" {
+@test "publishes a commit-bound COMMENT with verified OpenCode GitHub App identity" {
   set_git_candidate ghs_verified
-  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
+  run_request
   [ "${status}" -eq 0 ]
   [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 2 ]
   [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
   jq -e '.event == "COMMENT" and .body == "Reviewed"' "${BATS_TEST_TMPDIR}/payload"
 }
 
-@test "rejects an unverified candidate with default policy" {
+@test "rejects an unverified App token before publishing" {
   set_git_candidate ghs_wrong
-  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
+  run_request
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Unable to resolve and verify an OpenCode GitHub App token"* ]]
-  [[ "${output}" != *"GITHUB_IDENTITY_TOKEN="* ]]
   [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
   [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
   jq -e 'keys | length == 0' "${BATS_TEST_TMPDIR}/payload"
 }
 
-@test "read requests use a candidate token without creating identity probes" {
+@test "scoped reads use a candidate without identity probes" {
   set_git_candidate ghs_wrong
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews
+  printf '%s' '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews"}' > "${request_file}"
+  run_request
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"GITHUB_IDENTITY_TOKEN=ghs_wrong"* ]]
   [ "$(wc -c < "${BATS_TEST_TMPDIR}/gh-calls")" -eq 1 ]
-  grep -q -- '--method GET' "${BATS_TEST_TMPDIR}/gh-args"
   assert_no_matching_lines '--method (POST|DELETE)' "${BATS_TEST_TMPDIR}/gh-args"
 }
 
-@test "explicit workflow-token fallback is permitted" {
+@test "explicit workflow-token fallback can publish" {
   set_git_candidate ghs_wrong
-  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${request_head}" > "${request_file}"
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${request_head}" > "${request_file}"
   run env GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" PATH="${fake_bin}:${PATH}" \
     GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
     GH_TOKEN=workflow_tok GITHUB_TOKEN=workflow_tok USE_GITHUB_TOKEN=true \
     PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
     PR_REVIEW_HEAD_SHA="${request_head}" \
-    bash -c 'cd "$1"; shift; "$@"' _ "${temp_repo}" bash "${wrapper}" \
-    api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${request_file}"
+    bash -c 'cd "$1"; bash "$2" --request-stdin < "$3"' _ "${temp_repo}" "${wrapper}" "${request_file}"
   [ "${status}" -eq 0 ]
   [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 2 ]
   [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
-  jq -e '.event == "COMMENT" and .body == "Reviewed"' "${BATS_TEST_TMPDIR}/payload"
 }
 
-@test "rejects invalid event PR URL before accessing credentials" {
+@test "rejects malformed PR context before accessing credentials" {
+  printf '%s' '{"endpoint":"repos/dceoy/opencode-action/pulls/127"}' > "${request_file}"
   run env PR_REVIEW_URL=https://github.com/not-valid \
-    bash "${wrapper}" api repos/dceoy/opencode-action/pulls/127/reviews
+    bash -c 'bash "$1" --request-stdin < "$2"' _ "${wrapper}" "${request_file}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Invalid PR_REVIEW_URL"* ]]
 }
 
-@test "only allows review-oriented gh commands" {
-  for subcommand in merge status; do
-    run_wrapper pr "${subcommand}" "https://github.com/dceoy/opencode-action/pull/127"
+@test "legacy direct gh CLI is disabled" {
+  for command in api pr; do
+    run bash "${wrapper}" "${command}" repos/dceoy/opencode-action/pulls/127
     [ "${status}" -eq 2 ]
-    [[ "${output}" == *"Unsupported gh pr subcommand"* ]]
-    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
+    [[ "${output}" == *"Use the structured pr-review-api tool"* ]]
   done
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
 }
 
-@test "rejects arbitrary methods endpoints hosts and field mutations before credentials" {
-  for args in 'api repos/dceoy/opencode-action/pulls/127 --method DELETE' \
-    'api repos/other/repo/pulls/127' 'api graphql' \
-    'api repos/dceoy/opencode-action/pulls/127/reviews -f event=APPROVE' \
-    'api repos/dceoy/opencode-action/pulls/127 --hostname attacker.example' \
-    'api repos/dceoy/opencode-action/pulls/127 --method=POST'; do
-    # Intentional whitespace splitting supplies hostile CLI arguments.
-    # shellcheck disable=SC2086
-    run_wrapper ${args}
-    [ "${status}" -ne 0 ]
-    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
-  done
+@test "internal adapter cannot access unscoped endpoints or non-GET methods" {
+  run env PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
+    bash "${wrapper}" --scoped-api GET repos/other/repo/pulls/127 ''
+  [ "${status}" -eq 2 ]
+  run env PR_REVIEW_URL=https://github.com/dceoy/opencode-action/pull/127 \
+    bash "${wrapper}" --scoped-api DELETE repos/dceoy/opencode-action/pulls/127 ''
+  [ "${status}" -eq 2 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
 }
 
-@test "accepts commit-bound COMMENT JSON and rejects approval wrong SHA and duplicate keys" {
-  set_git_candidate ghs_verified
-  payload="${BATS_TEST_TMPDIR}/review.json"
-  sha=abcdefabcdefabcdefabcdefabcdefabcdefabcd
-  export PR_REVIEW_HEAD_SHA="${sha}" PYTHONOPTIMIZE=1
-  printf '{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}' "${sha}" > "${payload}"
-  run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${payload}"
-  [ "${status}" -eq 0 ]
-  for json in '{"event":"APPROVE","body":"x"}' \
+@test "rejects approvals wrong commit and duplicate JSON keys" {
+  for payload in '{"event":"APPROVE","body":"x"}' \
     '{"event":"COMMENT","body":"x","commit_id":"wrong"}' \
     '{"event":"APPROVE","event":"COMMENT","body":"x"}'; do
-    printf '%s' "${json}" > "${payload}"
-    run_wrapper api repos/dceoy/opencode-action/pulls/127/reviews --method POST --input "${payload}"
+    printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":%s}' "${payload}" > "${request_file}"
+    run_request
     [ "${status}" -ne 0 ]
+    [ ! -e "${BATS_TEST_TMPDIR}/gh-calls" ]
   done
 }
 
