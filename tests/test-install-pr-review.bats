@@ -68,12 +68,14 @@ setup() {
 @test "installer uses its token without replacing caller auth" {
   mock_bin="${BATS_TEST_TMPDIR}/bin"
   token_capture="${BATS_TEST_TMPDIR}/installer-token"
+  args_capture="${BATS_TEST_TMPDIR}/installer-args"
   caller_capture="${BATS_TEST_TMPDIR}/caller-token"
   mkdir -p "${mock_bin}"
   cat > "${mock_bin}/gh" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s' "${GH_TOKEN}" > "${GH_TOKEN_CAPTURE}"
+printf '%s' "$*" > "${GH_ARGS_CAPTURE}"
 skill_dir="${HOME}/.config/opencode/skills/pr-review"
 mkdir -p "${skill_dir}/references"
 for file in SKILL.md references/review-lenses.md references/finding-validation.md references/github-posting.md; do
@@ -84,14 +86,16 @@ EOF
 
   # Keep variable expansion inside the child shell.
   # shellcheck disable=SC2016
-  run env HOME="${install_home}" PATH="${mock_bin}:${PATH}" PR_REVIEW_REF="${pin}" \
-    USE_BUNDLED_TOOLKIT=true PR_REVIEW_INSTALL_TOKEN=installer-token GH_TOKEN=caller-token \
-    GH_TOKEN_CAPTURE="${token_capture}" bash -euo pipefail -c \
+  run env HOME="${install_home}" PATH="${mock_bin}:${PATH}" PR_REVIEW_REF='' \
+    ACTION_PATH="${repo_root}" USE_BUNDLED_TOOLKIT=true \
+    PR_REVIEW_INSTALL_TOKEN=installer-token GH_TOKEN=caller-token \
+    GH_TOKEN_CAPTURE="${token_capture}" GH_ARGS_CAPTURE="${args_capture}" bash -euo pipefail -c \
     'review_home="${HOME}"; source "$1"; printf "%s:%s" "${GH_TOKEN}" "${PR_REVIEW_INSTALL_TOKEN:-}" > "$2"' \
     _ "${install_step}" "${caller_capture}"
   [ "${status}" -eq 0 ]
   [ "$(cat "${token_capture}")" = installer-token ]
   [ "$(cat "${caller_capture}")" = caller-token: ]
+  [[ "$(cat "${args_capture}")" == *"--pin ${pin}"* ]]
 }
 
 @test "review-only preserves shared installer tools and runs a fresh binary" {
