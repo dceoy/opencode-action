@@ -14,7 +14,7 @@ setup() {
   awk '
     $0 == "    - name: Run OpenCode" { step=1; next }
     step && /^      run: \|$/ { script=1; next }
-    script && index($0, "if [[ \"${USE_BUNDLED_TOOLKIT}\" != \"true\"") { install=1 }
+    script && index($0, "if [[ -z \"${PR_REVIEW_REF}\" ]]") { install=1 }
     install && /^          curl -fsSL https:\/\/opencode\.ai\/install/ { exit }
     install { sub(/^        /, ""); print }
   ' "${repo_root}/action.yml" > "${install_step}"
