@@ -82,10 +82,6 @@ jobs:
           if current is None:
               raise SystemExit('Cannot locate the default pr-loop release pin')
           path.write_text(f'{sha}  # {tag}\n')
-          for name in ['docs/pull-request-reviews.md']:
-              path = Path(name)
-              text = path.read_text().replace(current[1], sha)
-              path.write_text(re.sub(r'(?<![\w.])' + re.escape(current[2]) + r'(?![\w.])', lambda _: tag, text))
           PYCODE
       - name: Update release pins
         env:
