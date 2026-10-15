@@ -14,9 +14,8 @@ setup() {
   mkdir -p "${BATS_TEST_TMPDIR}/bin"
   cat > "${BATS_TEST_TMPDIR}/bin/gh" <<'SH'
 #!/usr/bin/env bash
-[[ "${1:-}" == api && "${2:-}" == "repos/dceoy/opencode-action/contents/.github/pr-loop-ref?ref=${EXPECTED_REF}" ]] && {
-  [[ "${MOCK_MISSING_PIN:-false}" != true ]] || exit 1
-  printf '%s\n' "${MOCK_PR_LOOP_PIN}"
+[[ "${1:-}" == api && "${2:-}" == "repos/dceoy/opencode-action/contents/action.yml?ref=${EXPECTED_REF}" ]] && {
+  printf '%s\n' "${MOCK_ACTION_METADATA}"
   exit 0
 }
 [[ "${1:-}" == api && "${2:-}" == "repos/dceoy/opencode-action/contents/.github/workflows/opencode-review.yml?ref=${EXPECTED_REF}" ]] && {
@@ -33,42 +32,51 @@ SH
   export EXPECTED_REF="${WORKFLOW_SHA}"
   export EVENT_NAME='workflow_call'
   export GITHUB_REPOSITORY='external/caller'
-  MOCK_PR_LOOP_PIN="$(cat "${repo_root}/.github/pr-loop-ref")"
-  export MOCK_PR_LOOP_PIN
+  MOCK_ACTION_METADATA="$(cat "${repo_root}/action.yml")"
+  export MOCK_ACTION_METADATA
+  expected_pin="$(sed -n -E '/^  pr-review-ref:$/,/^  timeout-minutes:$/s/^    default: ([0-9a-f]{40}).*$/\1/p' <<< "${MOCK_ACTION_METADATA}")"
+  export expected_pin
 }
 
 @test "reusable workflow always reads the pin at its own immutable SHA" {
   run bash -euo pipefail "${script}"
   [ "${status}" -eq 0 ]
-  grep -Fx "PR_LOOP_REF=${MOCK_PR_LOOP_PIN%% *}" "${GITHUB_ENV}"
+  grep -Fx "PR_LOOP_REF=${expected_pin}" "${GITHUB_ENV}"
 }
 
 @test "self-repository pull request reads its trusted base instead of the PR checkout" {
   run env GITHUB_REPOSITORY=dceoy/opencode-action EVENT_NAME=pull_request \
     EXPECTED_REF="${PR_BASE_SHA}" bash -euo pipefail "${script}"
   [ "${status}" -eq 0 ]
-  grep -Fx "PR_LOOP_REF=${MOCK_PR_LOOP_PIN%% *}" "${GITHUB_ENV}"
+  grep -Fx "PR_LOOP_REF=${expected_pin}" "${GITHUB_ENV}"
 }
 
 @test "legacy base pin is accepted only during self-repository migration" {
   legacy="env:
-  PR_LOOP_REF: ${MOCK_PR_LOOP_PIN}"
+  PR_LOOP_REF: ${expected_pin}  # v1.0.0"
+  old_action="inputs:
+  pr-review-ref:
+    default: ''"
   run env GITHUB_REPOSITORY=dceoy/opencode-action EVENT_NAME=pull_request \
-    EXPECTED_REF="${PR_BASE_SHA}" MOCK_MISSING_PIN=true MOCK_LEGACY_WORKFLOW="${legacy}" \
+    EXPECTED_REF="${PR_BASE_SHA}" MOCK_ACTION_METADATA="${old_action}" MOCK_LEGACY_WORKFLOW="${legacy}" \
     bash -euo pipefail "${script}"
   [ "${status}" -eq 0 ]
-  grep -Fx "PR_LOOP_REF=${MOCK_PR_LOOP_PIN%% *}" "${GITHUB_ENV}"
+  grep -Fx "PR_LOOP_REF=${expected_pin}" "${GITHUB_ENV}"
 }
 
 @test "a missing pin fails closed in calls from external repositories" {
-  run env MOCK_MISSING_PIN=true bash -euo pipefail "${script}"
+  run env MOCK_ACTION_METADATA="inputs:
+  pr-review-ref:
+    default: ''" bash -euo pipefail "${script}"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *"Could not resolve default pr-loop pin."* ]]
+  [[ "${output}" == *"Invalid default pr-loop release pin."* ]]
   [ ! -e "${GITHUB_ENV}" ]
 }
 
 @test "invalid pin content is rejected without exporting it" {
-  run env MOCK_PR_LOOP_PIN=v1.0.0 bash -euo pipefail "${script}"
+  run env MOCK_ACTION_METADATA="  pr-review-ref:
+    default: v1.0.0
+  timeout-minutes:" bash -euo pipefail "${script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Invalid default pr-loop release pin."* ]]
   [ ! -e "${GITHUB_ENV}" ]
