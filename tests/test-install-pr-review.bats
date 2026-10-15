@@ -33,8 +33,10 @@ setup() {
 @test "reusable review workflow inherits the action's pinned default" {
   [[ "${pin}" =~ ^[0-9a-f]{40}$ ]]
   workflow="${repo_root}/.github/workflows/opencode-review.yml"
-  ! grep -Eq '^[[:space:]]+pr-review-ref:' "${workflow}"
-  ! grep -Fq 'Resolve default pr-loop pin' "${workflow}"
+  run grep -Eq '^[[:space:]]+pr-review-ref:' "${workflow}"
+  [ "${status}" -ne 0 ]
+  run grep -Fq 'Resolve default pr-loop pin' "${workflow}"
+  [ "${status}" -ne 0 ]
 }
 
 @test "rejects invalid OpenCode review-only versions" {
