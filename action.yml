@@ -53,7 +53,7 @@ inputs:
   pr-review-ref:
     required: false
     description: Full immutable pr-loop commit SHA supplying the pr-review skill
-    default: ''
+    default: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
   timeout-minutes:
     required: false
     description: Maximum minutes to let 'opencode github run' execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
@@ -159,6 +159,9 @@ runs:
           export XDG_CACHE_HOME="${HOME}/.cache"
           export XDG_STATE_HOME="${HOME}/.local/state"
           "${ACTION_PATH}/scripts/prepare-opencode-config.sh"
+          if [[ -z "${PR_REVIEW_REF}" ]]; then
+            PR_REVIEW_REF="$(sed -n -E '/^  pr-review-ref:$/,/^  timeout-minutes:$/s/^    default: ([0-9a-f]{40})(  # v[0-9]+\.[0-9]+\.[0-9]+)?$/\1/p' "${ACTION_PATH}/action.yml")"
+          fi
           if [[ "${USE_BUNDLED_TOOLKIT}" != "true" || ! "${PR_REVIEW_REF}" =~ ^[[:xdigit:]]{40}$ ]]; then
             echo "::error::Review-only requires the bundled toolkit and a full immutable pr-review commit SHA." >&2
             exit 1

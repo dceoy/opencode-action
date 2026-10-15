@@ -77,15 +77,16 @@ jobs:
           from pathlib import Path
 
           tag, sha = sys.argv[1:]
-          path = Path('.github/workflows/opencode-review.yml')
-          current = re.search(r'  PR_LOOP_REF: ([0-9a-f]{40})  # (v\d+\.\d+\.\d+)\n', path.read_text())
-          if current is None:
-              raise SystemExit('Cannot locate the default pr-loop release pin')
-          path.write_text(path.read_text().replace(current[0], f'  PR_LOOP_REF: {sha}  # {tag}\n'))
-          for name in ['docs/pull-request-reviews.md']:
-              path = Path(name)
-              text = path.read_text().replace(current[1], sha)
-              path.write_text(re.sub(r'(?<![\w.])' + re.escape(current[2]) + r'(?![\w.])', lambda _: tag, text))
+          path = Path('action.yml')
+          source = path.read_text()
+          matches = list(re.finditer(
+              r'(?m)^(  pr-review-ref:\n    required: false\n    description: [^\n]+\n    default: )'
+              r'([0-9a-f]{40})  # (v\d+\.\d+\.\d+)$', source,
+          ))
+          if len(matches) != 1:
+              raise SystemExit('Cannot locate the default pr-loop release pin in action.yml')
+          match = matches[0]
+          path.write_text(source[:match.start()] + f'{match[1]}{sha}  # {tag}' + source[match.end():])
           PYCODE
       - name: Update release pins
         env:

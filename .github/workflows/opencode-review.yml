@@ -52,11 +52,6 @@ on:
         type: boolean
         description: Use the action's bundled OpenCode toolkit
         default: true
-      pr-review-ref:
-        required: false
-        type: string
-        description: Full immutable pr-loop commit SHA
-        default: ''
       timeout-minutes:
         required: false
         type: number
@@ -114,8 +109,6 @@ permissions:
   issues: write
   id-token: write
   actions: read
-env:
-  PR_LOOP_REF: ddd538f6e9347b13cf6aaebfbda86ba704ee8415  # v1.0.0
 jobs:
   opencode-review:
     if: >
@@ -165,5 +158,4 @@ jobs:
           opencode-version: ${{ inputs.opencode-version || 'latest' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
-          pr-review-ref: ${{ inputs.pr-review-ref || env.PR_LOOP_REF }}
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

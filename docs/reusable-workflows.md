@@ -72,7 +72,7 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 ## Inputs
 
-Both reusable workflows expose the action configuration plus a runner input. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
+Both reusable workflows expose the action configuration plus a runner input, except that only the bot workflow exposes `pr-review-ref`; the review workflow inherits its default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -87,7 +87,7 @@ Both reusable workflows expose the action configuration plus a runner input. The
 | `opencode-version`    | `latest`                                                            | OpenCode version to install.                                  |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
 | `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
-| `pr-review-ref`       | Workflow pin or caller SHA                                          | Immutable `pr-loop` commit providing the reviewer.            |
+| `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
