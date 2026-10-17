@@ -20,7 +20,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-actions-lint-and-scan.yml@main  # zizmor: ignore[unpinned-uses]
+    uses: dceoy/gha-for-devops/.github/workflows/github-actions-lint-and-scan.yml@main   # zizmor: ignore[unpinned-uses]
     with:
       search-path: .github/workflows
       yamllint-search-path: .
