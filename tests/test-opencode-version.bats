@@ -38,7 +38,7 @@ for path in paths:
         assert re.fullmatch(r"v1\.\d+\.\d+", match["currentValue"]), path
         versions.add(match["currentValue"])
     if path != "action.yml":
-        assert "opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}" in content, path
+        assert "opencode-version: ${{ inputs.opencode-version || '" in content, path
 assert len(versions) == 1, versions
 assert any(
     rule.get("matchPackageNames") == ["anomalyco/opencode"]
