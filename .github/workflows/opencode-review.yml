@@ -46,7 +46,8 @@ on:
         required: false
         type: string
         description: OpenCode version to install
-        default: latest
+        # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
+        default: v1.19.3
       use-bundled-toolkit:
         required: false
         type: boolean
@@ -155,7 +156,7 @@ jobs:
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
-          opencode-version: ${{ inputs.opencode-version || 'latest' }}
+          opencode-version: ${{ inputs.opencode-version }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

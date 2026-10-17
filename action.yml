@@ -41,7 +41,8 @@ inputs:
   opencode-version:
     required: false
     description: OpenCode version to install (e.g., v1.2.3)
-    default: latest
+    # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
+    default: v1.19.3
   use-bundled-toolkit:
     required: false
     description: Whether to copy the action's bundled provider configuration and review support files.
