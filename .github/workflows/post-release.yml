@@ -15,7 +15,7 @@ jobs:
   tag:
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@3754118ff454057e560e78b3bf46178ebb756506
+    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@main  # zizmor: ignore[unpinned-uses]
   release-pins:
     permissions:
       contents: write
