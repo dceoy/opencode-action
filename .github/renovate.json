@@ -1,13 +1,44 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": [
+    "config:recommended"
+  ],
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
       "description": "Automatically merge minor and patch-level updates",
-      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
       "automerge": true,
       "automergeType": "branch"
+    },
+    {
+      "description": "Keep the OpenCode binary on v1",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackageNames": [
+        "anomalyco/opencode"
+      ],
+      "allowedVersions": "<2.0.0",
+      "groupName": "OpenCode v1"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the pinned OpenCode binary default in the action and reusable workflows",
+      "managerFilePatterns": [
+        "/^action\\.yml$/",
+        "/^\\.github\\/workflows\\/opencode-(?:bot|review)\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+default:\\s+(?<currentValue>v\\d+\\.\\d+\\.\\d+)",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+opencode-version: \\$\\{\\{ inputs\\.opencode-version \\|\\| '(?<currentValue>v\\d+\\.\\d+\\.\\d+)' \\}\\}"
+      ]
     }
   ]
 }

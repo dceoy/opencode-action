@@ -46,7 +46,8 @@ on:
         required: false
         type: string
         description: OpenCode version to install
-        default: latest
+        # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
+        default: v1.19.3
       use-bundled-toolkit:
         required: false
         type: boolean
@@ -130,7 +131,7 @@ jobs:
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
       - name: Run OpenCode
-        uses: $/.
+        uses: $/.  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -155,7 +156,8 @@ jobs:
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
-          opencode-version: ${{ inputs.opencode-version || 'latest' }}
+          # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
+          opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}
