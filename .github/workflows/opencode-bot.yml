@@ -226,7 +226,7 @@ jobs:
         if: >-
           (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
           || steps.comment-trigger.outputs.matched == 'true'
-        uses: $/.
+        uses: $/.  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

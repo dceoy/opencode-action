@@ -27,7 +27,7 @@ for path in paths:
     matches = [
         m.groupdict()
         for pattern in manager["matchStrings"]
-        for m in re.finditer(pattern, content)
+        for m in re.finditer(pattern.replace("(?<", "(?P<"), content)
     ]
     expected = 1 if path == "action.yml" else 2
     assert len(matches) == expected, (path, len(matches))

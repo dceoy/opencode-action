@@ -131,7 +131,7 @@ jobs:
           git config --local user.name 'opencode-agent[bot]'
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
       - name: Run OpenCode
-        uses: $/.
+        uses: $/.  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
