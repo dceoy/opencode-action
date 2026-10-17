@@ -24,16 +24,21 @@ versions = set()
 for path in paths:
     content = (root / path).read_text()
     assert any(re.search(pattern[1:-1], path) for pattern in manager["managerFilePatterns"]), path
-    matches = list(re.finditer(manager["matchStrings"][0], content))
-    assert len(matches) == 1, (path, len(matches))
-    match = matches[0].groupdict()
-    assert match["datasource"] == "github-releases", path
-    assert match["depName"] == "anomalyco/opencode", path
-    assert match["versioning"] == "semver", path
-    assert re.fullmatch(r"v1\.\d+\.\d+", match["currentValue"]), path
-    versions.add(match["currentValue"])
+    matches = [
+        m.groupdict()
+        for pattern in manager["matchStrings"]
+        for m in re.finditer(pattern, content)
+    ]
+    expected = 1 if path == "action.yml" else 2
+    assert len(matches) == expected, (path, len(matches))
+    for match in matches:
+        assert match["datasource"] == "github-releases", path
+        assert match["depName"] == "anomalyco/opencode", path
+        assert match["versioning"] == "semver", path
+        assert re.fullmatch(r"v1\.\d+\.\d+", match["currentValue"]), path
+        versions.add(match["currentValue"])
     if path != "action.yml":
-        assert "opencode-version: ${{ inputs.opencode-version }}" in content, path
+        assert "opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}" in content, path
 assert len(versions) == 1, versions
 assert any(
     rule.get("matchPackageNames") == ["anomalyco/opencode"]

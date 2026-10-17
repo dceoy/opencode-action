@@ -251,7 +251,8 @@ jobs:
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
-          opencode-version: ${{ inputs.opencode-version }}
+          # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
+          opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: ${{ inputs.review-only }}
           pr-review-ref: ${{ inputs.pr-review-ref }}

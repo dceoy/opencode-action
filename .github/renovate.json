@@ -36,7 +36,8 @@
         "/^\\.github\\/workflows\\/opencode-(?:bot|review)\\.yml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+default:\\s+(?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+default:\\s+(?<currentValue>v\\d+\\.\\d+\\.\\d+)",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) versioning=(?<versioning>\\S+)\\s+opencode-version: \\$\\{\\{ inputs\\.opencode-version \\|\\| '(?<currentValue>v\\d+\\.\\d+\\.\\d+)' \\}\\}"
       ]
     }
   ]
