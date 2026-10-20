@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '17 5 * * 1'
   workflow_dispatch:
 permissions:
   contents: read
@@ -62,6 +64,7 @@ jobs:
   github-codeql-analysis:
     if: >
       github.event_name == 'push'
+      || github.event_name == 'schedule'
       || github.event_name == 'pull_request'
       || github.event_name == 'workflow_dispatch'
     permissions:
@@ -71,7 +74,7 @@ jobs:
     uses: dceoy/gha-for-devops/.github/workflows/github-codeql-analysis.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       language: >
-        ["actions","javascript-typescript"]
+        ["actions"]
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
