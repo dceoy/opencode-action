@@ -1,28 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
       "description": "Automatically merge minor and patch-level updates",
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "digest"
-      ],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
       "automergeType": "branch"
     },
     {
       "description": "Keep the OpenCode binary on v1",
-      "matchDatasources": [
-        "github-releases"
-      ],
-      "matchPackageNames": [
-        "anomalyco/opencode"
-      ],
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["anomalyco/opencode"],
       "allowedVersions": "<2.0.0",
       "groupName": "OpenCode v1"
     }
