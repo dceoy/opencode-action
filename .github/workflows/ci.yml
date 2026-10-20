@@ -71,7 +71,7 @@ jobs:
     uses: dceoy/gha-for-devops/.github/workflows/github-codeql-analysis.yml@main  # zizmor: ignore[unpinned-uses]
     with:
       language: >
-        ["actions"]
+        ["actions","javascript-typescript"]
   dependabot-auto-merge:
     if: >
       github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
