@@ -17,7 +17,7 @@ updates:
     schedule:
       interval: daily
     cooldown:
-      default-days: 7
+      default-days: 1
     open-pull-requests-limit: 10
     groups:
       npm-dependencies:
