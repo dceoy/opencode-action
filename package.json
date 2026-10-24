@@ -3,5 +3,8 @@
   "private": true,
   "devDependencies": {
     "opencode-ai": "latest"
+  },
+  "engines": {
+    "node": ">=22.23.4"
   }
 }
