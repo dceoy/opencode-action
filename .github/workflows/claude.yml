@@ -7,35 +7,14 @@ on:
     types:
       - opened
       - ready_for_review
+    paths-ignore:
+      - '.github/workflows/claude.yml'
 permissions:
   contents: read
 jobs:
-  claude_workflow_change:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      changed: ${{ steps.check.outputs.changed }}
-    steps:
-      - name: Detect changes to this workflow
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
-            --paginate \
-            --jq '.[].filename' > "${RUNNER_TEMP}/pull-request-files"
-          if grep -Fxq '.github/workflows/claude.yml' "${RUNNER_TEMP}/pull-request-files"; then
-            echo "changed=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "changed=false" >> "${GITHUB_OUTPUT}"
-          fi
   claude-code-review:
-    needs: claude_workflow_change
     if: >
-      needs.claude_workflow_change.outputs.changed != 'true'
-      && github.event_name == 'pull_request'
+      github.event_name == 'pull_request'
       && (! github.event.pull_request.draft)
       && github.event.pull_request.user.type != 'Bot'
     permissions:
