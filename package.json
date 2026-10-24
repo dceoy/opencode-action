@@ -6,7 +6,7 @@
   },
   "engines": {
     "node": ">=22.23.4",
-    "pnpm": ">=12"
+    "pnpm": ">=11 <13"
   },
   "devEngines": {
     "runtime": {
