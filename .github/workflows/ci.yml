@@ -55,12 +55,6 @@ jobs:
       search-path: .
       setup-run: |
         corepack install --global pnpm@latest
-        export PNPM_HOME="${RUNNER_TEMP}/pnpm"
-        mkdir -p "${PNPM_HOME}"
-        export PATH="${PNPM_HOME}:${PNPM_HOME}/bin:${PATH}"
-        corepack pnpm runtime set node latest -g
-        echo "${PNPM_HOME}" >> "${GITHUB_PATH}"
-        echo "${PNPM_HOME}/bin" >> "${GITHUB_PATH}"
         corepack pnpm install --frozen-lockfile
         (cd node_modules/opencode-ai && node postinstall.mjs)
         echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> "${GITHUB_PATH}"
