@@ -8,7 +8,7 @@ on:
       - opened
       - ready_for_review
     paths-ignore:
-      - '.github/workflows/claude.yml'
+      - .github/workflows/claude.yml
 permissions:
   contents: read
 jobs:
