@@ -19,10 +19,6 @@
           "name": "llm-jp-3.1-8x13b-instruct4",
           "variants": {},
         },
-        "preview/Kimi-K2.6": {
-          "name": "preview/Kimi-K2.6",
-          "variants": {},
-        },
         "preview/Kimi-K2.7-Code": {
           "name": "preview/Kimi-K2.7-Code",
           "variants": {},
