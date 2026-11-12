@@ -10,15 +10,13 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 ## OpenCode bot
 
-Use `opencode-bot.yml` for `/opencode` and `/oc` comments, direct manual dispatch, or another event with a fixed `prompt`.
+Use `opencode-bot.yml` for `/opencode` and `/oc` inline pull request review comments, direct manual dispatch, or another event with a fixed `prompt`.
 
 <!-- prettier-ignore -->
 ```yaml
 ---
 name: OpenCode
 on:
-  issue_comment:
-    types: [created]
   pull_request_review_comment:
     types: [created]
 
@@ -37,7 +35,7 @@ jobs:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 ```
 
-For comment events, the reusable workflow accepts comments only from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations **and** requires a configured `mentions` phrase in the comment body (case-insensitive). Supplying the required `model` input does not bypass either condition. On non-comment events, a non-empty `prompt` is required.
+For pull request review comments, the reusable workflow accepts comments only from `OWNER`, `MEMBER`, or `COLLABORATOR` author associations **and** requires a configured `mentions` phrase in the comment body (case-insensitive). Supplying the required `model` input does not bypass either condition. On non-comment events, a non-empty `prompt` is required.
 
 ## Pull request review
 
