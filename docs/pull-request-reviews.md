@@ -18,7 +18,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@main
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@163f9a9cd3d3f497e2847635585419f951371d2f  # v0.8.1
     with:
       model: sakura/preview/Kimi-K2.7-Code
       prompt: Focus on security and regression risks.
