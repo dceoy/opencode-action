@@ -136,9 +136,6 @@ on:
       pr-review-ref: *input-pr-review-ref
       timeout-minutes: *input-timeout-minutes
       runs-on: *input-runs-on
-  issue_comment:
-    types:
-      - created
   pull_request_review_comment:
     types:
       - created
@@ -152,20 +149,19 @@ jobs:
   opencode-bot:
     if: >
       (
-        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+        github.event_name == 'pull_request_review_comment'
         && github.event.comment.user.type != 'Bot'
         && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
 
       ) || (
-        github.event_name != 'issue_comment'
-        && github.event_name != 'pull_request_review_comment'
+        github.event_name != 'pull_request_review_comment'
         && inputs.prompt != ''
       )
     runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
     steps:
       - name: Check configured comment mentions
         id: comment-trigger
-        if: github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment'
+        if: github.event_name == 'pull_request_review_comment'
         shell: bash
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
@@ -206,7 +202,7 @@ jobs:
           PY
       - name: Checkout repository
         if: >-
-          (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+          github.event_name != 'pull_request_review_comment'
           || steps.comment-trigger.outputs.matched == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -216,7 +212,7 @@ jobs:
       - name: Configure Git identity
         if: >-
           inputs.use-github-token && (
-            (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+            github.event_name != 'pull_request_review_comment'
             || steps.comment-trigger.outputs.matched == 'true'
           )
         run: |
@@ -224,7 +220,7 @@ jobs:
           git config --local user.email 'opencode-agent[bot]@users.noreply.github.com'
       - name: Run OpenCode
         if: >-
-          (github.event_name != 'issue_comment' && github.event_name != 'pull_request_review_comment')
+          github.event_name != 'pull_request_review_comment'
           || steps.comment-trigger.outputs.matched == 'true'
         uses: $/.  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         env:
