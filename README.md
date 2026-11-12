@@ -1,6 +1,6 @@
 # opencode-action
 
-Run an [OpenCode](https://opencode.ai/) agent from GitHub Actions, including issue and pull request comments, pull request reviews, and manually dispatched tasks.
+Run an [OpenCode](https://opencode.ai/) agent from GitHub Actions, including inline pull request review comments, pull request reviews, and manually dispatched tasks.
 
 [![CI](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml/badge.svg)](https://github.com/dceoy/opencode-action/actions/workflows/ci.yml)
 
@@ -19,8 +19,6 @@ Create `.github/workflows/opencode.yml`:
 ---
 name: OpenCode
 on:
-  issue_comment:
-    types: [created]
   pull_request_review_comment:
     types: [created]
 permissions:
@@ -46,10 +44,10 @@ jobs:
           model: opencode-go/kimi-k3
 ```
 
-### 3. Comment on an issue or pull request
+### 3. Add an inline comment to a pull request diff
 
 ```text
-/opencode explain this issue
+/opencode explain this change
 ```
 
 The shorter `/oc` trigger also works:
@@ -66,7 +64,7 @@ For smaller caller workflows, this repository provides reusable workflows for Op
 
 | Workflow                                                       | Purpose                                                                           |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted comments, manual dispatch, or a fixed prompt.           |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted PR review comments, manual dispatch, or a fixed prompt.           |
 | [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Install and use `pr-loop`'s external `pr-review` skill for `pull_request` events. |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
