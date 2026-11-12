@@ -64,7 +64,7 @@ For smaller caller workflows, this repository provides reusable workflows for Op
 
 | Workflow                                                       | Purpose                                                                           |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode from trusted PR review comments, manual dispatch, or a fixed prompt.           |
+| [`opencode-bot.yml`](.github/workflows/opencode-bot.yml)       | Run OpenCode via PR review comments, dispatch, or a fixed prompt.                 |
 | [`opencode-review.yml`](.github/workflows/opencode-review.yml) | Install and use `pr-loop`'s external `pr-review` skill for `pull_request` events. |
 
 See [Reusable workflows](docs/reusable-workflows.md) for caller examples, inputs, secrets, and permission requirements.
