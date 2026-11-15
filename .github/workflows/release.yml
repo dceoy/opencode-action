@@ -42,4 +42,5 @@ jobs:
     uses: ./.github/workflows/post-release.yml
     with:
       release-tag: ${{ needs.release.outputs.release-tag }}
-    secrets: inherit
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
