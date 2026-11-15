@@ -52,7 +52,7 @@ jobs:
        (needs.release.result == 'success' && needs.release.outputs.release-tag != ''))
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@ca03ecc027911ba3be22aaef48be32b69f8351bb  # PR #1195; repin after merge
+    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@7c83fb4e99108d9160d0962ead17ddf1913cf2dd  # PR #1195; repin after merge
     with:
       tag-name: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
   release-pins:
@@ -64,7 +64,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-action-release-pins.yml@ca03ecc027911ba3be22aaef48be32b69f8351bb  # PR #1195; repin after merge
+    uses: dceoy/gha-for-devops/.github/workflows/github-action-release-pins.yml@7c83fb4e99108d9160d0962ead17ddf1913cf2dd  # PR #1195; repin after merge
     with:
       release-tag: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
       pr-loop-ref-input: pr-review-ref
