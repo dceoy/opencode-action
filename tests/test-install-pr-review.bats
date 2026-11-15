@@ -44,7 +44,7 @@ setup() {
   model_input="$(sed -n '/^      model:$/,/^      agent:$/p' "${workflow}")"
   [[ "${model_input}" == *"required: false"* ]]
   [[ "${model_input}" == *"default: opencode/deepseek-v4.1-flash-free"* ]]
-  run grep -Fq "model: \\${{ inputs.model || 'opencode/deepseek-v4.1-flash-free' }}" "${workflow}"
+  run grep -Fq "model: \${{ inputs.model || 'opencode/deepseek-v4.1-flash-free' }}" "${workflow}"
   [ "${status}" -eq 0 ]
   run grep -Fq 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' "${workflow}"
   [ "${status}" -eq 0 ]
