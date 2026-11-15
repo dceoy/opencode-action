@@ -44,6 +44,23 @@ Automatic formatters and language servers are disabled in review-only runs.
 
 The adapter resolves credentials for each invocation rather than persisting a short-lived token between processes. Read-only requests use best-effort token resolution; the pending-review probe runs only before publication and performs real GitHub API create/delete operations, although it never publishes a review. The review agent denies tools by default and allows only the upstream skill, trusted reference reads and globbing, and the native API tool. It denies direct GitHub/network tools, general shell commands, grep, delegation, repository edits and all checkout file reads. Repository content is read through frozen Git blobs instead, so checkout symlinks cannot redirect file reads to runner credentials. These are OpenCode tool permissions, **not an operating-system sandbox**; use trusted runners and grant `pull-requests: write`.
 
+## OpenCode 2 runtime (opt-in)
+
+OpenCode 2 has no `opencode github run`, so the action only runs it for review-only runs, where publication already goes through the action's own adapter. Opt in with all three inputs:
+
+```yaml
+with:
+  runtime: v2
+  opencode-version: v2.3.0 # explicit OpenCode 2 release; `latest` is rejected
+  use-github-token: true
+```
+
+- `runtime: v2` installs with the OpenCode 2 installer into the same disposable HOME and runs `opencode run --standalone` with the restricted review agent. The action refuses to start unless the installed binary reports an OpenCode 2 version.
+- The review bridge is loaded as an OpenCode 2 plugin (`plugins/pr-review-api`) instead of the OpenCode 1 custom tool; both call the same adapter.
+- The OpenCode App token exchange was part of `opencode github run`, so `use-github-token: true` is required and reviews are authored by the workflow token's identity. `share` and `oidc-base-url` have no effect.
+- General (non-review) runs fail before installation with `runtime: v2`. `runtime: v1` rejects OpenCode 2 versions.
+- The default stays `v1`. v2.3.0 is the release exercised by the Bats suite, which runs the real binary against a mock model to check the tool permission matrix and that OpenCode files in the checkout (config, plugins, tools, skills) are not loaded.
+
 ## Review contract and boundaries
 
 Upstream `pr-review` freezes the base/head snapshot, validates findings against repository evidence, and publishes one verified `COMMENT` review by default. It never approves, requests changes, merges, or modifies repository contents. See [the upstream skill specification](https://github.com/dceoy/pr-loop/blob/main/skills/pr-review/SKILL.md) for the authoritative policy.

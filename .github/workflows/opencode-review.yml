@@ -49,6 +49,11 @@ on:
         description: OpenCode version to install
         # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
         default: v1.19.3
+      runtime:
+        required: false
+        type: string
+        description: OpenCode runtime generation (v1 or v2); v2 needs an OpenCode 2 opencode-version and use-github-token
+        default: v1
       use-bundled-toolkit:
         required: false
         type: boolean
@@ -159,6 +164,7 @@ jobs:
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
           opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
+          runtime: ${{ inputs.runtime || 'v1' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

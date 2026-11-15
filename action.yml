@@ -40,9 +40,15 @@ inputs:
     default: https://api.opencode.ai
   opencode-version:
     required: false
-    description: OpenCode version to install (e.g., v1.2.3)
+    description: OpenCode version to install (e.g., v1.2.3). Its major version must match the selected runtime.
     # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
     default: v1.19.3
+  runtime:
+    required: false
+    description: >-
+      OpenCode runtime generation, v1 or v2. v2 is opt-in, supports review-only runs with use-github-token: true,
+      and requires an explicit OpenCode 2 opencode-version (e.g., v2.3.0).
+    default: v1
   use-bundled-toolkit:
     required: false
     description: Whether to copy the action's bundled provider configuration and review support files.
@@ -57,12 +63,15 @@ inputs:
     default: 66193c0383663b48ea144b438d7dd4a42e02b6e2  # v1.1.5
   timeout-minutes:
     required: false
-    description: Maximum minutes to let 'opencode github run' execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
+    description: Maximum minutes to let OpenCode execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
     default: '60'
 outputs:
   opencode-version:
     description: OpenCode version resolved for this run.
     value: ${{ steps.version.outputs.opencode-version }}
+  runtime:
+    description: OpenCode runtime generation selected for this run.
+    value: ${{ steps.version.outputs.runtime }}
   cache-hit:
     description: Whether the OpenCode binary cache was restored. Empty for review-only runs, which install a fresh OpenCode binary.
     value: ${{ steps.cache.outputs.cache-hit }}
@@ -76,7 +85,26 @@ runs:
         INPUT_VERSION: ${{ inputs.opencode-version }}
         GITHUB_TOKEN: ${{ github.token }}
         REVIEW_ONLY: ${{ inputs.review-only }}
+        RUNTIME: ${{ inputs.runtime }}
       run: |
+        RUNTIME="${RUNTIME:-v1}"
+        case "${RUNTIME}" in
+          v1) ;;
+          v2)
+            if [[ "${REVIEW_ONLY}" != "true" ]]; then
+              echo "::error::Runtime v2 supports review-only runs only; OpenCode 2 has no 'opencode github run'. Use runtime: v1 for general runs." >&2
+              exit 1
+            fi
+            if [[ "${INPUT_VERSION}" == "latest" ]]; then
+              echo "::error::Runtime v2 requires an explicit OpenCode 2 version (e.g., v2.3.0); 'latest' is not resolved across majors." >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "::error::Invalid runtime '${RUNTIME}'; expected v1 or v2." >&2
+            exit 1
+            ;;
+        esac
         if [[ "${INPUT_VERSION}" == "latest" ]]; then
           if [[ -n "${GITHUB_TOKEN:-}" ]]; then
             auth_header=(-H "Authorization: token ${GITHUB_TOKEN}")
@@ -88,7 +116,15 @@ runs:
           OPENCODE_VERSION="${INPUT_VERSION}"
         fi
         OPENCODE_VERSION="${OPENCODE_VERSION#v}"
-        if [[ "${REVIEW_ONLY}" == "true" ]]; then
+        if [[ "${RUNTIME}" == "v2" ]]; then
+          if [[ ! "${OPENCODE_VERSION}" =~ ^2\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Runtime v2 requires an OpenCode 2 release such as v2.3.0 (got '${OPENCODE_VERSION}')." >&2
+            exit 1
+          fi
+        elif [[ "${OPENCODE_VERSION}" =~ ^([0-9]+)\. ]] && (( 10#${BASH_REMATCH[1]} >= 2 )); then
+          echo "::error::OpenCode ${OPENCODE_VERSION} is not an OpenCode 1 release, so runtime v1 cannot run it. OpenCode 2 needs runtime: v2." >&2
+          exit 1
+        elif [[ "${REVIEW_ONLY}" == "true" ]]; then
           if [[ ! "${OPENCODE_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?(\+([0-9A-Za-z]+([.-][0-9A-Za-z]+)*))?$ ]]; then
             echo "::error::Review-only requires OpenCode 1.2.14 or newer (got '${OPENCODE_VERSION}')." >&2
             exit 1
@@ -101,6 +137,7 @@ runs:
           fi
         fi
         echo "opencode-version=${OPENCODE_VERSION}" | tee -a "${GITHUB_OUTPUT}"
+        echo "runtime=${RUNTIME}" | tee -a "${GITHUB_OUTPUT}"
     - name: Copy bundled OpenCode config
       if: inputs.use-bundled-toolkit == 'true' && inputs.review-only != 'true'
       shell: bash -euo pipefail {0}
@@ -148,6 +185,7 @@ runs:
         REVIEW_ONLY: ${{ inputs.review-only }}
         PR_REVIEW_REF: ${{ inputs.pr-review-ref }}
         PR_REVIEW_INSTALL_TOKEN: ${{ inputs.review-only == 'true' && github.token || '' }}
+        OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}
         RUNNER_TEMP: ${{ runner.temp }}
       run: |
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
@@ -201,7 +239,11 @@ runs:
               > "${review_installer_bin}/which"
             chmod 700 "${review_installer_bin}/which"
           fi
-          curl -fsSL https://opencode.ai/install |
+          installer_url=https://opencode.ai/install
+          if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+            installer_url=https://opencode.ai/v2/install
+          fi
+          curl -fsSL "${installer_url}" |
             PATH="${review_installer_bin}:${PATH}" \
               GITHUB_PATH=/dev/null \
               OPENCODE_REVIEW_INSTALL_SHIM="${review_installer_bin}/opencode" \

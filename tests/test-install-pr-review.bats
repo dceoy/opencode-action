@@ -15,7 +15,7 @@ setup() {
     $0 == "    - name: Run OpenCode" { step=1; next }
     step && /^      run: \|$/ { script=1; next }
     script && index($0, "if [[ -z \"${PR_REVIEW_REF}\" ]]") { install=1 }
-    install && /^          curl -fsSL https:\/\/opencode\.ai\/install/ { exit }
+    install && /^          installer_url=https:\/\/opencode\.ai\/install$/ { exit }
     install { sub(/^        /, ""); print }
   ' "${repo_root}/action.yml" > "${install_step}"
   [ -s "${install_step}" ]
@@ -50,14 +50,36 @@ setup() {
   [ "${status}" -eq 0 ]
 }
 
-@test "rejects invalid OpenCode review-only versions" {
-  for version in 0.9.0 1.2.13 1.2.14-beta.1 invalid; do
-    run env INPUT_VERSION="${version}" REVIEW_ONLY=true GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-    [ "${status}" -ne 0 ]
+@test "version step accepts only versions matching the selected runtime" {
+  for example in '|true|0.9.0|1' '|true|1.2.13|1' '|true|1.2.14-beta.1|1' '|true|invalid|1' \
+    '|true|1.2.14|0' '|true|v1.2.14|0' '|true|1.2.14+build.1|0' '|true|1.3.0|0' \
+    '|true|2.0.0|1' 'v1|true|v2.3.0|1' 'v1|false|v2.3.0|1' 'v1|false|v1.19.3|0' 'v1|false|custom-build|0' \
+    'v2|true|v2.3.0|0' 'v2|true|2.3.0|0' 'v2|true|v1.19.3|1' 'v2|true|latest|1' 'v2|true|v2.3.0-beta.1|1' \
+    'v2|true|v3.0.0|1' 'v2|false|v2.3.0|1' 'v3|true|v2.3.0|1'; do
+    IFS='|' read -r runtime review_only version expected <<< "${example}"
+    : > "${BATS_TEST_TMPDIR}/output"
+    run env RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY="${review_only}" \
+      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
+    if [[ "${status}" -ne "${expected}" ]]; then
+      printf 'unexpected status %s for %s: %s\n' "${status}" "${example}" "${output}" >&2
+    fi
+    [ "${status}" -eq "${expected}" ]
+    if [[ "${expected}" -eq 0 ]]; then
+      grep -Fxq "runtime=${runtime:-v1}" "${BATS_TEST_TMPDIR}/output"
+      grep -Fxq "opencode-version=${version#v}" "${BATS_TEST_TMPDIR}/output"
+    fi
   done
-  for version in 1.2.14 v1.2.14 1.2.14+build.1 1.3.0 2.0.0; do
-    run env INPUT_VERSION="${version}" REVIEW_ONLY=true GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-    [ "${status}" -eq 0 ]
+}
+
+# shellcheck disable=SC2016  # literal workflow expressions
+@test "review-only installer and inputs follow the selected runtime" {
+  action="${repo_root}/action.yml"
+  grep -Fq 'installer_url=https://opencode.ai/v2/install' "${action}"
+  grep -Fq 'curl -fsSL "${installer_url}" |' "${action}"
+  grep -Fq 'OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}' "${action}"
+  [[ "$(sed -n '/^  runtime:$/,/^  use-bundled-toolkit:$/p' "${action}")" == *"default: v1"* ]]
+  for workflow in opencode-bot opencode-review; do
+    grep -Fq "runtime: \${{ inputs.runtime || 'v1' }}" "${repo_root}/.github/workflows/${workflow}.yml"
   done
 }
 

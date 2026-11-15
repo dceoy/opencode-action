@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run scoped GitHub reads and commit-bound review publication.
-# This runs inside opencode github run, after its OIDC token exchange.
+# This runs inside OpenCode: after the OIDC token exchange of v1 `opencode github run`,
+# or with the explicit workflow token on runtime v2.
 set -euo pipefail
 
 pr_review_request() {

@@ -272,10 +272,59 @@ opencode_report_failure() {
   opencode_report_error "OpenCode failed with exit code ${status} for ${context}."
 }
 
+# Fail before any model call when the selected runtime cannot serve this run.
+# OpenCode 2 has no `opencode github run`, so only the review-only flow, which
+# publishes through the action's own adapter, can run on it. That adapter
+# normally relies on the App token exchanged by `opencode github run`.
+opencode_validate_runtime() {
+  case "${OPENCODE_RUNTIME:-v1}" in
+    v1) ;;
+    v2)
+      if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
+        opencode_report_error "Runtime v2 supports review-only runs only; OpenCode 2 has no 'opencode github run'. Use runtime: v1 for general runs."
+        return 1
+      fi
+      if [[ "${USE_GITHUB_TOKEN:-false}" != "true" ]]; then
+        opencode_report_error "Runtime v2 does not perform the OpenCode App token exchange. Set use-github-token: true to publish the review with the workflow token."
+        return 1
+      fi
+      ;;
+    *)
+      opencode_report_error "Invalid runtime '${OPENCODE_RUNTIME}'; expected v1 or v2."
+      return 1
+      ;;
+  esac
+}
+
+# Set OPENCODE_RUN_COMMAND for the selected runtime. Runtime v2 refuses to
+# start unless the binary on PATH reports an OpenCode 2 version, because both
+# generations install an executable named `opencode`.
+opencode_select_run_command() {
+  local reported model
+
+  if [[ "${OPENCODE_RUNTIME:-v1}" != "v2" ]]; then
+    OPENCODE_RUN_COMMAND=(opencode github run)
+    return 0
+  fi
+  reported="$(opencode --version 2> /dev/null | tail -n 1)" || reported=""
+  reported="${reported##* }"
+  if [[ ! "${reported#v}" =~ ^2\.[0-9]+\.[0-9]+ ]]; then
+    opencode_report_error "Runtime v2 requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
+    return 1
+  fi
+  model="${MODEL:?MODEL is required}"
+  if [[ -n "${VARIANT:-}" ]]; then
+    model+="#${VARIANT}"
+  fi
+  OPENCODE_RUN_COMMAND=(opencode run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
+}
+
 opencode_configure_run() {
-  local script_dir base_config skill_relative
+  local script_dir base_config skill_relative review_bridge
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  opencode_validate_runtime || return 1
 
   if [[ "${REVIEW_ONLY:-false}" == "true" ]]; then
     if [[ "${USE_BUNDLED_TOOLKIT:-false}" != "true" || ! -f "${HOME}/.config/opencode/skills/pr-review/SKILL.md" ]]; then
@@ -330,7 +379,11 @@ opencode_configure_run() {
       opencode_report_error "Review-only requires a concrete PR_REVIEW_URL and full PR_REVIEW_HEAD_SHA; provide them explicitly for comment or manual events."
       return 1
     fi
-    if [[ ! -f "${HOME}/.config/opencode/tools/pr-review-api.js" || ! -f "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]]; then
+    review_bridge="tools/pr-review-api.js"
+    if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+      review_bridge="plugins/pr-review-api/index.js"
+    fi
+    if [[ ! -f "${HOME}/.config/opencode/${review_bridge}" || ! -f "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]]; then
       opencode_report_error "Review-only requires the installed native pr-review-api tool and adapter."
       return 1
     fi
@@ -376,12 +429,13 @@ _opencode_run_main() {
   timeout_minutes="${TIMEOUT_MINUTES:?TIMEOUT_MINUTES is required}"
 
   opencode_configure_run
+  opencode_select_run_command
   output_file="$(mktemp)"
   trap 'rm -f "${output_file}"' EXIT
   opencode_select_timeout_command "${timeout_minutes}"
 
   set +e
-  "${OPENCODE_TIMEOUT_COMMAND[@]}" opencode github run 2>&1 | tee "${output_file}"
+  "${OPENCODE_TIMEOUT_COMMAND[@]}" "${OPENCODE_RUN_COMMAND[@]}" 2>&1 | tee "${output_file}"
   opencode_status="${PIPESTATUS[0]}"
   set -e
 

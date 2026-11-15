@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install only provider configuration for regular runs; isolate review support.
 opencode_prepare_config() {
-  local action_path="${1}" review_only="${2:-false}" config_dir
+  local action_path="${1}" review_only="${2:-false}" runtime="${3:-v1}" config_dir
   config_dir="${HOME}/.config/opencode"
   if [[ ! -d "${action_path}/.opencode" ]]; then
     echo "::error::Bundled OpenCode config is unavailable at '${action_path}/.opencode'." >&2
@@ -11,6 +11,13 @@ opencode_prepare_config() {
     echo "::error::OpenCode config parent is a symlink; refusing to write through it." >&2
     return 1
   fi
+  case "${runtime}" in
+    v1 | v2) ;;
+    *)
+      echo "::error::Invalid runtime '${runtime}'." >&2
+      return 1
+      ;;
+  esac
   case "${review_only}" in
     true)
       # action.yml supplies a fresh temporary HOME in review-only mode.
@@ -22,6 +29,12 @@ opencode_prepare_config() {
       export XDG_CONFIG_HOME="${HOME}/.config"
       mkdir -p "${config_dir}"
       cp -r "${action_path}/.opencode/." "${config_dir}/"
+      # Each runtime loads the review bridge through its own extension API.
+      if [[ "${runtime}" == "v2" ]]; then
+        rm -rf -- "${config_dir}/tools"
+      else
+        rm -rf -- "${config_dir}/plugins"
+      fi
       ;;
     false)
       mkdir -p "${config_dir}"
@@ -39,5 +52,5 @@ opencode_prepare_config() {
 }
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   set -euo pipefail
-  opencode_prepare_config "${ACTION_PATH:?ACTION_PATH is required}" "${REVIEW_ONLY:-false}"
+  opencode_prepare_config "${ACTION_PATH:?ACTION_PATH is required}" "${REVIEW_ONLY:-false}" "${OPENCODE_RUNTIME:-v1}"
 fi

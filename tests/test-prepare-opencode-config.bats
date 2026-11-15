@@ -9,6 +9,8 @@ setup() {
   printf '%s\n' 'obsolete' > "${fake_action}/.opencode/commands/legacy.md"
   cp "${repo_root}/.opencode/tools/pr-review-api.js" "${fake_action}/.opencode/tools/"
   cp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${fake_action}/.opencode/scripts/"
+  mkdir -p "${fake_action}/.opencode/plugins"
+  cp -r "${repo_root}/.opencode/plugins/pr-review-api" "${fake_action}/.opencode/plugins/"
   printf '%s\n' bundled > "${fake_action}/.opencode/opencode.jsonc"
   export HOME="${fake_home}"
 }
@@ -20,6 +22,22 @@ setup() {
   cmp "${repo_root}/.opencode/tools/pr-review-api.js" "${HOME}/.config/opencode/tools/pr-review-api.js"
   cmp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${HOME}/.config/opencode/scripts/pr-review-gh.sh"
   [ -f "${HOME}/.opencode/bin/opencode" ]
+}
+
+@test "review-only installs only the selected runtime's review bridge" {
+  for example in '|tools/pr-review-api.js|plugins' 'v1|tools/pr-review-api.js|plugins' \
+    'v2|plugins/pr-review-api/index.js|tools'; do
+    IFS='|' read -r runtime present absent <<< "${example}"
+    rm -rf "${HOME}/.config"
+    opencode_prepare_config "${fake_action}" true ${runtime:+"${runtime}"}
+    [ -f "${HOME}/.config/opencode/${present}" ]
+    [ -f "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]
+    [ ! -e "${HOME}/.config/opencode/${absent}" ]
+  done
+  rm -rf "${HOME}/.config"
+  run opencode_prepare_config "${fake_action}" true v3
+  [ "${status}" -ne 0 ]
+  [ ! -e "${HOME}/.config/opencode" ]
 }
 
 @test "review-only refuses inherited config without deleting it" {

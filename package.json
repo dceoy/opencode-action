@@ -2,11 +2,8 @@
   "name": "opencode-action",
   "private": true,
   "devDependencies": {
+    "@opencode/cli": "2.3.0",
     "opencode-ai": "latest"
-  },
-  "engines": {
-    "node": ">=22.23.4",
-    "pnpm": ">=11 <13"
   },
   "devEngines": {
     "runtime": {
@@ -14,5 +11,9 @@
       "version": ">=22.23.4",
       "onFail": "download"
     }
+  },
+  "engines": {
+    "node": ">=22.23.4",
+    "pnpm": ">=11 <13"
   }
 }
