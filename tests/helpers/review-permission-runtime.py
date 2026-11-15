@@ -111,6 +111,10 @@ try:
             state = observed.get('case_' + name)
             assert state is not None, (name, result.stdout, result.stderr)
             assert (state['status'] == 'completed') == allowed, (model, name, state)
+            if name == 'skill':
+                skill_result = json.dumps(state.get('output', state))
+                assert 'Trusted fixture.' in skill_result, (model, name, state)
+                assert 'UNTRUSTED_SKILL' not in skill_result, (model, name, state)
             print(model, name, 'allowed' if allowed else 'denied')
         visible = [names for names in advertised if names]
         assert visible and all('pr-review-api' in names for names in visible), advertised
