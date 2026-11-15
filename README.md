@@ -76,6 +76,7 @@ Set `model` to a `provider/model` value and pass the corresponding API key:
 | Provider        | Example model                | Secret               |
 | --------------- | ---------------------------- | -------------------- |
 | OpenCode        | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`   |
+| OpenCode free   | `opencode/deepseek-v4.1-flash-free` | `OPENCODE_API_KEY` |
 | OpenRouter      | `openrouter/openrouter/free` | `OPENROUTER_API_KEY` |
 | Anthropic       | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`  |
 | OpenAI          | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`     |
@@ -120,5 +121,7 @@ Outputs are `opencode-version` and `cache-hit`. Review-only runs (`review-only: 
 The reusable [`opencode-review.yml`](.github/workflows/opencode-review.yml) runs the SHA-pinned external `pr-loop/pr-review` skill in an isolated `review-only` environment. The old bundled `/review-pr` command, agents, and orchestration are gone. The `/pr-review` prompt loads the skill through OpenCode's native `skill` tool; optional plain-text instructions narrow review focus.
 
 Direct action or bot review-only calls require `use-bundled-toolkit: 'true'`, a full `pr-review-ref` commit SHA, and a concrete PR URL/head SHA. The reusable review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` as public inputs for compatibility; its review agent remains fixed, comment mentions are irrelevant to PR events, and the bundle is required. The action retains its restricted GitHub API adapter and verified App-token publication flow, which are needed to enforce read-only evidence access and a commit-bound `COMMENT` review. The restriction is an OpenCode tool permission boundary, not an operating-system sandbox.
+
+The reusable review workflow defaults to `opencode/deepseek-v4.1-flash-free`, currently free for a limited time. Set the `OPENCODE_API_KEY` Actions secret for OpenCode Console access, or override `model` with another provider and supply its credentials. Model availability and free-tier limits can change.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for usage, permissions, trust boundaries, and limitations.
