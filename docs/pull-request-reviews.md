@@ -46,15 +46,15 @@ The adapter resolves credentials for each invocation rather than persisting a sh
 
 ## OpenCode 2 (opt-in)
 
-OpenCode 2 has no `opencode github run`, so the action only runs it for review-only runs, where publication already goes through the action's own adapter. The major version of `opencode-version` selects the runtime, so opt in by pinning an OpenCode 2 release:
+OpenCode 2 has no `opencode github run`, so the action only runs it for review-only runs, where publication already goes through the action's own adapter. The major version of `opencode-version` selects the runtime. Use `v2` to resolve the newest stable OpenCode 2 release automatically:
 
 ```yaml
 with:
-  opencode-version: v2.3.0
+  opencode-version: v2
   use-github-token: true
 ```
 
-- An OpenCode 2 version installs with the OpenCode 2 installer into the same disposable HOME and runs `opencode run --standalone` with the restricted review agent. The action refuses to start unless the installed binary reports an OpenCode 2 version.
+- `v2` resolves the latest stable 2.x release; a full version such as `v2.3.0` can still pin a specific release. An OpenCode 2 version installs with the OpenCode 2 installer into the same disposable HOME and runs `opencode run --standalone` with the restricted review agent. The action refuses to start unless the installed binary reports an OpenCode 2 version.
 - The review bridge is loaded as an OpenCode 2 plugin (`plugins/pr-review-api`) instead of the OpenCode 1 custom tool; both call the same adapter.
 - The OpenCode App token exchange was part of `opencode github run`, so `use-github-token: true` is required and reviews are authored by the workflow token's identity. `share` and `oidc-base-url` have no effect.
 - General (non-review) runs fail before installation with an OpenCode 2 version, including when `latest` resolves to one. Prereleases and other majors are rejected.

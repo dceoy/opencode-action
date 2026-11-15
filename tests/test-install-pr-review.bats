@@ -88,6 +88,69 @@ setup() {
   done
 }
 
+
+@test "v1 and v2 resolve the highest stable release of the requested major" {
+  mock_bin="${BATS_TEST_TMPDIR}/major-version-bin"
+  mkdir -p "${mock_bin}"
+  page1="${BATS_TEST_TMPDIR}/major-releases-page1.json"
+  page2="${BATS_TEST_TMPDIR}/major-releases-page2.json"
+  python3 - "${page1}" "${page2}" <<'PY'
+import json
+import sys
+
+def release(tag, prerelease=False, draft=False):
+    return {"tag_name": tag, "prerelease": prerelease, "draft": draft}
+
+# The first page is full of v2 releases, so v1 must request page 2.
+page1 = [release("v2.3.0"), release("process-daemon-v0.5.2"), release("v2.10.0")]
+page1 += [release("v2.0.0")] * (100 - len(page1))
+page2 = [
+    release("v1.19.4"),
+    release("v1.19.5"),
+    release("v1.99.0-beta.1", prerelease=True),
+    release("v1.50.0", draft=True),
+]
+for path, entries in zip(sys.argv[1:], [page1, page2]):
+    with open(path, "w", encoding="utf-8") as stream:
+        json.dump(entries, stream)
+PY
+  cat > "${mock_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+url=""
+for arg in "$@"; do url="${arg}"; done
+if [[ "${NO_MATCH:-}" == "true" ]]; then
+  printf '[]'
+  exit 0
+fi
+case "${url}" in
+  *'releases?per_page=100&page=1') cat "${MOCK_PAGE1}" ;;
+  *'releases?per_page=100&page=2') cat "${MOCK_PAGE2}" ;;
+  *) exit 2 ;;
+esac
+EOF
+  chmod +x "${mock_bin}/curl"
+  for example in 'true|v1|0|1.19.5|v1' 'false|v1|0|1.19.5|v1' \
+    'true|v2|0|2.10.0|v2' 'false|v2|1||'; do
+    IFS='|' read -r review_only input expected_status expected_version expected_runtime <<< "${example}"
+    : > "${BATS_TEST_TMPDIR}/output"
+    run env PATH="${mock_bin}:${PATH}" MOCK_PAGE1="${page1}" MOCK_PAGE2="${page2}" \
+      INPUT_VERSION="${input}" REVIEW_ONLY="${review_only}" GITHUB_TOKEN='' \
+      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
+    [ "${status}" -eq "${expected_status}" ]
+    if [[ "${expected_status}" -eq 0 ]]; then
+      grep -Fxq "opencode-version=${expected_version}" "${BATS_TEST_TMPDIR}/output"
+      grep -Fxq "runtime=${expected_runtime}" "${BATS_TEST_TMPDIR}/output"
+    else
+      [[ "${output}" == *"supports review-only runs only"* ]]
+    fi
+  done
+  run env PATH="${mock_bin}:${PATH}" NO_MATCH=true INPUT_VERSION=v1 REVIEW_ONLY=true \
+    GITHUB_TOKEN='' GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"No stable OpenCode v1 release found"* ]]
+}
+
 # shellcheck disable=SC2016  # literal workflow expressions
 @test "review-only installer follows the derived runtime without a separate input" {
   action="${repo_root}/action.yml"

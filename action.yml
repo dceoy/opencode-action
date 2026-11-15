@@ -41,8 +41,8 @@ inputs:
   opencode-version:
     required: false
     description: >-
-      OpenCode version to install (e.g., v1.2.3). Its major version selects the runtime: an OpenCode 2 release
-      (e.g., v2.3.0) is opt-in and supports review-only runs with use-github-token: true.
+      Use v1 or v2 for the latest stable release in that major, or pin an exact release.
+      OpenCode 2 is opt-in, supports review-only runs, and requires use-github-token: true.
     # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
     default: v1.19.3
   use-bundled-toolkit:
@@ -82,12 +82,37 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
         REVIEW_ONLY: ${{ inputs.review-only }}
       run: |
-        if [[ "${INPUT_VERSION}" == "latest" ]]; then
-          if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-            auth_header=(-H "Authorization: token ${GITHUB_TOKEN}")
-          else
-            auth_header=()
+        auth_header=()
+        if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+          auth_header=(-H "Authorization: token ${GITHUB_TOKEN}")
+        fi
+        if [[ "${INPUT_VERSION}" =~ ^v([12])$ ]]; then
+          # The global latest release may belong to a different major.
+          # Search older pages when a newer major fills the first page.
+          requested_major="${BASH_REMATCH[1]}"
+          OPENCODE_VERSION=""
+          for page in {1..100}; do
+            releases="$(curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/anomalyco/opencode/releases?per_page=100&page=${page}")"
+            version="$(jq -r --arg major "${requested_major}" '
+              [.[] | select(.draft == false and .prerelease == false)
+                | .tag_name
+                | select(test("^v?" + $major + "\\.[0-9]+\\.[0-9]+$"))
+                | ltrimstr("v")]
+              | sort_by(split(".") | map(tonumber)) | .[-1] // empty
+            ' <<< "${releases}")"
+            if [[ -n "${version}" ]]; then
+              OPENCODE_VERSION="${version}"
+              break
+            fi
+            if (( $(jq 'length' <<< "${releases}") < 100 )); then
+              break
+            fi
+          done
+          if [[ -z "${OPENCODE_VERSION}" ]]; then
+            echo "::error::No stable OpenCode v${requested_major} release found." >&2
+            exit 1
           fi
+        elif [[ "${INPUT_VERSION}" == "latest" ]]; then
           OPENCODE_VERSION="$(curl -fsSL "${auth_header[@]}" https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r '.tag_name')"
         else
           OPENCODE_VERSION="${INPUT_VERSION}"
