@@ -46,7 +46,7 @@ setup() {
   [[ "${model_input}" == *"default: opencode/deepseek-v4.1-flash-free"* ]]
   run grep -Fq "model: \${{ inputs.model || 'opencode/deepseek-v4.1-flash-free' }}" "${workflow}"
   [ "${status}" -eq 0 ]
-  run grep -Fq 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' "${workflow}"
+  run grep -Fq "OPENCODE_API_KEY: \${{ secrets.OPENCODE_API_KEY }}" "${workflow}"
   [ "${status}" -eq 0 ]
 }
 
