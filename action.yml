@@ -54,7 +54,7 @@ inputs:
   pr-review-ref:
     required: false
     description: Full immutable pr-loop commit SHA supplying the pr-review skill
-    default: d1d547b54d39d8c4b4c3724fcddaabe96e669294  # v1.0.1
+    default: 66193c0383663b48ea144b438d7dd4a42e02b6e2  # v1.1.5
   timeout-minutes:
     required: false
     description: Maximum minutes to let 'opencode github run' execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
