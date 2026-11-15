@@ -91,22 +91,7 @@ The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` 
 
 ## Releases
 
-The [release workflow](.github/workflows/release.yml) runs on Mondays at
-09:15 JST and can also be dispatched manually on `main`. It uses the shared
-[gha-for-devops GitHub Release workflow](https://github.com/dceoy/gha-for-devops/blob/main/.github/workflows/github-release.yml).
-
-Scheduled runs release only when `action.yml`, `scripts/`, `.opencode/`, or the
-`opencode-bot.yml` and `opencode-review.yml` reusable workflows have changed
-since the latest stable SemVer release. Feature or breaking-change commits
-receive a minor version bump; other eligible changes receive a patch bump.
-Manual dispatch supports major, minor, or patch releases.
-
-The release job calls [post-release](.github/workflows/post-release.yml)
-directly after publication to update the major-version tag and open a PR to
-refresh documented SHA pins and the upstream `pr-loop` review pin. This avoids
-relying on a `release` event generated with `GITHUB_TOKEN`, which does not
-trigger another GitHub Actions workflow. Existing manual and externally
-triggered post-release runs remain supported.
+The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15 JST when eligible files have changed, or manually for major, minor, and patch releases. After publication, it updates the major-version tag and opens a PR to refresh SHA pins.
 
 ## Inputs
 
