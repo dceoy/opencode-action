@@ -46,7 +46,7 @@ on:
       opencode-version:
         required: false
         type: string
-        description: OpenCode version to install
+        description: Select v1/v2 for latest stable major, or a specific release (v2 review-only)
         # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
         default: v1.19.3
       use-bundled-toolkit:
