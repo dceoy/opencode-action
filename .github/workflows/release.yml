@@ -6,7 +6,7 @@ on:
   release:
     types:
       - released
-  workflow_dispatch:  # checkov:skip=CKV_GHA_7:Only the release increment is selectable
+  workflow_dispatch:  # checkov:skip=CKV_GHA_7:Only predefined release tasks are selectable
     inputs:
       task:
         description: Release task
