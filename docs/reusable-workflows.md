@@ -74,7 +74,7 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `model`               | `opencode/deepseek-v4.1-flash-free` (review); required (bot) | Model in `provider/model` format.                    |
+| `model`               | `opencode/deepseek-v4.1-flash-free` (review); required (bot)        | Model in `provider/model` format.                             |
 | `agent`               | `build`                                                             | Primary agent; review-only runs override it.                  |
 | `share`               | `false`                                                             | Share the OpenCode session.                                   |
 | `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
