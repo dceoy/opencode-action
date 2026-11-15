@@ -39,6 +39,17 @@ setup() {
   [ "${status}" -ne 0 ]
 }
 
+@test "reusable review workflow defaults to the free OpenCode model" {
+  workflow="${repo_root}/.github/workflows/opencode-review.yml"
+  model_input="$(sed -n '/^      model:$/,/^      agent:$/p' "${workflow}")"
+  [[ "${model_input}" == *"required: false"* ]]
+  [[ "${model_input}" == *"default: opencode/deepseek-v4.1-flash-free"* ]]
+  run grep -Fq "model: \${{ inputs.model || 'opencode/deepseek-v4.1-flash-free' }}" "${workflow}"
+  [ "${status}" -eq 0 ]
+  run grep -Fq "OPENCODE_API_KEY: \${{ secrets.OPENCODE_API_KEY }}" "${workflow}"
+  [ "${status}" -eq 0 ]
+}
+
 @test "rejects invalid OpenCode review-only versions" {
   for version in 0.9.0 1.2.13 1.2.14-beta.1 invalid; do
     run env INPUT_VERSION="${version}" REVIEW_ONLY=true GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"

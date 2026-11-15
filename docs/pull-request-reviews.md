@@ -20,11 +20,10 @@ jobs:
       actions: read
     uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@163f9a9cd3d3f497e2847635585419f951371d2f # v0.8.1
     with:
-      model: sakura/preview/Kimi-K2.7-Code
       prompt: Focus on security and regression risks.
-    secrets:
-      SAKURA_AI_ENGINE_API_KEY: ${{ secrets.SAKURA_AI_ENGINE_API_KEY }}
 ```
+
+The default review model is `opencode/deepseek-v4.1-flash-free`, currently free for a limited time through OpenCode and usable without an account or model-provider API key. GitHub token permissions and the default OIDC-based App token exchange still apply to PR review operations. Pass `with.model` to override the default and supply credentials if required. Free availability and rate limits can change.
 
 ## GitHub App token reuse
 

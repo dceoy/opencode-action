@@ -4,9 +4,10 @@ on:
   workflow_call:
     inputs:
       model:
-        required: true
+        required: false
         type: string
         description: Model to use with OpenCode
+        default: opencode/deepseek-v4.1-flash-free
       agent:
         required: false
         type: string
@@ -148,7 +149,7 @@ jobs:
           PR_REVIEW_URL: ${{ github.event.pull_request.html_url }}
           PR_REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
-          model: ${{ inputs.model || 'sakura/preview/Kimi-K2.7-Code' }}
+          model: ${{ inputs.model || 'opencode/deepseek-v4.1-flash-free' }}
           agent: ${{ inputs.agent || 'build' }}
           share: ${{ inputs.share }}
           prompt: ${{ inputs.prompt || '/pr-review' }}
