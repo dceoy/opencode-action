@@ -89,6 +89,10 @@ The optional [Sakura model synchronization workflow](.github/workflows/sync-saku
 
 The workflow uses the repository-provided `GITHUB_TOKEN` with `contents: write` and `pull-requests: write`; no additional GitHub token secret is required. GitHub does not create new workflow runs for events triggered by `GITHUB_TOKEN`, so pull requests created by this workflow do not automatically trigger `pull_request` workflows. See [GitHub's `GITHUB_TOKEN` documentation](https://docs.github.com/en/actions/concepts/security/github_token).
 
+## Releases
+
+The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15 JST when eligible files have changed, or manually for major, minor, and patch releases. After publication, it updates the major-version tag and opens a PR to refresh SHA pins.
+
 ## Inputs
 
 | Input                 | Default                   | Description                                                                                                                                       |
