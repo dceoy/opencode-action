@@ -45,14 +45,9 @@ on:
       opencode-version: &input-opencode-version
         required: false
         type: string
-        description: OpenCode version to install
+        description: OpenCode version to install; an OpenCode 2 release selects the review-only v2 runtime
         # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
         default: v1.19.3
-      runtime: &input-runtime
-        required: false
-        type: string
-        description: OpenCode runtime generation (v1 or v2); v2 supports review-only runs with an OpenCode 2 opencode-version and use-github-token
-        default: v1
       use-bundled-toolkit: &input-use-bundled-toolkit
         required: false
         type: boolean
@@ -134,7 +129,6 @@ on:
       variant: *input-variant
       oidc-base-url: *input-oidc-base-url
       opencode-version: *input-opencode-version
-      runtime: *input-runtime
       use-bundled-toolkit: *input-use-bundled-toolkit
       review-only: *input-review-only
       pr-review-url: *input-pr-review-url
@@ -255,7 +249,6 @@ jobs:
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
           opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
-          runtime: ${{ inputs.runtime || 'v1' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: ${{ inputs.review-only }}
           pr-review-ref: ${{ inputs.pr-review-ref }}

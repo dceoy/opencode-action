@@ -105,20 +105,19 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
 | `opencode-version`    | Pinned v1                 | OpenCode version to install. The bundled Sakura provider's `chunkTimeout` needs 1.2.25+.                                                          |
-| `runtime`             | `v1`                      | OpenCode generation: `v1` or opt-in `v2` (review-only, see [pull request reviews](docs/pull-request-reviews.md#opencode-2-runtime-opt-in)).       |
 | `use-bundled-toolkit` | `true`                    | Install the bundled provider configuration for normal runs or the trusted review bridge for review-only runs.                                     |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
-The default OpenCode binary version is pinned to a stable v1 release and maintained by Renovate (v2 releases are excluded). Set `opencode-version` explicitly to override the default, or use `latest` to opt into runtime resolution. The version's major must match `runtime`: OpenCode 2 releases are rejected unless `runtime: v2` is set, and `runtime: v2` requires an explicit OpenCode 2 version.
+The default OpenCode binary version is pinned to a stable v1 release and maintained by Renovate (v2 releases are excluded). Set `opencode-version` explicitly to override the default, or use `latest` to opt into runtime resolution. The version's major selects the runtime: an OpenCode 2 release (for example `v2.3.0`) opts into the v2 runtime, which supports review-only runs only (see [pull request reviews](docs/pull-request-reviews.md#opencode-2-opt-in)).
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
 When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
 
-Outputs are `opencode-version`, `runtime`, and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache, install the external `pr-review` skill, and use a disposable temporary HOME (including isolated XDG paths).
+Outputs are `opencode-version`, `runtime` (`v1` or `v2`, derived from the version), and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache, install the external `pr-review` skill, and use a disposable temporary HOME (including isolated XDG paths).
 
 ## Pull request reviews
 

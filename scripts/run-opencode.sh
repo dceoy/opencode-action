@@ -281,11 +281,11 @@ opencode_validate_runtime() {
     v1) ;;
     v2)
       if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
-        opencode_report_error "Runtime v2 supports review-only runs only; OpenCode 2 has no 'opencode github run'. Use runtime: v1 for general runs."
+        opencode_report_error "OpenCode 2 supports review-only runs only; it has no 'opencode github run'. Use an OpenCode 1 version for general runs."
         return 1
       fi
       if [[ "${USE_GITHUB_TOKEN:-false}" != "true" ]]; then
-        opencode_report_error "Runtime v2 does not perform the OpenCode App token exchange. Set use-github-token: true to publish the review with the workflow token."
+        opencode_report_error "OpenCode 2 runs do not perform the OpenCode App token exchange. Set use-github-token: true to publish the review with the workflow token."
         return 1
       fi
       ;;
@@ -296,7 +296,7 @@ opencode_validate_runtime() {
   esac
 }
 
-# Set OPENCODE_RUN_COMMAND for the selected runtime. Runtime v2 refuses to
+# Set OPENCODE_RUN_COMMAND for the selected runtime. The v2 runtime refuses to
 # start unless the binary on PATH reports an OpenCode 2 version, because both
 # generations install an executable named `opencode`.
 opencode_select_run_command() {
@@ -309,7 +309,7 @@ opencode_select_run_command() {
   reported="$(opencode --version 2> /dev/null | tail -n 1)" || reported=""
   reported="${reported##* }"
   if [[ ! "${reported#v}" =~ ^2\.[0-9]+\.[0-9]+ ]]; then
-    opencode_report_error "Runtime v2 requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
+    opencode_report_error "The selected OpenCode 2 runtime requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
     return 1
   fi
   model="${MODEL:?MODEL is required}"

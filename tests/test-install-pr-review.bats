@@ -50,36 +50,53 @@ setup() {
   [ "${status}" -eq 0 ]
 }
 
-@test "version step accepts only versions matching the selected runtime" {
-  for example in '|true|0.9.0|1' '|true|1.2.13|1' '|true|1.2.14-beta.1|1' '|true|invalid|1' \
-    '|true|1.2.14|0' '|true|v1.2.14|0' '|true|1.2.14+build.1|0' '|true|1.3.0|0' \
-    '|true|2.0.0|1' 'v1|true|v2.3.0|1' 'v1|false|v2.3.0|1' 'v1|false|v1.19.3|0' 'v1|false|custom-build|0' \
-    'v2|true|v2.3.0|0' 'v2|true|2.3.0|0' 'v2|true|v1.19.3|1' 'v2|true|latest|1' 'v2|true|v2.3.0-beta.1|1' \
-    'v2|true|v3.0.0|1' 'v2|false|v2.3.0|1' 'v3|true|v2.3.0|1'; do
-    IFS='|' read -r runtime review_only version expected <<< "${example}"
+@test "version step derives the runtime from the OpenCode major version" {
+  for example in 'true|0.9.0|1|' 'true|1.2.13|1|' 'true|1.2.14-beta.1|1|' 'true|invalid|1|' \
+    'true|1.2.14|0|v1' 'true|v1.2.14|0|v1' 'true|1.2.14+build.1|0|v1' 'true|1.3.0|0|v1' \
+    'false|v1.19.3|0|v1' 'false|custom-build|0|v1' \
+    'true|v2.3.0|0|v2' 'true|2.3.0|0|v2' 'true|2.0.0|0|v2' \
+    'false|v2.3.0|1|' 'true|v2.3.0-beta.1|1|' 'true|v3.0.0|1|' 'false|v3.0.0|1|'; do
+    IFS='|' read -r review_only version expected runtime <<< "${example}"
     : > "${BATS_TEST_TMPDIR}/output"
-    run env RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY="${review_only}" \
+    run env INPUT_VERSION="${version}" REVIEW_ONLY="${review_only}" \
       GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
     if [[ "${status}" -ne "${expected}" ]]; then
       printf 'unexpected status %s for %s: %s\n' "${status}" "${example}" "${output}" >&2
     fi
     [ "${status}" -eq "${expected}" ]
     if [[ "${expected}" -eq 0 ]]; then
-      grep -Fxq "runtime=${runtime:-v1}" "${BATS_TEST_TMPDIR}/output"
+      grep -Fxq "runtime=${runtime}" "${BATS_TEST_TMPDIR}/output"
       grep -Fxq "opencode-version=${version#v}" "${BATS_TEST_TMPDIR}/output"
     fi
   done
 }
 
+@test "latest resolving to OpenCode 2 selects the v2 runtime only for review-only runs" {
+  mock_bin="${BATS_TEST_TMPDIR}/latest-bin"
+  mkdir -p "${mock_bin}"
+  printf '%s\n' '#!/usr/bin/env bash' "printf '%s' '{\"tag_name\":\"v2.3.0\"}'" > "${mock_bin}/curl"
+  chmod +x "${mock_bin}/curl"
+  for example in 'true|0' 'false|1'; do
+    IFS='|' read -r review_only expected <<< "${example}"
+    : > "${BATS_TEST_TMPDIR}/output"
+    run env PATH="${mock_bin}:${PATH}" INPUT_VERSION=latest REVIEW_ONLY="${review_only}" GITHUB_TOKEN='' \
+      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
+    [ "${status}" -eq "${expected}" ]
+    if [[ "${expected}" -eq 0 ]]; then
+      grep -Fxq 'runtime=v2' "${BATS_TEST_TMPDIR}/output"
+    fi
+  done
+}
+
 # shellcheck disable=SC2016  # literal workflow expressions
-@test "review-only installer and inputs follow the selected runtime" {
+@test "review-only installer follows the derived runtime without a separate input" {
   action="${repo_root}/action.yml"
   grep -Fq 'installer_url=https://opencode.ai/v2/install' "${action}"
   grep -Fq 'curl -fsSL "${installer_url}" |' "${action}"
   grep -Fq 'OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}' "${action}"
-  [[ "$(sed -n '/^  runtime:$/,/^  use-bundled-toolkit:$/p' "${action}")" == *"default: v1"* ]]
-  for workflow in opencode-bot opencode-review; do
-    grep -Fq "runtime: \${{ inputs.runtime || 'v1' }}" "${repo_root}/.github/workflows/${workflow}.yml"
+  for file in action.yml .github/workflows/opencode-bot.yml .github/workflows/opencode-review.yml; do
+    run grep -Fq 'inputs.runtime' "${repo_root}/${file}"
+    [ "${status}" -ne 0 ]
   done
 }
 
