@@ -58,11 +58,9 @@ jobs:
       id-token: write
       actions: read
     uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@163f9a9cd3d3f497e2847635585419f951371d2f  # v0.8.1
-    secrets:
-      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 ```
 
-This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time. Configure an OpenCode Console API key as the `OPENCODE_API_KEY` Actions secret. To use another provider/model, set `with.model` explicitly and pass that provider's API key. Free-model availability and rate limits may change.
+This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time without an account or model-provider API key. To use another provider/model, set `with.model` explicitly and pass credentials if required. Free-model availability and rate limits may change.
 
 This example assumes a trusted, same-repository pull request. For `pull_request` events from public forks, GitHub withholds repository Actions secrets and makes `GITHUB_TOKEN` read-only; Dependabot pull requests have the same restrictions. Private-fork behavior can differ when repository settings explicitly allow secrets or write tokens.
 
@@ -97,7 +95,7 @@ GitHub.com's `$/path` self repository syntax resolves to the repository and comm
 
 ## Secrets
 
-Pass only the provider secret needed by the selected model. The default review model requires `OPENCODE_API_KEY` from OpenCode Console; unlike the review workflow, the bot workflow continues to require an explicit model input. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
+Pass only the provider secret needed by the selected model. The default free review model does not require an OpenCode Console account or `OPENCODE_API_KEY`; unlike the review workflow, the bot workflow continues to require an explicit model input. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
 
 `GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. For code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`.
 
