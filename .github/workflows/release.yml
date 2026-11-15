@@ -1,0 +1,45 @@
+---
+name: Publish GitHub Release
+on:
+  schedule:
+    - cron: '15 0 * * 1'  # Mondays 09:15 JST
+  workflow_dispatch:  # checkov:skip=CKV_GHA_7:Only the release increment is selectable
+    inputs:
+      task:
+        description: Release version increment
+        type: choice
+        required: true
+        default: patch-release
+        options:
+          - major-release
+          - minor-release
+          - patch-release
+permissions:
+  contents: read
+concurrency:
+  group: github-release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'dceoy/opencode-action'
+    permissions:
+      contents: write
+    uses: dceoy/gha-for-devops/.github/workflows/github-release.yml@9e394d7c18b3a00fb853cd3c693cc4eeb5f0c825  # v2.3.0
+    with:
+      version-bump: ${{ inputs.task || 'auto' }}
+      release-trigger-paths: |
+        action.yml
+        scripts
+        .opencode
+        .github/workflows/opencode-bot.yml
+        .github/workflows/opencode-review.yml
+  post-release:
+    needs: release
+    if: needs.release.outputs.release-tag
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/post-release.yml
+    with:
+      release-tag: ${{ needs.release.outputs.release-tag }}
+    secrets: inherit
