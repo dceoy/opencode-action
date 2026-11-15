@@ -76,7 +76,6 @@ Set `model` to a `provider/model` value and pass the corresponding API key:
 | Provider        | Example model                | Secret               |
 | --------------- | ---------------------------- | -------------------- |
 | OpenCode        | `opencode-go/kimi-k3`        | `OPENCODE_API_KEY`   |
-| OpenCode free   | `opencode/deepseek-v4.1-flash-free` | `OPENCODE_API_KEY` |
 | OpenRouter      | `openrouter/openrouter/free` | `OPENROUTER_API_KEY` |
 | Anthropic       | `anthropic/claude-opus-5`    | `ANTHROPIC_API_KEY`  |
 | OpenAI          | `openai/gpt-5.6-sol`         | `OPENAI_API_KEY`     |
