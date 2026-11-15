@@ -39,7 +39,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: ./.github/workflows/post-release.yml
+    uses: $/.github/workflows/post-release.yml
     with:
       release-tag: ${{ needs.release.outputs.release-tag }}
     secrets:
