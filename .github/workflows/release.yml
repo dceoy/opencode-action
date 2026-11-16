@@ -2,7 +2,7 @@
 name: Publish GitHub Release
 on:
   schedule:
-    - cron: '15 0 * * 1'
+    - cron: '15 0 * * 1'  # Mondays 09:15 JST
   release:
     types:
       - released
