@@ -35,7 +35,7 @@ jobs:
       && inputs.task != 'post-release'
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-release.yml@9e394d7c18b3a00fb853cd3c693cc4eeb5f0c825  # v2.3.0
+    uses: dceoy/gha-for-devops/.github/workflows/github-release.yml@607489fde554da8b89bacf055479d3723e529e2a  # v2.3.2
     with:
       version-bump: ${{ inputs.task || 'auto' }}
       release-trigger-paths: |
@@ -52,7 +52,9 @@ jobs:
        (needs.release.result == 'success' && needs.release.outputs.release-tag != ''))
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@9e394d7c18b3a00fb853cd3c693cc4eeb5f0c825  # v2.3.0
+    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@607489fde554da8b89bacf055479d3723e529e2a  # v2.3.2
+    with:
+      tag-name: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
   release-pins:
     needs: release
     if: >-
@@ -62,111 +64,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Set release
-        id: release
-        env:
-          INPUT_TAG: ${{ needs.release.outputs.release-tag }}
-          EVENT_TAG: ${{ github.event.release.tag_name }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-        run: |
-          tag="${INPUT_TAG:-${EVENT_TAG:-}}"
-          if [[ -z "${tag}" ]]; then
-            tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq '.tagName')"
-          fi
-          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Expected a stable SemVer release tag, got: ${tag}" >&2
-            exit 1
-          fi
-          tee -a "${GITHUB_OUTPUT}" <<< "tag=${tag}"
-      - name: Set actions/checkout release
-        id: checkout
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-        run: |
-          tag="$(gh release view --repo actions/checkout --json tagName --jq '.tagName')"
-          sha="$(gh api "repos/actions/checkout/commits/${tag}" --jq '.sha')"
-          if [[ -z "${tag}" || ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo 'Failed to resolve the latest actions/checkout release commit.' >&2
-            exit 1
-          fi
-          tee -a "${GITHUB_OUTPUT}" <<< "tag=${tag}"
-          tee -a "${GITHUB_OUTPUT}" <<< "sha=${sha}"
-      - name: Update pr-loop release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-        run: |
-          tag="$(gh release view --repo dceoy/pr-loop --json tagName --jq '.tagName')"
-          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo 'Failed to resolve a stable pr-loop release tag.' >&2
-            exit 1
-          fi
-          sha="$(gh api "repos/dceoy/pr-loop/commits/${tag}" --jq '.sha')"
-          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo 'Failed to resolve the pr-loop release commit.' >&2
-            exit 1
-          fi
-          python - "${tag}" "${sha}" <<'PYCODE'
-          import re
-          import sys
-          from pathlib import Path
-
-          tag, sha = sys.argv[1:]
-          path = Path('action.yml')
-          source = path.read_text()
-          matches = list(re.finditer(
-              r'(?m)^(  pr-review-ref:\n    required: false\n    description: [^\n]+\n    default: )'
-              r'([0-9a-f]{40})  # (v\d+\.\d+\.\d+)$', source,
-          ))
-          if len(matches) != 1:
-              raise SystemExit('Cannot locate the default pr-loop release pin in action.yml')
-          match = matches[0]
-          path.write_text(source[:match.start()] + f'{match[1]}{sha}  # {tag}' + source[match.end():])
-          PYCODE
-      - name: Update release pins
-        env:
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          CHECKOUT_TAG: ${{ steps.checkout.outputs.tag }}
-          CHECKOUT_SHA: ${{ steps.checkout.outputs.sha }}
-        run: |
-          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
-
-          readme_action_match_count="$(grep -Ec 'uses: dceoy/opencode-action@[0-9a-f]{40}' README.md || true)"
-          if [[ "${readme_action_match_count}" != 1 ]]; then
-            echo "Expected exactly one pinned dceoy/opencode-action reference in README.md, found ${readme_action_match_count}." >&2
-            exit 1
-          fi
-
-          readme_checkout_match_count="$(grep -Ec 'uses: actions/checkout@[0-9a-f]{40}' README.md || true)"
-          if [[ "${readme_checkout_match_count}" != 1 ]]; then
-            echo "Expected exactly one pinned actions/checkout reference in README.md, found ${readme_checkout_match_count}." >&2
-            exit 1
-          fi
-
-          workflow_match_count="$(grep -Ec 'uses: dceoy/opencode-action/\.github/workflows/opencode-(bot|review)\.yml@[0-9a-f]{40}' docs/reusable-workflows.md || true)"
-          if [[ "${workflow_match_count}" != 2 ]]; then
-            echo "Expected exactly two pinned reusable workflow references in docs/reusable-workflows.md, found ${workflow_match_count}." >&2
-            exit 1
-          fi
-
-          sed -E -i "s|(uses: dceoy/opencode-action@)[0-9a-f]{40}( +#.*)?|\1${release_sha}  # ${RELEASE_TAG}|" README.md
-          sed -E -i "s|(uses: actions/checkout@)[0-9a-f]{40}( +#.*)?|\1${CHECKOUT_SHA}  # ${CHECKOUT_TAG}|" README.md
-          sed -E -i "s,(uses: dceoy/opencode-action/\.github/workflows/opencode-(bot|review)\.yml@)[0-9a-f]{40}( +#.*)?,\1${release_sha}  # ${RELEASE_TAG},g" docs/reusable-workflows.md
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1  # v8.1.3
-        with:
-          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}  # zizmor: ignore[secrets-outside-env] caller-provided secret
-          commit-message: Update release pins for ${{ steps.release.outputs.tag }}
-          title: Update release pins for ${{ steps.release.outputs.tag }}
-          branch: github-actions/release-pins
-          base: ${{ github.event.repository.default_branch }}
-          labels: agent:github-actions
-          body: Update the README action and actions/checkout pins plus reusable workflow documentation and pr-loop release pins for ${{ steps.release.outputs.tag }}.
-          delete-branch: true
+    uses: dceoy/gha-for-devops/.github/workflows/github-action-release-pins.yml@607489fde554da8b89bacf055479d3723e529e2a  # v2.3.2
+    with:
+      release-tag: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
+      pr-loop-ref-input: pr-review-ref
+      update-reusable-workflow-docs: true
+    secrets:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
