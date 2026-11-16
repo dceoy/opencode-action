@@ -2,11 +2,11 @@
 name: Publish GitHub Release
 on:
   schedule:
-    - cron: '15 0 * * 1'  # Mondays 09:15 JST
+    - cron: '15 0 * * 1'
   release:
     types:
       - released
-  workflow_dispatch:  # checkov:skip=CKV_GHA_7:Only predefined release tasks are selectable
+  workflow_dispatch:
     inputs:
       task:
         description: Release task
