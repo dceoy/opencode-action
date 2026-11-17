@@ -49,12 +49,12 @@ setup() {
   mkdir -p "${fake_bin}"
   cat > "${fake_bin}/curl" <<'SCRIPT'
 #!/usr/bin/env bash
-case "${*: -1}" in
+case "$2" in
   https://opencode.ai/install) major=1 ;;
   https://opencode.ai/v2/install) major=2 ;;
   *) exit 1 ;;
 esac
-cat <<INSTALLER
+cat > "$4" <<INSTALLER
 #!/usr/bin/env bash
 set -eu
 [[ "\$1" == --version && "\$3" == --no-modify-path ]]
@@ -63,7 +63,15 @@ mkdir -p "\$HOME/.opencode/bin"
 printf '%s\n' '${major}' > "\$HOME/.opencode/bin/installed-major"
 INSTALLER
 SCRIPT
-  chmod +x "${fake_bin}/curl"
+  cat > "${fake_bin}/shasum" <<'SCRIPT'
+#!/usr/bin/env bash
+if grep -q '== 1.\*' "$3"; then
+  echo 'a2dd59522b9a091b6cdb2e4870c0f2135f7da09807cd5a7e04222d4316925b72  fixture'
+else
+  echo 'bbc4584fd6a888bcd14623b8a63afa0f1b4075a2e84a2c3518cd509b446b3135  fixture'
+fi
+SCRIPT
+  chmod +x "${fake_bin}/curl" "${fake_bin}/shasum"
   export PATH="${fake_bin}:${PATH}"
   for runtime in v1 v2; do
     major="${runtime#v}"
