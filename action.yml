@@ -38,6 +38,10 @@ inputs:
     required: false
     description: Base URL for OIDC token exchange API. Only required when running a custom GitHub App install.
     default: https://api.opencode.ai
+  runtime:
+    required: false
+    description: OpenCode runtime generation (v1 or v2).
+    default: v1
   opencode-version:
     required: false
     description: >-
