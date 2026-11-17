@@ -124,7 +124,6 @@ runs:
       run: |
         export OPENCODE_INSTALL_HOME="${HOME}/.opencode-action/${OPENCODE_RUNTIME}"
         "${ACTION_PATH}/scripts/verify-opencode.sh"
-        echo "${OPENCODE_INSTALL_HOME}/.opencode/bin" >> "${GITHUB_PATH}"
     - name: Run OpenCode
       id: run_opencode
       shell: bash -euo pipefail {0}
