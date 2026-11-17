@@ -298,17 +298,21 @@ opencode_select_run_command() {
     OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" github run)
     return 0
   fi
-  reported="$(opencode --version 2> /dev/null | tail -n 1)" || reported=""
+  reported="$("${OPENCODE_BIN:-opencode}" --version 2> /dev/null | tail -n 1)" || reported=""
   reported="${reported##* }"
   if [[ ! "${reported#v}" =~ ^2\.[0-9]+\.[0-9]+ ]]; then
     opencode_report_error "The selected OpenCode 2 runtime requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
     return 1
   fi
-  model="${MODEL:?MODEL is required}"
+  model="${MODEL:-}"
+  if [[ ! "${model}" =~ ^[^/[:space:]#]+/[^[:space:]#]+$ || "${VARIANT:-}" == *[[:space:]#]* ]]; then
+    opencode_report_error "OpenCode v2 requires a model in provider/model form and a valid optional variant."
+    return 1
+  fi
   if [[ -n "${VARIANT:-}" ]]; then
     model+="#${VARIANT}"
   fi
-  OPENCODE_RUN_COMMAND=(opencode run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
+  OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
 }
 
 opencode_configure_run() {

@@ -87,3 +87,34 @@ SCRIPT
   [ "$(cat "${BATS_TEST_TMPDIR}/v1/.opencode/bin/installed-major")" = 1 ]
   [ "$(cat "${BATS_TEST_TMPDIR}/v2/.opencode/bin/installed-major")" = 2 ]
 }
+
+@test "v2 command uses the selected binary and preserves the trusted prompt and variant" {
+  binary="${BATS_TEST_TMPDIR}/opencode"
+  printf '#!/bin/bash\necho "opencode v2.3.0"\n' > "${binary}"
+  chmod +x "${binary}"
+  run env OPENCODE_BIN="${binary}" OPENCODE_RUNTIME=v2 MODEL=provider/model VARIANT=fast \
+    AGENT=action-pr-review PROMPT='trusted prompt' bash -c \
+    'source "$1"; opencode_select_run_command; printf "<%s>\n" "${OPENCODE_RUN_COMMAND[@]}"' _ "${root}/scripts/run-opencode.sh"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "<${binary}>
+<run>
+<--standalone>
+<--model>
+<provider/model#fast>
+<--agent>
+<action-pr-review>
+<trusted prompt>" ]
+}
+
+@test "v2 command rejects a missing or malformed model before execution" {
+  binary="${BATS_TEST_TMPDIR}/opencode"
+  printf '#!/bin/bash\necho "opencode v2.3.0"\n' > "${binary}"
+  chmod +x "${binary}"
+  for model in '' model 'provider/model#variant' 'provider/'; do
+    run env OPENCODE_BIN="${binary}" OPENCODE_RUNTIME=v2 MODEL="${model}" \
+      AGENT=action-pr-review PROMPT=trusted bash -c \
+      'source "$1"; opencode_select_run_command' _ "${root}/scripts/run-opencode.sh"
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *'requires a model'* ]]
+  done
+}
