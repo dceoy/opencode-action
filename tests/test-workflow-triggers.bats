@@ -71,3 +71,24 @@ PY
   done
   grep -Fq '          review-only: true' "${review}"
 }
+
+@test "bot does not subscribe to issue or PR conversation comments" {
+  # Restrict the check to the top-level event declaration, not documentation
+  # or an expression elsewhere in the workflow.
+  run python3 - "${bot}" << 'PY'
+import re
+import sys
+from pathlib import Path
+
+workflow = Path(sys.argv[1]).read_text()
+events = workflow.split('\non:\n', 1)[1].split('\npermissions:\n', 1)[0]
+assert not re.search(r'^  issue_comment\s*:', events, re.MULTILINE)
+assert re.search(r'^  pull_request_review_comment\s*:', events, re.MULTILINE)
+PY
+  [ "${status}" -eq 0 ]
+}
+
+@test "review comment execution requires a trusted non-bot author" {
+  grep -Fq "github.event.comment.user.type != 'Bot'" "${bot}"
+  grep -Fq "contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)" "${bot}"
+}
