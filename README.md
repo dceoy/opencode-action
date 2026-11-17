@@ -129,3 +129,21 @@ Direct action or bot review-only calls require `use-bundled-toolkit: 'true'`, a 
 The reusable review workflow defaults to `opencode/deepseek-v4.1-flash-free`, currently free for a limited time without a model-provider API key or account. Override `model` with another provider and supply credentials only if required. GitHub credentials are still needed for review operations; model availability and free-tier limits can change.
 
 See [Pull request reviews](docs/pull-request-reviews.md) for usage, permissions, trust boundaries, and limitations.
+
+### Sakura OpenCode v2 integration check
+
+The credential-free Bats smoke test checks the synchronized catalog with the
+pinned OpenCode v2 CLI, including the isolated review configuration. It does
+not establish provider parity or send a Sakura request. The manual **Trusted
+Sakura v2 integration** workflow can exercise a catalog model with a real key:
+configure the `sakura-integration` GitHub environment and its
+`SAKURA_AI_ENGINE_API_KEY` secret, then dispatch the workflow from the default
+branch with a model ID from the catalog (without `sakura/`). Restrict access to
+that environment to trusted maintainers. The workflow checks out only the
+default branch and never runs on pull requests. It asks the model to use the
+read tool; a successful run requires a completed tool event and the probe
+marker. The CLI may make more than one HTTP request to complete that single
+interactive task. The harness suppresses provider output and classifies common
+failures without printing credentials. Its five-minute deadline is separate
+from the catalog's provider timeouts. A successful run does not by itself
+validate rate limits or the effective timeout semantics.

@@ -761,3 +761,20 @@ _review_permission_matrix() {
     [[ "${output}" == *"${expected}"* ]]
   done
 }
+
+@test "authoritative validation supports v2 array variants on slash-containing model IDs" {
+  cat > "${fake_action}/.opencode/opencode.jsonc" <<'JSON'
+{"providers":{"demo":{"models":{"nested/model":{"variants":[{"id":"low"},{"id":"high"}]}}}}}
+JSON
+  for variant in high missing; do
+    run env HOME="${fake_home}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted RUNNER_OS=Linux \
+      bash -euo pipefail -c 'source "$1"; source "$2"; opencode_validate_variant demo/nested/model "$3" "$4"' _ \
+      "${run_script}" "${lib_script}" "${variant}" "${fake_action}/.opencode/opencode.jsonc"
+    if [[ "${variant}" == high ]]; then
+      [ "${status}" -eq 0 ]
+    else
+      [ "${status}" -ne 0 ]
+      [[ "${output}" == *"Supported variants: high, low."* ]]
+    fi
+  done
+}
