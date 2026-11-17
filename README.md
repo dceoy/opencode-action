@@ -104,8 +104,8 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `variant`             | -                         | Provider-specific reasoning effort; leave empty unless supported. See [Custom providers](docs/custom-providers.md#variants-for-custom-providers). |
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
-| `runtime`             | `v1`                      | Runtime generation: `v1` or `v2`. v2 model execution is disabled pending #58 and #59. |
-| `opencode-version`    | Pinned v1                 | Exact stable release matching the runtime. The Sakura provider requires 1.2.25+. |
+| `runtime`             | `v1`                      | Runtime generation: `v1` or `v2`. v2 model execution is disabled pending #58 and #59.                                                             |
+| `opencode-version`    | Pinned v1                 | Exact stable release matching the runtime. The Sakura provider requires 1.2.25+.                                                                  |
 | `use-bundled-toolkit` | `true`                    | Install the bundled provider configuration for normal runs or the trusted review bridge for review-only runs.                                     |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
