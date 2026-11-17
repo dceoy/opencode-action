@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2016 # Single-quoted programs expand in the child shell.
 setup() {
   root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   export GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output"
