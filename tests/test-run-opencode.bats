@@ -615,7 +615,7 @@ EOF
     ACTION_PATH="${repo_root}" PROMPT="/pr-review security and performance" REVIEW_ONLY=true \
     USE_BUNDLED_TOOLKIT=true MODEL="sakura/preview/Kimi-K2.7-Code" \
     AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-    bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
+    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
   [[ "${output}" == *"pr-review-api"* ]]
@@ -648,7 +648,7 @@ EOF
   printf '%s' '{"pull_request":{"html_url":"https://github.com/org/repo/pull/123","head":{"sha":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"}}}' > "${event}"
   run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA HOME="${fake_home}" ACTION_PATH="${repo_root}" \
     REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true GITHUB_EVENT_PATH="${event}" \
-    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$PROMPT"' _ "${run_script}"
+    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$PROMPT"' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"https://github.com/org/repo/pull/123 at frozen head abcdefabcdefabcdefabcdefabcdefabcdefabcd"* ]]
 }
@@ -670,7 +670,7 @@ EOF
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
       MODEL=provider/model AGENT="${caller}" PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
       PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
+      bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
     [ "${status}" -eq 0 ]
     jq -e '.default_agent == "action-pr-review" and .formatter == false and .lsp == false and .permission["*"] == "deny" and
       .agent["action-pr-review"].permission == .permission and .permission.bash == "deny" and .permission.edit == "deny" and .permission["pr-review-api"] == "allow"' <<< "${output}"
@@ -708,7 +708,7 @@ _review_permission_matrix() {
     OPENCODE_RUNTIME="${runtime}" USE_GITHUB_TOKEN=true \
     MODEL=provider/model AGENT=build PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
     PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"
+    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"
   env OPENCODE_BIN="${binary}" python3 "${repo_root}/tests/helpers/review-permission-runtime.py" \
     "${config}" "${fake_home}" "${fake_workspace}" "${runtime}"
 }
@@ -748,11 +748,10 @@ _review_permission_matrix() {
 @test "runtime v2 fails closed before OpenCode starts" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
   touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  for example in 'v2|false|true|supports review-only runs only' \
-    'v2|true|false|Set use-github-token: true' \
-    'v2|true||Set use-github-token: true' \
-    'v3|true|true|Invalid runtime' \
-    'v2|true|true|requires the installed native pr-review-api'; do
+  for example in 'v2|false|true|disabled pending' \
+    'v2|true|false|disabled pending' \
+    'v2|true|true|disabled pending' \
+    'v3|true|true|Invalid runtime'; do
     IFS='|' read -r runtime review_only use_github_token expected <<< "${example}"
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" OPENCODE_RUNTIME="${runtime}" REVIEW_ONLY="${review_only}" \
       USE_GITHUB_TOKEN="${use_github_token}" USE_BUNDLED_TOOLKIT=true MODEL=provider/model \
@@ -760,42 +759,5 @@ _review_permission_matrix() {
       bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
     [ "${status}" -ne 0 ]
     [[ "${output}" == *"${expected}"* ]]
-  done
-}
-
-@test "runtime v2 runs the standalone review command only on an OpenCode 2 binary" {
-  fake_bin="${BATS_TEST_TMPDIR}/v2-bin"
-  invocation_file="${BATS_TEST_TMPDIR}/invocation"
-  mkdir -p "${fake_bin}" "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/plugins/pr-review-api"
-  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  cp "${repo_root}/.opencode/plugins/pr-review-api/index.js" "${fake_home}/.config/opencode/plugins/pr-review-api/"
-  printf '%s\n' '#!/usr/bin/env bash' 'shift' 'exec "$@"' > "${fake_bin}/timeout"
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'if [[ "$1" == "--version" ]]; then printf "%s\n" "${REPORTED_VERSION}"; exit 0; fi' \
-    'printf "%s\n" "$@" >"${INVOCATION_FILE}"' > "${fake_bin}/opencode"
-  chmod +x "${fake_bin}/timeout" "${fake_bin}/opencode"
-  for example in 'opencode v2.3.0|high|0|provider/model#high' \
-    'opencode v2.3.0||0|provider/model' \
-    '2.10.1||0|provider/model' \
-    '1.19.5||1|' \
-    'opencode v3.0.0||1|' \
-    '||1|'; do
-    IFS='|' read -r reported variant expected_status expected_model <<< "${example}"
-    rm -f "${invocation_file}"
-    run env PATH="${fake_bin}:${PATH}" HOME="${fake_home}" ACTION_PATH="${repo_root}" \
-      GITHUB_WORKSPACE="${fake_workspace}" OPENCODE_RUNTIME=v2 REVIEW_ONLY=true USE_GITHUB_TOKEN=true \
-      USE_BUNDLED_TOOLKIT=true MODEL=provider/model VARIANT="${variant}" AGENT=build PROMPT="/pr-review focus" \
-      PR_REVIEW_URL=https://github.com/org/repo/pull/123 PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      TIMEOUT_MINUTES=5 REPORTED_VERSION="${reported}" INVOCATION_FILE="${invocation_file}" "${run_script}"
-    [ "${status}" -eq "${expected_status}" ]
-    if [[ "${expected_status}" -eq 0 ]]; then
-      [ "$(sed -n '1,6p' "${invocation_file}" | paste -sd ' ' -)" = "run --standalone --model ${expected_model} --agent action-pr-review" ]
-      [[ "$(sed -n '7p' "${invocation_file}")" == "Load and follow the installed pr-review skill"* ]]
-      [[ "$(tail -n 1 "${invocation_file}")" == *"Additional focus: focus" ]]
-    else
-      [[ "${output}" == *"requires an OpenCode 2 binary"* ]]
-      [ ! -e "${invocation_file}" ]
-    fi
   done
 }
