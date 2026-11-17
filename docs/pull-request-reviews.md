@@ -68,6 +68,8 @@ mock adapter, not a real review submission. Managed configuration, inherited
 state and credentials, discovery flags, plugin loading, and a real pinned skill
 and commit-bound review still need end-to-end verification before enabling v2.
 
+The gated v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, manual dispatch, or issue comment events. Free-form focus is currently supported only by v1. Comment and manual events require an explicit PR URL and full head SHA.
+
 ## Review contract and boundaries
 
 Upstream `pr-review` freezes the base/head snapshot, validates findings against repository evidence, and publishes one verified `COMMENT` review by default. It never approves, requests changes, merges, or modifies repository contents. See [the upstream skill specification](https://github.com/dceoy/pr-loop/blob/main/skills/pr-review/SKILL.md) for the authoritative policy.

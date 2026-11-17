@@ -367,6 +367,21 @@ opencode_configure_run() {
       opencode_report_error "Review-only accepts /pr-review or plain-text review focus."
       return 1
     fi
+    if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+      case "${GITHUB_EVENT_NAME:-}" in
+        pull_request | pull_request_target | workflow_dispatch | issue_comment) ;;
+        *)
+          opencode_report_error "OpenCode v2 review-only does not support event '${GITHUB_EVENT_NAME:-missing}'."
+          return 1
+          ;;
+      esac
+      # Free-form text can request a general comment or mutation. Until a
+      # structured focus input exists, authorize only the review command itself.
+      if [[ -n "${OPENCODE_EFFECTIVE_PROMPT}" ]]; then
+        opencode_report_error "OpenCode v2 review-only accepts only an empty prompt or /pr-review."
+        return 1
+      fi
+    fi
     if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
       export PR_REVIEW_URL="${PR_REVIEW_URL:-$(jq -r '.pull_request.html_url // empty' "${GITHUB_EVENT_PATH}")}"
       export PR_REVIEW_HEAD_SHA="${PR_REVIEW_HEAD_SHA:-$(jq -r '.pull_request.head.sha // empty' "${GITHUB_EVENT_PATH}")}"
