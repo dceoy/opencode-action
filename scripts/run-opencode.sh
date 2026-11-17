@@ -273,9 +273,7 @@ opencode_report_failure() {
 }
 
 # Fail before any model call when the selected runtime cannot serve this run.
-# OpenCode 2 has no `opencode github run`, so only the review-only flow, which
-# publishes through the action's own adapter, can run on it. That adapter
-# normally relies on the App token exchanged by `opencode github run`.
+# The v2 review permission boundary has not yet been proven (issue #58).
 opencode_validate_runtime() {
   case "${OPENCODE_RUNTIME:-v1}" in
     v1) ;;

@@ -46,7 +46,7 @@ inputs:
     required: false
     description: >-
       Pin an exact stable release matching runtime. Floating versions are rejected.
-      OpenCode 2 model execution is disabled pending security and routing work.
+      OpenCode 2 model execution is blocked pending verification of review isolation and routing work.
     # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
     default: v1.19.3
   use-bundled-toolkit:
@@ -146,6 +146,11 @@ runs:
         OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}
         RUNNER_TEMP: ${{ runner.temp }}
       run: |
+        # Check before installing the review skill or starting OpenCode.
+        if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+          echo "::error::OpenCode 2 isolation is not yet verified; refusing to start before installation or any model call. Use OpenCode 1 (see issue #58)." >&2
+          exit 1
+        fi
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
           # Scope HOME, PATH, and XDG overrides to this composite step only.
           review_home="$(mktemp -d "${RUNNER_TEMP%/}/opencode-review.XXXXXXXX")"
