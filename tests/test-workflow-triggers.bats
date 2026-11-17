@@ -89,6 +89,26 @@ PY
 }
 
 @test "review comment execution requires a trusted non-bot author" {
-  grep -Fq "github.event.comment.user.type != 'Bot'" "${bot}"
-  grep -Fq "contains(fromJSON('[\"OWNER\",\"MEMBER\",\"COLLABORATOR\"]'), github.event.comment.author_association)" "${bot}"
+  run python3 - "${bot}" << 'PYCODE'
+import re
+import sys
+from pathlib import Path
+
+workflow = Path(sys.argv[1]).read_text()
+match = re.findall(
+    r"^jobs:\n  opencode-bot:\n    if: >\n((?:      .*\n|\n)+)    runs-on:",
+    workflow, re.MULTILINE,
+)
+assert len(match) == 1, "could not uniquely extract the bot job condition"
+condition = " ".join(match[0].split())
+expected = " ".join("""
+    ( github.event_name == 'pull_request_review_comment'
+      && github.event.comment.user.type != 'Bot'
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    ) || ( github.event_name != 'pull_request_review_comment'
+      && inputs.prompt != '' )
+""".split())
+assert condition == expected, "bot job condition changed"
+PYCODE
+  [ "${status}" -eq 0 ]
 }
