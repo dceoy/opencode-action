@@ -144,6 +144,6 @@ default branch and never runs on pull requests. It asks the model to use the
 read tool; a successful run requires a completed tool event and the probe
 marker. The CLI may make more than one HTTP request to complete that single
 interactive task. The harness suppresses provider output and classifies common
-failures without printing credentials. Its five-minute deadline is separate
-from the catalog's provider timeouts. A successful run does not by itself
-validate rate limits or the effective timeout semantics.
+failures without printing credentials. Its five-minute deadline plus a short
+shutdown grace period is separate from the catalog's provider timeouts. A
+successful run does not by itself validate rate limits or the effective timeout semantics.

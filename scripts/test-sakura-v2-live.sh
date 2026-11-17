@@ -24,13 +24,13 @@ OPENCODE_CONFIG_CONTENT="$(jq -nc --arg probe "${tmpdir}/work/probe.txt" \
 export OPENCODE_CONFIG_CONTENT
 # Output may contain provider data; keep it off the workflow log, even on failure.
 set +e
-timeout 5m "${OPENCODE_V2_BIN}" run --standalone --format json --model "sakura/${SAKURA_MODEL}" --auto \
+timeout --kill-after=10s 5m "${OPENCODE_V2_BIN}" run --standalone --format json --model "sakura/${SAKURA_MODEL}" --auto \
   'Use the read tool to read probe.txt, then report its contents.' > "${tmpdir}/output" 2> "${tmpdir}/error"
 status=$?
 set -e
 if ((status != 0)); then
-  if ((status == 124)); then
-    echo 'OpenCode timed out (five-minute harness deadline).' >&2
+  if ((status == 124 || status == 137)); then
+    echo 'OpenCode timed out (five minutes plus a short shutdown grace period).' >&2
   elif grep -Eiq '429|rate.limit' "${tmpdir}/output" "${tmpdir}/error"; then
     echo 'Provider rate limit reported.' >&2
   elif grep -Eiq '401|403|unauthori[sz]ed|authentication' "${tmpdir}/output" "${tmpdir}/error"; then
