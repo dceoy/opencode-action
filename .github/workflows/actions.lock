@@ -16,6 +16,8 @@ workflows:
     '.github/workflows/sync-sakura-models.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1'
+    '.github/workflows/test-sakura-v2-live.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 dependencies:
     'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
         ref: 'v6.1.0'

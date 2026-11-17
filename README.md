@@ -137,8 +137,8 @@ pinned OpenCode v2 CLI, including the isolated review configuration. It does
 not establish provider parity or send a Sakura request. The manual **Trusted
 Sakura v2 integration** workflow can exercise a catalog model with a real key:
 configure the `sakura-integration` GitHub environment and its
-`SAKURA_AI_ENGINE_API_KEY` secret, then dispatch the workflow from the default
-branch with a model ID from the catalog (without `sakura/`). Restrict access to
+`SAKURA_AI_ENGINE_API_KEY` secret and `SAKURA_MODEL` variable (a catalog
+model ID without `sakura/`), then dispatch the workflow from the default branch. Restrict access to
 that environment to trusted maintainers. The workflow checks out only the
 default branch and never runs on pull requests. It asks the model to use the
 read tool; a successful run requires a completed tool event and the probe
