@@ -290,7 +290,7 @@ EOF
   fi
   pin="$(sed -n -E '/^  pr-review-ref:$/,/^  timeout-minutes:$/s/^    default: ([a-f0-9]{40}).*$/\1/p' "${repo_root}/action.yml")"
   [[ "${pin}" =~ ^[a-f0-9]{40}$ ]]
-  run env HOME="${install_home}" PR_REVIEW_REF="${pin}" USE_BUNDLED_TOOLKIT=true \
+  run env HOME="${install_home}" review_home="${install_home}" PR_REVIEW_REF="${pin}" USE_BUNDLED_TOOLKIT=true \
     PR_REVIEW_INSTALL_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}" bash -euo pipefail "${install_step}"
   if [ "${status}" -ne 0 ]; then
     echo "${output}" >&3
