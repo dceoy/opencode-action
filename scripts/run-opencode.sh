@@ -280,7 +280,7 @@ opencode_validate_runtime() {
   case "${OPENCODE_RUNTIME:-v1}" in
     v1) ;;
     v2)
-      opencode_report_error "OpenCode v2 model execution is disabled pending #58 and #59."
+      opencode_report_error "OpenCode 2 isolation is not yet verified; OpenCode v2 model execution is disabled pending #58 and #59. Refusing to start before any model call; use OpenCode 1."
       return 1
       ;;
     *)
