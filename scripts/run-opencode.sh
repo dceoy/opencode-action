@@ -369,7 +369,7 @@ opencode_configure_run() {
     fi
     if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
       case "${GITHUB_EVENT_NAME:-}" in
-        pull_request | pull_request_target | workflow_dispatch | issue_comment) ;;
+        pull_request | pull_request_target | workflow_dispatch) ;;
         *)
           opencode_report_error "OpenCode v2 review-only does not support event '${GITHUB_EVENT_NAME:-missing}'."
           return 1

@@ -666,7 +666,8 @@ EOF
 @test "v2 review-only authorizes only review requests on supported events with a frozen target" {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/plugins/pr-review-api"
   touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md" "${fake_home}/.config/opencode/plugins/pr-review-api/index.js"
-  for spec in 'pull_request|/pr-review|0' 'workflow_dispatch||0' 'issue_comment|/pr-review|0' \
+  for spec in 'pull_request|/pr-review|0' 'pull_request_target|/pr-review|0' 'workflow_dispatch||0' \
+    'issue_comment|/pr-review|1' 'pull_request_review_comment|/pr-review|1' \
     'push|/pr-review|1' 'issue_comment|post a comment|1' 'workflow_dispatch|/pr-review fix the code|1'; do
     IFS='|' read -r event prompt expected <<< "${spec}"
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \

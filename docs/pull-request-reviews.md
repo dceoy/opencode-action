@@ -68,7 +68,7 @@ mock adapter, not a real review submission. Managed configuration, inherited
 state and credentials, discovery flags, plugin loading, and a real pinned skill
 and commit-bound review still need end-to-end verification before enabling v2.
 
-The gated v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, manual dispatch, or issue comment events. Free-form focus is currently supported only by v1. Comment and manual events require an explicit PR URL and full head SHA.
+The gated v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, or manual dispatch events. It does not support `issue_comment` or `pull_request_review_comment` events. The bot workflow gates review comments on trusted authors and configured mentions, but the action can also be invoked directly and does not enforce those gates itself. Free-form focus is currently supported only by v1. Manual events require an explicit PR URL and full head SHA.
 
 ## Review contract and boundaries
 
