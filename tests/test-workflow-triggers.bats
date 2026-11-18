@@ -75,7 +75,7 @@ PY
 @test "bot does not subscribe to issue or PR conversation comments" {
   # yq parses YAML 1.2, preserving "on" as a string; it is installed on
   # the ubuntu-slim runner used by the Bats CI job.
-  run yq -e '(.on | tag) == "!!map" and (.on | has("issue_comment") == false) and (.on | has("pull_request_review_comment"))' "${bot}"
+  run yq -e 'explode(.) | (.on | tag) == "!!map" and (.on | has("issue_comment") == false) and (.on | has("pull_request_review_comment"))' "${bot}"
   [ "${status}" -eq 0 ]
 }
 
