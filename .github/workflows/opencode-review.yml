@@ -105,14 +105,15 @@ on:
     types:
       - opened
       - ready_for_review
-permissions:
-  contents: read
-  pull-requests: write
-  issues: write
-  id-token: write
-  actions: read
+permissions: {}
 jobs:
   opencode-review:
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
     if: >
       github.event_name == 'pull_request'
       && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)

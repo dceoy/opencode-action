@@ -20,8 +20,7 @@ on:
   schedule:
     - cron: '17 5 * * 1'
   workflow_dispatch:
-permissions:
-  contents: read
+permissions: {}
 jobs:
   github-codeql-analysis:
     permissions:
