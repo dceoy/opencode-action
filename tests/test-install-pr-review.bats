@@ -31,6 +31,14 @@ setup() {
   [ "${status}" -ne 0 ]
 }
 
+@test "v2 review fails before the installer or OpenCode is invoked" {
+  run env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true ACTION_PATH="${BATS_TEST_TMPDIR}/missing" \
+    GITHUB_TOKEN=SECRET_SENTINEL bash -euo pipefail "${run_step}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"OpenCode 2 isolation is not yet verified"* ]]
+  [[ "${output}" != *"SECRET_SENTINEL"* ]]
+}
+
 @test "reusable review workflow defaults to the free OpenCode model" {
   workflow="${repo_root}/.github/workflows/opencode-review.yml"
   model_input="$(sed -n '/^      model:$/,/^      agent:$/p' "${workflow}")"
