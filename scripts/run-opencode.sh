@@ -280,14 +280,8 @@ opencode_validate_runtime() {
   case "${OPENCODE_RUNTIME:-v1}" in
     v1) ;;
     v2)
-      if [[ "${REVIEW_ONLY:-false}" != "true" ]]; then
-        opencode_report_error "OpenCode 2 supports review-only runs only; it has no 'opencode github run'. Use an OpenCode 1 version for general runs."
-        return 1
-      fi
-      if [[ "${USE_GITHUB_TOKEN:-false}" != "true" ]]; then
-        opencode_report_error "OpenCode 2 runs do not perform the OpenCode App token exchange. Set use-github-token: true to publish the review with the workflow token."
-        return 1
-      fi
+      opencode_report_error "OpenCode v2 model execution is disabled pending #58 and #59."
+      return 1
       ;;
     *)
       opencode_report_error "Invalid runtime '${OPENCODE_RUNTIME}'; expected v1 or v2."
@@ -303,7 +297,7 @@ opencode_select_run_command() {
   local reported model
 
   if [[ "${OPENCODE_RUNTIME:-v1}" != "v2" ]]; then
-    OPENCODE_RUN_COMMAND=(opencode github run)
+    OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" github run)
     return 0
   fi
   reported="$(opencode --version 2> /dev/null | tail -n 1)" || reported=""

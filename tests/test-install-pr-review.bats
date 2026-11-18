@@ -3,14 +3,6 @@ setup() {
   repo_root="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
   install_step="${BATS_TEST_TMPDIR}/install.sh"
   run_step="${BATS_TEST_TMPDIR}/run-opencode.sh"
-  version_step="${BATS_TEST_TMPDIR}/version.sh"
-  awk -v name="Get OpenCode version" '
-    $0 == "    - name: " name { step=1; next }
-    step && /^    - name: / { exit }
-    step && /^      run: \|$/ { script=1; next }
-    script { sub(/^        /, ""); print }
-  ' "${repo_root}/action.yml" > "${version_step}"
-  [ -s "${version_step}" ]
   awk '
     $0 == "    - name: Run OpenCode" { step=1; next }
     step && /^      run: \|$/ { script=1; next }
@@ -48,119 +40,6 @@ setup() {
   [ "${status}" -eq 0 ]
   run grep -Fq "OPENCODE_API_KEY: \${{ secrets.OPENCODE_API_KEY }}" "${workflow}"
   [ "${status}" -eq 0 ]
-}
-
-@test "version step derives the runtime from the OpenCode major version" {
-  for example in 'true|0.9.0|1|' 'true|1.2.13|1|' 'true|1.2.14-beta.1|1|' 'true|invalid|1|' \
-    'true|1.2.14|0|v1' 'true|v1.2.14|0|v1' 'true|1.2.14+build.1|0|v1' 'true|1.3.0|0|v1' \
-    'false|v1.19.3|0|v1' 'false|custom-build|0|v1' \
-    'true|v2.3.0|0|v2' 'true|2.3.0|0|v2' 'true|2.0.0|0|v2' \
-    'false|v2.3.0|1|' 'true|v2.3.0-beta.1|1|' 'true|v3.0.0|1|' 'false|v3.0.0|1|'; do
-    IFS='|' read -r review_only version expected runtime <<< "${example}"
-    : > "${BATS_TEST_TMPDIR}/output"
-    run env INPUT_VERSION="${version}" REVIEW_ONLY="${review_only}" \
-      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-    if [[ "${status}" -ne "${expected}" ]]; then
-      printf 'unexpected status %s for %s: %s\n' "${status}" "${example}" "${output}" >&2
-    fi
-    [ "${status}" -eq "${expected}" ]
-    if [[ "${expected}" -eq 0 ]]; then
-      grep -Fxq "runtime=${runtime}" "${BATS_TEST_TMPDIR}/output"
-      grep -Fxq "opencode-version=${version#v}" "${BATS_TEST_TMPDIR}/output"
-    fi
-  done
-}
-
-@test "latest resolving to OpenCode 2 selects the v2 runtime only for review-only runs" {
-  mock_bin="${BATS_TEST_TMPDIR}/latest-bin"
-  mkdir -p "${mock_bin}"
-  printf '%s\n' '#!/usr/bin/env bash' "printf '%s' '{\"tag_name\":\"v2.3.0\"}'" > "${mock_bin}/curl"
-  chmod +x "${mock_bin}/curl"
-  for example in 'true|0' 'false|1'; do
-    IFS='|' read -r review_only expected <<< "${example}"
-    : > "${BATS_TEST_TMPDIR}/output"
-    run env PATH="${mock_bin}:${PATH}" INPUT_VERSION=latest REVIEW_ONLY="${review_only}" GITHUB_TOKEN='' \
-      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-    [ "${status}" -eq "${expected}" ]
-    if [[ "${expected}" -eq 0 ]]; then
-      grep -Fxq 'runtime=v2' "${BATS_TEST_TMPDIR}/output"
-    fi
-  done
-}
-
-
-@test "v1 and v2 resolve the highest stable release of the requested major" {
-  mock_bin="${BATS_TEST_TMPDIR}/major-version-bin"
-  mkdir -p "${mock_bin}"
-  page1="${BATS_TEST_TMPDIR}/major-releases-page1.json"
-  page2="${BATS_TEST_TMPDIR}/major-releases-page2.json"
-  python3 - "${page1}" "${page2}" <<'PY'
-import json
-import sys
-
-def release(tag, prerelease=False, draft=False):
-    return {"tag_name": tag, "prerelease": prerelease, "draft": draft}
-
-# The first page is full of v2 releases, so v1 must request page 2.
-page1 = [release("v2.3.0"), release("process-daemon-v0.5.2"), release("v2.10.0")]
-page1 += [release("v2.0.0")] * (100 - len(page1))
-page2 = [
-    release("v1.19.4"),
-    release("v1.19.5"),
-    release("v1.99.0-beta.1", prerelease=True),
-    release("v1.50.0", draft=True),
-]
-for path, entries in zip(sys.argv[1:], [page1, page2]):
-    with open(path, "w", encoding="utf-8") as stream:
-        json.dump(entries, stream)
-PY
-  cat > "${mock_bin}/curl" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-url=""
-for arg in "$@"; do url="${arg}"; done
-if [[ "${NO_MATCH:-}" == "true" ]]; then
-  printf '[]'
-  exit 0
-fi
-case "${url}" in
-  *'releases?per_page=100&page=1') cat "${MOCK_PAGE1}" ;;
-  *'releases?per_page=100&page=2') cat "${MOCK_PAGE2}" ;;
-  *) exit 2 ;;
-esac
-EOF
-  chmod +x "${mock_bin}/curl"
-  for example in 'true|v1|0|1.19.5|v1' 'false|v1|0|1.19.5|v1' \
-    'true|v2|0|2.10.0|v2' 'false|v2|1||'; do
-    IFS='|' read -r review_only input expected_status expected_version expected_runtime <<< "${example}"
-    : > "${BATS_TEST_TMPDIR}/output"
-    run env PATH="${mock_bin}:${PATH}" MOCK_PAGE1="${page1}" MOCK_PAGE2="${page2}" \
-      INPUT_VERSION="${input}" REVIEW_ONLY="${review_only}" GITHUB_TOKEN='' \
-      GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-    [ "${status}" -eq "${expected_status}" ]
-    if [[ "${expected_status}" -eq 0 ]]; then
-      grep -Fxq "opencode-version=${expected_version}" "${BATS_TEST_TMPDIR}/output"
-      grep -Fxq "runtime=${expected_runtime}" "${BATS_TEST_TMPDIR}/output"
-    else
-      [[ "${output}" == *"supports review-only runs only"* ]]
-    fi
-  done
-  run env PATH="${mock_bin}:${PATH}" NO_MATCH=true INPUT_VERSION=v1 REVIEW_ONLY=true \
-    GITHUB_TOKEN='' GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" bash "${version_step}"
-  [ "${status}" -ne 0 ]
-  [[ "${output}" == *"No stable OpenCode v1 release found"* ]]
-}
-
-# shellcheck disable=SC2016  # literal workflow expressions
-@test "review-only installer follows the derived runtime without a separate input" {
-  action="${repo_root}/action.yml"
-  grep -Fq 'installer_url=https://opencode.ai/v2/install' "${action}"
-  grep -Fq 'curl -fsSL "${installer_url}" |' "${action}"
-  grep -Fq 'OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}' "${action}"
-  for file in action.yml .github/workflows/opencode-bot.yml .github/workflows/opencode-review.yml; do
-    run grep -Fq 'inputs.runtime' "${repo_root}/${file}"
-    [ "${status}" -ne 0 ]
-  done
 }
 
 @test "rejects mutable refs and disabled bundled toolkit" {
@@ -309,13 +188,14 @@ echo "${specific_version}"
 BINARY
 chmod +x "${HOME}/.opencode/bin/opencode"
 EOF
+    cp "${repo_root}/scripts/verify-opencode.sh" "${mock_action}/scripts/verify-opencode.sh"
     chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/opencode" "${mock_bin}/gh" \
       "${mock_bin}/curl" "${mock_bin}/tar" \
       "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
 
     run env HOME="${original_home}" RUNNER_TEMP="${runner_temp}" REVIEW_ONLY=true \
       USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${pin}" PR_REVIEW_INSTALL_TOKEN="" \
-      OPENCODE_VERSION=1.2.14 ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
+      OPENCODE_RUNTIME=v1 OPENCODE_VERSION=1.2.14 GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
       PATH="${original_home}/.opencode/bin:${mock_bin}" INSTALLER_FIXTURE="${installer_fixture}" \
       HOME_CAPTURE="${home_capture}" INSTALLER_PATH_CAPTURE="${installer_path_capture}" \
       REQUIRED_TOOLS_CAPTURE="${required_tools_capture}" WHICH_CAPTURE="${which_capture}" \
@@ -386,7 +266,7 @@ EOF
 
   run env HOME="${original_home}" RUNNER_TEMP="${runner_temp}" REVIEW_ONLY=true \
     USE_BUNDLED_TOOLKIT=true PR_REVIEW_REF="${pin}" PR_REVIEW_INSTALL_TOKEN="" \
-    OPENCODE_VERSION=1.2.14 ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
+    OPENCODE_RUNTIME=v1 OPENCODE_VERSION=1.2.14 GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/output" ACTION_PATH="${mock_action}" GITHUB_PATH="${path_file}" \
     PATH="${mock_bin}:${PATH}" INSTALLER_FIXTURE="${case_root}/installer.sh" \
     HOME_CAPTURE="${home_capture}" RUN_CAPTURE="${run_capture}" bash "${run_step}"
   [ "${status}" -ne 0 ]
@@ -394,49 +274,6 @@ EOF
   [ ! -e "${run_capture}" ]
   [ "$(cat "${path_file}")" = '/existing/github/path' ]
   [ ! -e "$(cat "${home_capture}")" ]
-}
-
-@test "normal runs keep using the caller OpenCode binary without the review installer" {
-  case_root="${BATS_TEST_TMPDIR}/normal-run"
-  original_home="${case_root}/home"
-  mock_bin="${case_root}/bin"
-  mock_action="${case_root}/action"
-  path_file="${case_root}/github-path"
-  run_capture="${case_root}/run-capture"
-  curl_capture="${case_root}/curl-capture"
-  mkdir -p "${original_home}/.opencode/bin" "${mock_bin}" "${mock_action}/scripts"
-  echo '/existing/github/path' > "${path_file}"
-  cat > "${original_home}/.opencode/bin/opencode" << 'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-echo 'opencode 1.2.14'
-EOF
-  cat > "${mock_bin}/curl" << 'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-echo invoked > "${CURL_CAPTURE}"
-exit 1
-EOF
-  cat > "${mock_action}/scripts/run-opencode.sh" << 'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-{
-  echo "${HOME}"
-  command -v opencode
-  opencode --version
-} > "${RUN_CAPTURE}"
-EOF
-  chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/curl" "${mock_action}/scripts/run-opencode.sh"
-
-  run env HOME="${original_home}" REVIEW_ONLY=false ACTION_PATH="${mock_action}" \
-    GITHUB_PATH="${path_file}" PATH="${original_home}/.opencode/bin:${mock_bin}:${PATH}" \
-    RUN_CAPTURE="${run_capture}" CURL_CAPTURE="${curl_capture}" bash "${run_step}"
-  [ "${status}" -eq 0 ]
-  [ ! -e "${curl_capture}" ]
-  [ "$(sed -n '1p' "${run_capture}")" = "${original_home}" ]
-  [ "$(sed -n '2p' "${run_capture}")" = "${original_home}/.opencode/bin/opencode" ]
-  [ "$(sed -n '3p' "${run_capture}")" = 'opencode 1.2.14' ]
-  [ "$(cat "${path_file}")" = '/existing/github/path' ]
 }
 
 @test "real gh skill installs only the SHA-pinned review skill" {

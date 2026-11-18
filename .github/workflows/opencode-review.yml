@@ -43,10 +43,15 @@ on:
         type: string
         description: Base URL for OIDC token exchange
         default: https://api.opencode.ai
+      runtime:
+        required: false
+        type: string
+        description: OpenCode runtime generation (v1 or v2)
+        default: v1
       opencode-version:
         required: false
         type: string
-        description: Select v1/v2 for latest stable major, or a specific release (v2 review-only)
+        description: Exact stable release matching the selected runtime
         # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
         default: v1.19.3
       use-bundled-toolkit:
@@ -157,6 +162,7 @@ jobs:
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
+          runtime: ${{ inputs.runtime || 'v1' }}
           # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
           opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}

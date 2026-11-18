@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@1a46f6a4207e3c67c901874c6abad73b3b3f11c1  # v0.9.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@d60931945956acddad620910a3455f28355e2d04
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -57,7 +57,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@1a46f6a4207e3c67c901874c6abad73b3b3f11c1  # v0.9.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@d60931945956acddad620910a3455f28355e2d04
 ```
 
 This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time without an account or model-provider API key. To use another provider/model, set `with.model` explicitly and pass credentials if required. Free-model availability and rate limits may change.
@@ -68,7 +68,7 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 ## Inputs
 
-Both reusable workflows expose the action configuration plus a runner input, except that only the bot workflow exposes `pr-review-ref`; the review workflow inherits its default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
+Both reusable workflows expose the action configuration plus a runner input, except that `review-only`, `pr-review-ref`, `pr-review-url`, and `pr-review-head-sha` are bot-only inputs. The review workflow always enables review-only mode and inherits the `pr-review-ref` default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -80,14 +80,17 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Use `v1`/`v2` to track latest stable major, or pin a release. |
+| `runtime`             | `v1`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
+| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Exact stable release matching the selected runtime.           |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
-| `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
+| `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
+| `pr-review-url`       | `''` (bot only)                                                     | GitHub PR URL for manual review-only runs.                    |
+| `pr-review-head-sha`  | `''` (bot only)                                                     | Full reviewed head SHA for manual review-only runs.           |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-The default version remains a concrete v1 release pinned in both workflow YAML files and `action.yml`; Renovate updates these pins while excluding v2 releases. Override `opencode-version` with `v1` or `v2` to resolve the newest stable release of that major, or specify a full version to pin it. `latest` continues to resolve the latest release across majors. OpenCode 2 is limited to review-only runs; see [pull request reviews](pull-request-reviews.md#opencode-2-opt-in).
+The default version remains a concrete v1 release pinned in both workflow YAML files and `action.yml`; Renovate updates these pins while excluding v2 releases. Set `runtime` to `v1` or `v2` and pin `opencode-version` to an exact stable release of the matching major, such as `v1.19.3` or `v2.3.0`. Floating values such as `v1`, `v2`, and `latest` are rejected. Review-only runs on v1 require version `v1.2.14` or newer. OpenCode 2 model execution is disabled, including review-only runs.
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs. Its input mappings reference the `workflow_call` definitions via GitHub Actions YAML anchors to avoid drift.
 
