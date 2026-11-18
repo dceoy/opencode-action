@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@1a46f6a4207e3c67c901874c6abad73b3b3f11c1  # v0.9.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@d60931945956acddad620910a3455f28355e2d04
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -57,7 +57,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@1a46f6a4207e3c67c901874c6abad73b3b3f11c1  # v0.9.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@d60931945956acddad620910a3455f28355e2d04
 ```
 
 This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time without an account or model-provider API key. To use another provider/model, set `with.model` explicitly and pass credentials if required. Free-model availability and rate limits may change.
@@ -68,7 +68,7 @@ To focus the review, override `prompt` with a supported review aspect, for examp
 
 ## Inputs
 
-Both reusable workflows expose the action configuration plus a runner input, except that only the bot workflow exposes `pr-review-ref`; the review workflow inherits its default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
+Both reusable workflows expose the action configuration plus a runner input, except that `review-only`, `pr-review-ref`, `pr-review-url`, and `pr-review-head-sha` are bot-only inputs. The review workflow always enables review-only mode and inherits the `pr-review-ref` default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
 
 | Input                 | Default                                                             | Description                                                   |
 | --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -83,8 +83,10 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `runtime`             | `v1`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
 | `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Exact stable release matching the selected runtime.           |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
-| `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
+| `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
+| `pr-review-url`       | `''` (bot only)                                                     | GitHub PR URL for manual review-only runs.                    |
+| `pr-review-head-sha`  | `''` (bot only)                                                     | Full reviewed head SHA for manual review-only runs.           |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
