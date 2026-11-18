@@ -18,8 +18,7 @@ on:
           - minor-release
           - patch-release
           - post-release
-permissions:
-  contents: read
+permissions: {}
 defaults:
   run:
     shell: bash -euo pipefail {0}

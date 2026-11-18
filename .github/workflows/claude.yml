@@ -9,8 +9,7 @@ on:
       - ready_for_review
     paths-ignore:
       - .github/workflows/claude.yml
-permissions:
-  contents: read
+permissions: {}
 jobs:
   claude-code-review:
     if: >
