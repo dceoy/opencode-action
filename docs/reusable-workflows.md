@@ -80,14 +80,15 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Use `v1`/`v2` to track latest stable major, or pin a release. |
+| `runtime`             | `v1`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
+| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Exact stable release matching the selected runtime.           |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
 | `review-only`         | `false` on bot; `true` on PR review workflow                        | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-The default version remains a concrete v1 release pinned in both workflow YAML files and `action.yml`; Renovate updates these pins while excluding v2 releases. Override `opencode-version` with `v1` or `v2` to resolve the newest stable release of that major, or specify a full version to pin it. `latest` continues to resolve the latest release across majors. OpenCode 2 is limited to review-only runs; see [pull request reviews](pull-request-reviews.md#opencode-2-opt-in).
+The default version remains a concrete v1 release pinned in both workflow YAML files and `action.yml`; Renovate updates these pins while excluding v2 releases. Set `runtime` to `v1` or `v2` and pin `opencode-version` to an exact stable release of the matching major, such as `v1.19.3` or `v2.3.0`. Floating values such as `v1`, `v2`, and `latest` are rejected. Review-only runs on v1 require version `v1.2.14` or newer. OpenCode 2 model execution is disabled, including review-only runs.
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs. Its input mappings reference the `workflow_call` definitions via GitHub Actions YAML anchors to avoid drift.
 
