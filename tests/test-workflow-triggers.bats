@@ -73,18 +73,9 @@ PY
 }
 
 @test "bot does not subscribe to issue or PR conversation comments" {
-  # Restrict the check to the top-level event declaration, not documentation
-  # or an expression elsewhere in the workflow.
-  run python3 - "${bot}" << 'PY'
-import re
-import sys
-from pathlib import Path
-
-workflow = Path(sys.argv[1]).read_text()
-events = workflow.split('\non:\n', 1)[1].split('\npermissions:\n', 1)[0]
-assert not re.search(r'^  issue_comment\s*:', events, re.MULTILINE)
-assert re.search(r'^  pull_request_review_comment\s*:', events, re.MULTILINE)
-PY
+  # yq parses YAML 1.2, preserving "on" as a string; it is installed on
+  # the ubuntu-slim runner used by the Bats CI job.
+  run yq -e '(.on | tag) == "!!map" and (.on | has("issue_comment") == false) and (.on | has("pull_request_review_comment"))' "${bot}"
   [ "${status}" -eq 0 ]
 }
 
