@@ -19,6 +19,14 @@
           "name": "llm-jp-3.1-8x13b-instruct4",
           "variants": {},
         },
+        "preview/DeepSeek-V4.1-Flash-1017": {
+          "name": "preview/DeepSeek-V4.1-Flash-1017",
+          "variants": {},
+        },
+        "preview/GLM-5.3-Flash": {
+          "name": "preview/GLM-5.3-Flash",
+          "variants": {},
+        },
         "preview/Kimi-K2.7-Code": {
           "name": "preview/Kimi-K2.7-Code",
           "variants": {},
