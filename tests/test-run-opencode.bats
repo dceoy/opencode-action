@@ -1014,6 +1014,37 @@ run_v2_publication() {
   [ "${status}" -eq 1 ]
 }
 
+@test "v2 non-review run launches OpenCode with GitHub credentials scrubbed" {
+  fake_bin="${BATS_TEST_TMPDIR}/scrub-bin"
+  workspace="${BATS_TEST_TMPDIR}/scrub-workspace"
+  env_file="${BATS_TEST_TMPDIR}/scrub-env"
+  mkdir -p "${fake_bin}" "${workspace}"
+  cat > "${fake_bin}/timeout" << 'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  cat > "${fake_bin}/opencode" << 'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == --version ]]; then echo 'opencode 2.3.0'; exit 0; fi
+env >"${ENV_FILE}"
+EOF
+  chmod +x "${fake_bin}/timeout" "${fake_bin}/opencode"
+
+  run env \
+    PATH="${fake_bin}:${PATH}" HOME="${fake_home}" ACTION_PATH="${fake_action}" GITHUB_WORKSPACE="${workspace}" \
+    OPENCODE_RUNTIME=v2 GITHUB_EVENT_NAME=workflow_dispatch USE_GITHUB_TOKEN=true REVIEW_ONLY=false \
+    USE_BUNDLED_TOOLKIT=false PROMPT="summarize" AGENT=build MENTIONS=/oc MODEL=provider/model TIMEOUT_MINUTES=1 \
+    OPENCODE_APP_TOKEN=inherited-app GH_TOKEN=inherited-gh GITHUB_TOKEN=inherited-workflow \
+    ACTIONS_ID_TOKEN_REQUEST_URL=https://oidc.invalid ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL=https://oidc.invalid \
+    ENV_FILE="${env_file}" "${run_script}"
+
+  [ "${status}" -eq 0 ]
+  [ -s "${env_file}" ]
+  run grep -Eq '^(OPENCODE_APP_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|ACTIONS_ID_TOKEN_REQUEST_TOKEN|OIDC_BASE_URL|GH_TOKEN|GITHUB_TOKEN)=' "${env_file}"
+  [ "${status}" -eq 1 ]
+}
+
 @test "v2 review parent verifies the App identity and publishes a commit-bound COMMENT after exit" {
   setup_v2_publication
   run_v2_publication success
