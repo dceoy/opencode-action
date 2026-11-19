@@ -854,7 +854,10 @@ from pathlib import Path
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def send_json(self, path, authorization, body):
-        if self.path != path or self.headers.get('Authorization') != authorization:
+        with open(os.environ['PORT_FILE'] + '.headers', 'a') as log:
+            log.write(self.command + ' ' + self.path + ' UA=' + str(self.headers.get('User-Agent')) + '\n')
+        if (self.path != path or self.headers.get('Authorization') != authorization
+                or self.headers.get('User-Agent') != 'opencode-action'):
             self.send_error(403)
             return
         self.send_response(200)
@@ -873,6 +876,15 @@ PYTOKEN
   oidc_pid=$!
   for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
   oidc_base="http://127.0.0.1:$(cat "${BATS_TEST_TMPDIR}/port")"
+}
+
+@test "App token exchange sends an explicit User-Agent on every request" {
+  start_mock_oidc
+  run env ACTIONS_ID_TOKEN_REQUEST_URL="${oidc_base}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request \
+    OIDC_BASE_URL="${oidc_base}" bash -c 'source "$1"; opencode_exchange_app_token' _ "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = app-token ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/port.headers")" = $'GET /oidc?audience=opencode-github-action UA=opencode-action\nPOST /exchange_github_app_token UA=opencode-action' ]
 }
 
 @test "v2 thread reply posts only the final assistant text from structured stdout" {

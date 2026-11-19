@@ -447,16 +447,17 @@ opencode_configure_run() {
 }
 
 # Match the v1 GitHub integration's OIDC audience and exchange endpoint.
+# api.opencode.ai sits behind Cloudflare, which rejects the default Python-urllib User-Agent.
 opencode_exchange_app_token() {
   python3 -I - << 'PYTOKEN'
 import json, os, urllib.parse, urllib.request
 url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
 url += ("&" if "?" in url else "?") + urllib.parse.urlencode({"audience": "opencode-github-action"})
-request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"], "User-Agent": "opencode-action"})
 with urllib.request.urlopen(request) as response:
     oidc = json.load(response)["value"]
 url = os.environ.get("OIDC_BASE_URL", "https://api.opencode.ai").rstrip("/") + "/exchange_github_app_token"
-request = urllib.request.Request(url, data=b"", headers={"Authorization": "Bearer " + oidc}, method="POST")
+request = urllib.request.Request(url, data=b"", headers={"Authorization": "Bearer " + oidc, "User-Agent": "opencode-action"}, method="POST")
 with urllib.request.urlopen(request) as response:
     token = json.load(response)["token"]
 if not isinstance(token, str) or not token or "\n" in token or "\r" in token:
