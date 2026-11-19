@@ -805,12 +805,11 @@ SCRIPT
   printf '%s' '{"comment":{"body":"/oc explain this line","id":42},"pull_request":{"number":7}}' > "${BATS_TEST_TMPDIR}/event"
   # Simulate the composite's omitted inputs and step-output mapping.
   runtime="$(yq -r '.inputs.runtime.default' "${repo_root}/action.yml")"
-  version="$(yq -r '.inputs."opencode-version".default' "${repo_root}/action.yml")"
-  export GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/version-output"
-  run env INPUT_RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY=false "${repo_root}/scripts/resolve-opencode-version.sh"
-  [ "${status}" -eq 0 ]
-  grep -qx 'runtime=v2' "${GITHUB_OUTPUT}"
-  grep -qx 'opencode-version=2.3.0' "${GITHUB_OUTPUT}"
+  age="$(yq -r '.inputs."minimum-release-age".default' "${repo_root}/action.yml")"
+  [ "${runtime}" = v2 ]
+  [ "${age}" = 24h ]
+  age_mapping="$(yq -r '.runs.steps[] | select(.name == "Get OpenCode version") | .env.MINIMUM_RELEASE_AGE' "${repo_root}/action.yml")"
+  [ "${age_mapping}" = '${{ inputs.minimum-release-age }}' ]
   mapping="$(yq -r '.runs.steps[] | select(.name == "Run OpenCode") | .env.OPENCODE_RUNTIME' "${repo_root}/action.yml")"
   [ "${mapping}" = '${{ steps.version.outputs.runtime }}' ]
   resolved_runtime="$(sed -n 's/^runtime=//p' "${GITHUB_OUTPUT}")"
