@@ -55,8 +55,10 @@ jobs:
     with:
       search-path: .
       setup-run: |
+        set -euo pipefail
         corepack install --global pnpm@latest
-        corepack pnpm install --frozen-lockfile
+        # Run only the two explicit postinstalls below.
+        corepack pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false
         (cd node_modules/opencode-ai && node postinstall.mjs)
         (cd node_modules/@opencode/cli && node postinstall.mjs)
         # Both generations ship an `opencode` bin, so expose each explicitly.
