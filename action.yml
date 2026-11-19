@@ -42,12 +42,10 @@ inputs:
     required: false
     description: OpenCode runtime generation (v1 or v2).
     default: v2
-  opencode-version:
+  minimum-release-age:
     required: false
-    description: >-
-      Pin an exact stable release matching runtime. Floating versions are rejected.
-    # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-    default: v2.3.0
+    description: Minimum age of a stable OpenCode GitHub release (e.g., 24h, 7d, 0s).
+    default: 24h
   use-bundled-toolkit:
     required: false
     description: Whether to copy the action's bundled provider configuration and review support files.
@@ -81,8 +79,8 @@ runs:
       id: version
       shell: bash -euo pipefail {0}
       env:
-        INPUT_VERSION: ${{ inputs.opencode-version }}
-        GITHUB_TOKEN: ${{ github.token }}
+        MINIMUM_RELEASE_AGE: ${{ inputs.minimum-release-age }}
+        GH_TOKEN: ${{ github.token }}
         REVIEW_ONLY: ${{ inputs.review-only }}
         INPUT_RUNTIME: ${{ inputs.runtime }}
         ACTION_PATH: ${{ github.action_path }}
