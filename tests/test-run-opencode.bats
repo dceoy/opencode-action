@@ -812,7 +812,7 @@ SCRIPT
   [ "${age_mapping}" = '${{ inputs.minimum-release-age }}' ]
   mapping="$(yq -r '.runs.steps[] | select(.name == "Run OpenCode") | .env.OPENCODE_RUNTIME' "${repo_root}/action.yml")"
   [ "${mapping}" = '${{ steps.version.outputs.runtime }}' ]
-  resolved_runtime="$(sed -n 's/^runtime=//p' "${GITHUB_OUTPUT}")"
+  resolved_runtime="${runtime}"
   run env -u GH_TOKEN HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
     OPENCODE_RUNTIME="${resolved_runtime}" REVIEW_ONLY=false USE_GITHUB_TOKEN=true GITHUB_TOKEN=workflow-token \
     MODEL=provider/model AGENT=build PROMPT= MENTIONS=/oc \
