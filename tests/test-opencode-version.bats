@@ -1,54 +1,33 @@
 #!/usr/bin/env bats
-# Regression test for the Renovate-managed OpenCode version pin.
 
-@test "OpenCode v2 defaults are consistent and discoverable by Renovate" {
+@test "runtime release-age policy is exposed without a version input" {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   run python3 - "${repo_root}" <<'PY'
 import json
-import re
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-config = json.loads((root / ".github/renovate.json").read_text())
-manager = next(
-    item for item in config["customManagers"]
-    if "OpenCode" in item.get("description", "")
-)
 paths = [
     "action.yml",
     ".github/workflows/opencode-bot.yml",
     ".github/workflows/opencode-review.yml",
 ]
-versions = set()
 for path in paths:
-    content = (root / path).read_text()
-    assert re.search(r"(?m)^\s+runtime:(?: &input-runtime)?\n(?:\s+.*\n)*?\s+default: v2$", content), path
-    if path != "action.yml":
-        assert "runtime: ${{ inputs.runtime || 'v2' }}" in content, path
-    assert any(re.search(pattern[1:-1], path) for pattern in manager["managerFilePatterns"]), path
-    matches = [
-        m.groupdict()
-        for pattern in manager["matchStrings"]
-        for m in re.finditer(pattern.replace("(?<", "(?P<"), content)
-    ]
-    expected = 1 if path == "action.yml" else 2
-    assert len(matches) == expected, (path, len(matches))
-    for match in matches:
-        assert match["datasource"] == "github-releases", path
-        assert match["depName"] == "anomalyco/opencode", path
-        assert match["versioning"] == "semver", path
-        assert re.fullmatch(r"v2\.\d+\.\d+", match["currentValue"]), path
-        versions.add(match["currentValue"])
-    if path != "action.yml":
-        assert "opencode-version: ${{ inputs.opencode-version || '" in content, path
-assert len(versions) == 1, versions
-assert any(
-    rule.get("matchPackageNames") == ["anomalyco/opencode"]
-    and rule.get("matchDatasources") == ["github-releases"]
-    and rule.get("allowedVersions") == ">=2.0.0 <3.0.0"
-    for rule in config["packageRules"]
-)
+    text = (root / path).read_text()
+    assert "minimum-release-age:" in text, path
+    assert "default: 24h" in text, path
+    assert "opencode-version: ${{ inputs.opencode-version" not in text, path
+    if path == "action.yml":
+        assert "\n  opencode-version:\n" in text  # The resolved-version output remains.
+        assert "\n  opencode-version:\n    required:" not in text
+        assert "MINIMUM_RELEASE_AGE: ${{ inputs.minimum-release-age }}" in text
+    else:
+        assert "minimum-release-age: ${{ inputs.minimum-release-age || '24h' }}" in text
+        assert "\n      opencode-version:" not in text
+config = json.loads((root / ".github/renovate.json").read_text())
+assert not config.get("customManagers"), "Dynamic release selection should not need Renovate pins"
+assert config["minimumReleaseAge"] == "1 day"
 PY
   [ "${status}" -eq 0 ]
 }
