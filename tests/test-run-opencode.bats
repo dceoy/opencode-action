@@ -13,6 +13,7 @@ setup() {
   mkdir -p "${fake_home}/.config/opencode/tools" "${fake_home}/.config/opencode/scripts"
   cp "${repo_root}/.opencode/tools/pr-review-api.js" "${fake_home}/.config/opencode/tools/"
   cp "${repo_root}/.opencode/scripts/pr-review-gh.sh" "${fake_home}/.config/opencode/scripts/"
+  export OPENCODE_RUNTIME=v1
   export XDG_CONFIG_HOME="${fake_home}/.config"
   export XDG_DATA_HOME="${fake_home}/.local/share"
 }
@@ -766,15 +767,65 @@ _review_permission_matrix() {
   [ ! -e "${marker}" ]
 }
 
-@test "runtime v2 invokes the selected binary" {
-  fake_bin="${BATS_TEST_TMPDIR}/opencode"
-  printf '%s\n' '#!/usr/bin/env bash' 'if [[ "$1" == --version ]]; then echo "opencode v2.3.0"; else touch "${INVOCATION_FILE}"; fi' > "${fake_bin}"
-  chmod +x "${fake_bin}"
-  run env HOME="${fake_home}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}" \
-    OPENCODE_RUNTIME=v2 REVIEW_ONLY=false MODEL=provider/model AGENT=build PROMPT=test \
-    INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" TIMEOUT_MINUTES=1 "${run_script}"
+@test "composite defaults resolve and deliver a mention to its review thread" {
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+  cat > "${fake_bin}/opencode" <<'SCRIPT'
+#!/usr/bin/env bash
+if [[ "$1" == --version ]]; then echo 'opencode v2.3.0'; exit; fi
+printf '<%s>\n' "$@" > "${INVOCATION_FILE}"
+echo 'The answer'
+SCRIPT
+  cat > "${fake_bin}/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "${REPLY_FILE}"
+cat > "${REPLY_BODY}"
+SCRIPT
+  chmod +x "${fake_bin}/opencode" "${fake_bin}/gh"
+  printf '%s' '{"comment":{"body":"/oc explain this line","id":42},"pull_request":{"number":7}}' > "${BATS_TEST_TMPDIR}/event"
+  # Simulate the composite's omitted inputs and step-output mapping.
+  runtime="$(ruby -ryaml -e 'puts YAML.load_file(ARGV[0])["inputs"]["runtime"]["default"]' "${repo_root}/action.yml")"
+  version="$(ruby -ryaml -e 'puts YAML.load_file(ARGV[0])["inputs"]["opencode-version"]["default"]' "${repo_root}/action.yml")"
+  export GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/version-output"
+  run env INPUT_RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY=false "${repo_root}/scripts/resolve-opencode-version.sh"
   [ "${status}" -eq 0 ]
-  [ -e "${BATS_TEST_TMPDIR}/invocation" ]
+  grep -qx 'runtime=v2' "${GITHUB_OUTPUT}"
+  grep -qx 'opencode-version=2.3.0' "${GITHUB_OUTPUT}"
+  resolved_runtime="$(sed -n 's/^runtime=//p' "${GITHUB_OUTPUT}")"
+  cat > "${BATS_TEST_TMPDIR}/oidc.py" <<'PYTOKEN'
+import http.server, os
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"value":"oidc"}')
+    def do_POST(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"token":"app-token"}')
+server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+open(os.environ['PORT_FILE'], 'w').write(str(server.server_port))
+server.serve_forever()
+PYTOKEN
+  PORT_FILE="${BATS_TEST_TMPDIR}/port" python3 "${BATS_TEST_TMPDIR}/oidc.py" &
+  server_pid=$!
+  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
+  port="$(cat "${BATS_TEST_TMPDIR}/port")"
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
+    OPENCODE_RUNTIME="${resolved_runtime}" REVIEW_ONLY=false USE_GITHUB_TOKEN=false MODEL=provider/model AGENT=build PROMPT= MENTIONS=/oc \
+    ACTIONS_ID_TOKEN_REQUEST_URL="http://127.0.0.1:${port}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL="http://127.0.0.1:${port}" \
+    GITHUB_EVENT_NAME=pull_request_review_comment GITHUB_EVENT_PATH="${BATS_TEST_TMPDIR}/event" GITHUB_REPOSITORY=owner/repo \
+    INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" REPLY_FILE="${BATS_TEST_TMPDIR}/reply" REPLY_BODY="${BATS_TEST_TMPDIR}/body" \
+    TIMEOUT_MINUTES=1 "${run_script}"
+  kill "${server_pid}"
+  wait "${server_pid}" || true
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/invocation")" = "<run>
+<--standalone>
+<--model>
+<provider/model>
+<--agent>
+<build>
+<explain this line>" ]
+  grep -q 'repos/owner/repo/pulls/7/comments/42/replies' "${BATS_TEST_TMPDIR}/reply"
+  jq -e '.body == "The answer\n"' "${BATS_TEST_TMPDIR}/body"
 }
 
 @test "authoritative validation supports v2 array variants on slash-containing model IDs" {

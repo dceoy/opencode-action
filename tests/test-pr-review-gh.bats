@@ -394,3 +394,42 @@ assert all("--method GET" in line for line in requests)
 PYCODE
   [ "${status}" -eq 0 ]
 }
+
+@test "clean v2 runner exchanges OIDC and publishes only after identity verification" {
+  local clean_head=abcdefabcdefabcdefabcdefabcdefabcdefabcd
+  cat > "${BATS_TEST_TMPDIR}/server.py" <<'PY'
+import http.server, json, os
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        assert self.path == '/oidc?audience=opencode-github-action'
+        assert self.headers['Authorization'] == 'Bearer request-secret'
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"value":"oidc-secret"}')
+    def do_POST(self):
+        assert self.path == '/exchange_github_app_token'
+        assert self.headers['Authorization'] == 'Bearer oidc-secret'
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"token":"ghs_verified"}')
+server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+open(os.environ['PORT_FILE'], 'w').write(str(server.server_port))
+server.serve_forever()
+PY
+  PORT_FILE="${BATS_TEST_TMPDIR}/port" python3 "${BATS_TEST_TMPDIR}/server.py" &
+  server_pid=$!
+  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
+  port="$(cat "${BATS_TEST_TMPDIR}/port")"
+  printf '{"endpoint":"repos/dceoy/opencode-action/pulls/127/reviews","method":"POST","payload":{"event":"COMMENT","body":"Reviewed","commit_id":"%s"}}' "${clean_head}" > "${request_file}"
+  run env -u GH_TOKEN GITHUB_TOKEN=workflow-token HOME="${request_home}" \
+    ACTIONS_ID_TOKEN_REQUEST_URL="http://127.0.0.1:${port}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request-secret \
+    OIDC_BASE_URL="http://127.0.0.1:${port}" GH_CALL_LOG="${BATS_TEST_TMPDIR}/gh-calls" \
+    GH_ARGS_LOG="${BATS_TEST_TMPDIR}/gh-args" GH_PAYLOAD_LOG="${BATS_TEST_TMPDIR}/payload" \
+    PATH="${fake_bin}:${PATH}" PR_REVIEW_URL="https://github.com/dceoy/opencode-action/pull/127" \
+    PR_REVIEW_HEAD_SHA="${clean_head}" bash -euo pipefail -c \
+    'cd "$1"; source "$2"; opencode_exchange_app_token; bash "$3" --request-stdin < "$4"' _ \
+    "${temp_repo}" "${repo_root}/scripts/run-opencode.sh" "${wrapper}" "${request_file}"
+  kill "${server_pid}"
+  wait "${server_pid}" || true
+  [ "${status}" -eq 0 ]
+  [ "$(grep -c -- '--method POST' "${BATS_TEST_TMPDIR}/gh-args")" -eq 2 ]
+  [ "$(grep -c -- '--method DELETE' "${BATS_TEST_TMPDIR}/gh-args")" -eq 1 ]
+  jq -e --arg sha "${clean_head}" '.event == "COMMENT" and .commit_id == $sha' "${BATS_TEST_TMPDIR}/payload"
+}

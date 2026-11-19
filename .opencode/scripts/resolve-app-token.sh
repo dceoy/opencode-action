@@ -95,6 +95,9 @@ opencode_resolve_app_token_candidates() {
   local value line key val rest token host
 
   {
+    if [[ -n "${OPENCODE_APP_TOKEN:-}" ]]; then
+      printf '%s\n' "${OPENCODE_APP_TOKEN}"
+    fi
     value="$(git config --local --get http.https://github.com/.extraheader 2> /dev/null || true)"
     if token="$(opencode_decode_extraheader_token "${value}")"; then
       printf '%s\n' "${token}"
