@@ -58,7 +58,7 @@ The shorter `/oc` trigger also works:
 
 The default setup exchanges the workflow OIDC token for an OpenCode GitHub App token, which requires `id-token: write`.
 
-On v2, no GitHub credentials are passed to OpenCode through its environment, and `gh` runs unauthenticated. In the default OIDC mode, the launcher only posts the final message as a reply to the review-comment thread. For code-writing runs, set `use-github-token: true` with persisted checkout credentials and a write-capable token (enabling `git push`), or use `runtime: v1` with an exact v1 pin. In token mode, persisted checkout credentials remain readable from OpenCode's shell, so that token is not isolated from the model; scope it least-privilege.
+On v2, no GitHub credentials are passed to OpenCode through its environment, and `gh` runs unauthenticated. In the default OIDC mode, the launcher only posts the final message as a reply to the review-comment thread. For code-writing runs, set `use-github-token: true` with persisted checkout credentials and a write-capable token (enabling `git push`), or use `runtime: v1` (which automatically resolves an eligible stable v1 release). In token mode, persisted checkout credentials remain readable from OpenCode's shell, so that token is not isolated from the model; scope it least-privilege.
 
 ## Reusable workflows
 
@@ -107,14 +107,14 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
 | `runtime`             | `v2`                      | Runtime generation: `v1` or `v2`.                                                                                                                 |
-| `opencode-version`    | `v2.3.0`                  | Exact stable release matching the runtime. The Sakura provider requires 1.2.25+.                                                                  |
+| `minimum-release-age` | `24h`                    | Install the newest stable release of the selected runtime published at least this long ago (e.g., `7d` or `0s`).                                   |
 | `use-bundled-toolkit` | `true`                    | Install the bundled provider configuration for normal runs or the trusted review bridge for review-only runs.                                     |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
-The default is the Renovate-managed OpenCode v2 pin. Floating versions, including `latest`, are rejected. To use v1, set `runtime: v1` and a matching exact pin such as `v1.19.3`; test and pin upgrades for the selected major.
+The default is the newest stable OpenCode v2 release published at least 24 hours ago. Set `minimum-release-age: 7d` to increase the delay, or `0s` to disable it. Supported units are `s`, `m`, `h`, `d`, and `w`. The action queries GitHub Releases using the job token, filters out drafts, prereleases, and other runtime majors, then installs the selected exact version. If no eligible release exists or the API request fails, the run fails rather than installing an unverified fallback. Set `runtime: v1` to resolve the newest eligible v1 release. Review-only v1 runs require v1.2.14 or newer.
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
@@ -135,7 +135,7 @@ See [Pull request reviews](docs/pull-request-reviews.md) for usage, permissions,
 ### Sakura OpenCode v2 integration check
 
 The credential-free Bats smoke test checks the synchronized catalog with the
-pinned OpenCode v2 CLI, including the isolated review configuration. It does
+selected OpenCode v2 CLI, including the isolated review configuration. It does
 not establish provider parity or send a Sakura request. The manual **Trusted
 Sakura v2 integration** workflow can exercise a catalog model with a real key:
 configure the `sakura-integration` GitHub environment and its
