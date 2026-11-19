@@ -23,7 +23,7 @@ jobs:
       prompt: /pr-review
 ```
 
-For a focused review with v1, use matching runtime and version inputs:
+For a focused review with v1, use the matching runtime input:
 
 ```yaml
 with:

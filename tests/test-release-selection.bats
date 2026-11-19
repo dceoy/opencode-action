@@ -6,15 +6,48 @@ setup() {
   : > "${GITHUB_OUTPUT}"
   export MOCK_RELEASES_DIR="${BATS_TEST_TMPDIR}/releases"
   mkdir -p "${MOCK_RELEASES_DIR}" "${BATS_TEST_TMPDIR}/bin"
+  # The resolver must not require the GitHub CLI: any `gh` invocation fails
+  # the run and records that it happened.
   cat > "${BATS_TEST_TMPDIR}/bin/gh" <<'SH'
 #!/usr/bin/env bash
-[[ "$1" == api ]] || exit 2
-[[ "${MOCK_API_ERROR:-}" != 1 ]] || exit 1
-page="${2##*page=}"
-cat "${MOCK_RELEASES_DIR}/page-${page}.json"
+touch "${MOCK_RELEASES_DIR}/gh-invoked"
+exit 99
 SH
   chmod +x "${BATS_TEST_TMPDIR}/bin/gh"
   export PATH="${BATS_TEST_TMPDIR}/bin:${PATH}"
+  cat > "${BATS_TEST_TMPDIR}/releases-server.py" <<'PY'
+import http.server
+import os
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        root = Path(os.environ["MOCK_RELEASES_DIR"])
+        if (root / "api-error").exists():
+            self.send_error(500)
+            return
+        page = parse_qs(urlparse(self.path).query).get("page", ["1"])[0]
+        page_file = root / f"page-{page}.json"
+        body = page_file.read_bytes() if page_file.exists() else b"[]"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+Path(os.environ["PORT_FILE"]).write_text(str(server.server_port))
+server.serve_forever()
+PY
+  PORT_FILE="${BATS_TEST_TMPDIR}/port" MOCK_RELEASES_DIR="${MOCK_RELEASES_DIR}" \
+    python3 "${BATS_TEST_TMPDIR}/releases-server.py" &
+  server_pid=$!
+  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
+  export GITHUB_API_URL="http://127.0.0.1:$(cat "${BATS_TEST_TMPDIR}/port")"
+  export GH_TOKEN=test-token
   python3 - "${MOCK_RELEASES_DIR}/page-1.json" <<'PY'
 import json
 import sys
@@ -44,6 +77,12 @@ releases = [
 with open(sys.argv[1], "w", encoding="utf-8") as output:
     json.dump(releases, output)
 PY
+}
+
+teardown() {
+  if [[ -n "${server_pid:-}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+  fi
 }
 
 @test "selects the highest eligible stable v2 version using publication timestamp" {
@@ -91,9 +130,45 @@ PY
 }
 
 @test "GitHub API failures do not bypass the age policy" {
-  run env INPUT_RUNTIME=v2 MINIMUM_RELEASE_AGE=24h MOCK_API_ERROR=1 "${root}/scripts/resolve-opencode-version.sh"
+  touch "${MOCK_RELEASES_DIR}/api-error"
+  run env INPUT_RUNTIME=v2 MINIMUM_RELEASE_AGE=24h "${root}/scripts/resolve-opencode-version.sh"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"Could not fetch OpenCode GitHub releases"* ]]
+}
+
+@test "version resolution does not require the GitHub CLI" {
+  run env INPUT_RUNTIME=v2 MINIMUM_RELEASE_AGE=24h "${root}/scripts/resolve-opencode-version.sh"
+  [ "${status}" -eq 0 ]
+  grep -qx 'opencode-version=2.10.0' "${GITHUB_OUTPUT}"
+  [ ! -e "${MOCK_RELEASES_DIR}/gh-invoked" ]
+}
+
+@test "scans all release pages before choosing the SemVer maximum" {
+  python3 - "${MOCK_RELEASES_DIR}" <<'PY'
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+
+path = sys.argv[1]
+now = datetime.now(timezone.utc)
+
+def release(tag, hours):
+    return {
+        "tag_name": tag, "prerelease": False, "draft": False,
+        "published_at": (now - timedelta(hours=hours)).isoformat().replace("+00:00", "Z"),
+    }
+
+# Page 1 is full and holds an eligible lower version plus ineligible
+# recent releases; the higher version was published earlier, on page 2.
+page1 = [release("v2.3.1", 48)] + [release("v2.8.0", 1)] * 99
+with open(f"{path}/page-1.json", "w", encoding="utf-8") as output:
+    json.dump(page1, output)
+with open(f"{path}/page-2.json", "w", encoding="utf-8") as output:
+    json.dump([release("v2.4.0", 72)], output)
+PY
+  run env INPUT_RUNTIME=v2 MINIMUM_RELEASE_AGE=24h "${root}/scripts/resolve-opencode-version.sh"
+  [ "${status}" -eq 0 ]
+  grep -qx 'opencode-version=2.4.0' "${GITHUB_OUTPUT}"
 }
 
 @test "version lookup continues to a second release page when necessary" {

@@ -4,13 +4,15 @@ python3 - <<'PY'
 import json
 import os
 import re
-import subprocess
 import sys
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 runtime = os.environ.get("INPUT_RUNTIME", "")
 review_only = os.environ.get("REVIEW_ONLY", "") == "true"
 age = os.environ.get("MINIMUM_RELEASE_AGE") or "24h"
+api_base = (os.environ.get("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
+token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
 
 
 def fail(message):
@@ -31,17 +33,22 @@ cutoff = datetime.now(timezone.utc) - timedelta(
 tag_pattern = re.compile(rf"v{runtime[1:]}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 selected = None
 for page in range(1, 21):
+    url = f"{api_base}/repos/anomalyco/opencode/releases?per_page=100&page={page}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "opencode-action",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     try:
-        response = subprocess.run(
-            ["gh", "api", f"repos/anomalyco/opencode/releases?per_page=100&page={page}"],
-            capture_output=True, text=True, check=True,
-        )
-        releases = json.loads(response.stdout)
-    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            releases = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError) as exc:
         fail(f"Could not fetch OpenCode GitHub releases: {exc}")
     if not isinstance(releases, list):
         fail("GitHub releases API returned an unexpected response.")
-    eligible = []
     for release in releases:
         if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
             continue
@@ -57,10 +64,9 @@ for page in range(1, 21):
         version = tuple(map(int, tag[1:].split(".")))
         if runtime == "v1" and review_only and version < (1, 2, 14):
             continue
-        eligible.append((version, tag, published))
-    if eligible:
-        selected = max(eligible, key=lambda item: item[0])
-        break
+        candidate = (version, tag, published)
+        if selected is None or candidate[0] > selected[0]:
+            selected = candidate
     if len(releases) < 100:
         break
 
