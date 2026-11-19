@@ -274,14 +274,9 @@ opencode_report_failure() {
 }
 
 # Fail before any model call when the selected runtime cannot serve this run.
-# The v2 review permission boundary has not yet been proven (issue #58).
 opencode_validate_runtime() {
   case "${OPENCODE_RUNTIME:-v1}" in
-    v1) ;;
-    v2)
-      opencode_report_error "OpenCode 2 isolation is not yet verified; OpenCode v2 model execution is disabled pending #58 and #59. Refusing to start before any model call; use OpenCode 1."
-      return 1
-      ;;
+    v1 | v2) ;;
     *)
       opencode_report_error "Invalid runtime '${OPENCODE_RUNTIME}'; expected v1 or v2."
       return 1

@@ -44,31 +44,11 @@ Automatic formatters and language servers are disabled in review-only runs.
 
 The adapter resolves credentials for each invocation rather than persisting a short-lived token between processes. Read-only requests use best-effort token resolution; the pending-review probe runs only before publication and performs real GitHub API create/delete operations, although it never publishes a review. The review agent denies tools by default and allows only the upstream skill, trusted reference reads and globbing, and the native API tool. It denies direct GitHub/network tools, general shell commands, grep, delegation, repository edits and all checkout file reads. Repository content is read through frozen Git blobs instead, so checkout symlinks cannot redirect file reads to runner credentials. These are OpenCode tool permissions, **not an operating-system sandbox**; use trusted runners and grant `pull-requests: write`.
 
-## OpenCode 2 security gate
+## OpenCode 2 review execution
 
-OpenCode v2 installation can be selected with `runtime: v2` and an exact pin such as `opencode-version: v2.3.0`. Model execution, including review-only execution, is disabled pending the security and routing work in #58 and #59. Roll back by selecting `runtime: v1` and a matching v1 release. Floating versions are rejected.
+OpenCode v2 is the default, pinned to `v2.3.0`. To use v1, select `runtime: v1` and a matching exact v1 release. Floating versions are rejected.
 
-OpenCode 2 review runs are blocked before installation and before a model call. The
-v1 permission configuration and the existing mock-model tests do not establish
-that v2 isolates every configuration source, plugin, credential, or tool call.
-See [issue #58](https://github.com/dceoy/opencode-action/issues/58). Use the
-pinned OpenCode 1 default until that security gate is satisfied.
-
-On Linux, the locked npm `@opencode/cli` 2.3.0 binary was inspected with
-`debug config --standalone` and `debug agents --standalone` in a disposable HOME
-and an empty workspace. The generated v1 configuration was supplied through
-`OPENCODE_CONFIG_CONTENT` with the project-config and external-skill disable
-variables set. `debug config` showed an ordered wildcard deny, scoped skill
-reads, `glob` and `pr-review-api` allows, and `edit` and `shell` denies.
-`debug agents` showed the generated rules after built-in allow/ask rules, and
-again as agent rules. This is diagnostic evidence, not a complete proof of
-rule precedence or discovery isolation. The existing mock-model permission
-matrix bypasses the production gate for testing; it uses a fixture skill and a
-mock adapter, not a real review submission. Managed configuration, inherited
-state and credentials, discovery flags, plugin loading, and a real pinned skill
-and commit-bound review still need end-to-end verification before enabling v2.
-
-The gated v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, or manual dispatch events. It does not support `issue_comment` or `pull_request_review_comment` events. The bot workflow gates review comments on trusted authors and configured mentions, but the action can also be invoked directly and does not enforce those gates itself. Free-form focus is currently supported only by v1. Manual events require an explicit PR URL and full head SHA.
+The v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, or manual dispatch events. It does not support `issue_comment` or `pull_request_review_comment` events. The bot workflow gates review comments on trusted authors and configured mentions, but the action can also be invoked directly and does not enforce those gates itself. Free-form focus is currently supported only by v1. Manual events require an explicit PR URL and full head SHA.
 
 ## Review contract and boundaries
 
@@ -78,6 +58,4 @@ Review-only runs use a disposable HOME under the runner's temporary directory, i
 
 The upstream skill's default commit SHA is defined by the `pr-review-ref` input in `action.yml`. The reusable review workflow omits this input and inherits the action default automatically. Direct action callers and the bot workflow can still override it; an empty bot-workflow input also falls back to the default in `action.yml`. The post-release CI updates the action default to the latest stable `pr-loop` release SHA via the release-pins PR, without modifying workflow files. `gh skill` installs the specified pinned commit without npm lifecycle scripts or local YAML rewrites. The action checks that the destination is unused, required reference files exist, and the installed Skill contains no symlinks. Failure is terminal; there is no bundled fallback. The existing Bats CI job exercises the exact inline installation command with a real SHA-pinned install. OpenCode GitHub integration can separately add a completion comment.
 
-OpenCode v2 review execution remains blocked pending the isolation proof in #58.
-The experimental command uses `opencode run --standalone` instead of
-v1's `opencode github run`; it is not a replacement for general bot runs.
+OpenCode v2 uses `opencode run --standalone` instead of v1's `opencode github run`.

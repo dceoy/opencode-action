@@ -87,7 +87,7 @@ from pathlib import Path
 
 workflow = Path(sys.argv[1]).read_text()
 match = re.findall(
-    r"^jobs:\n  opencode-bot:\n    if: >\n((?:      .*\n|\n)+)    runs-on:",
+    r"^jobs:\n  opencode-bot:\n(?:    permissions:\n(?:      .*\n)+)?    if: >\n((?:      .*\n|\n)+)    runs-on:",
     workflow, re.MULTILINE,
 )
 assert len(match) == 1, "could not uniquely extract the bot job condition"

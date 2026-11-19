@@ -11,11 +11,11 @@
       "automergeType": "branch"
     },
     {
-      "description": "Keep the OpenCode binary on v1",
+      "description": "Keep the OpenCode binary on v2",
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["anomalyco/opencode"],
-      "allowedVersions": "<2.0.0",
-      "groupName": "OpenCode v1"
+      "allowedVersions": ">=2.0.0 <3.0.0",
+      "groupName": "OpenCode v2"
     }
   ],
   "customManagers": [

@@ -615,7 +615,7 @@ EOF
     ACTION_PATH="${repo_root}" PROMPT="/pr-review security and performance" REVIEW_ONLY=true \
     USE_BUNDLED_TOOLKIT=true MODEL="sakura/preview/Kimi-K2.7-Code" \
     AGENT=build PR_REVIEW_URL="https://github.com/org/repo/pull/123" PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
+    bash -c 'source "$1"; opencode_configure_run; printf "%s\n" "$PROMPT"; [[ "$OPENCODE_DISABLE_EXTERNAL_SKILLS" == 1 ]]' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"Load and follow the installed pr-review skill from dceoy/pr-loop"* ]]
   [[ "${output}" == *"pr-review-api"* ]]
@@ -648,7 +648,7 @@ EOF
   printf '%s' '{"pull_request":{"html_url":"https://github.com/org/repo/pull/123","head":{"sha":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"}}}' > "${event}"
   run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA HOME="${fake_home}" ACTION_PATH="${repo_root}" \
     REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true GITHUB_EVENT_PATH="${event}" \
-    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$PROMPT"' _ "${run_script}"
+    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$PROMPT"' _ "${run_script}"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"https://github.com/org/repo/pull/123 at frozen head abcdefabcdefabcdefabcdefabcdefabcdefabcd"* ]]
 }
@@ -673,13 +673,13 @@ EOF
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
       OPENCODE_RUNTIME=v2 GITHUB_EVENT_NAME="${event}" PROMPT="${prompt}" \
       PR_REVIEW_URL=https://github.com/org/repo/pull/123 PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run' _ "${run_script}"
+      bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
     [ "${status}" -eq "${expected}" ]
   done
   run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA -u GITHUB_EVENT_PATH HOME="${fake_home}" \
     ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true OPENCODE_RUNTIME=v2 \
     GITHUB_EVENT_NAME=workflow_dispatch PROMPT=/pr-review \
-    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run' _ "${run_script}"
+    bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
   [ "${status}" -ne 0 ]
   [[ "${output}" == *"requires a concrete PR_REVIEW_URL"* ]]
 }
@@ -691,7 +691,7 @@ EOF
     run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
       MODEL=provider/model AGENT="${caller}" PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
       PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
+      bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}"
     [ "${status}" -eq 0 ]
     jq -e '.default_agent == "action-pr-review" and .formatter == false and .lsp == false and .permission["*"] == "deny" and
       .agent["action-pr-review"].permission == .permission and .permission.bash == "deny" and .permission.edit == "deny" and .permission["pr-review-api"] == "allow"' <<< "${output}"
@@ -729,7 +729,7 @@ _review_permission_matrix() {
     OPENCODE_RUNTIME="${runtime}" USE_GITHUB_TOKEN=true GITHUB_EVENT_NAME=workflow_dispatch \
     MODEL=provider/model AGENT=build PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
     PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"
+    bash -c 'source "$1"; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"
   env OPENCODE_BIN="${binary}" python3 "${repo_root}/tests/helpers/review-permission-runtime.py" \
     "${config}" "${fake_home}" "${fake_workspace}" "${runtime}"
 }
@@ -766,20 +766,15 @@ _review_permission_matrix() {
   [ ! -e "${marker}" ]
 }
 
-@test "runtime v2 fails before OpenCode starts, without exposing credentials" {
-  fake_bin="${BATS_TEST_TMPDIR}/gate-bin"
-  mkdir -p "${fake_bin}"
-  printf '%s\n' '#!/usr/bin/env bash' 'touch "${INVOCATION_FILE}"' > "${fake_bin}/opencode"
-  chmod +x "${fake_bin}/opencode"
-  for review_only in true false; do
-    run env PATH="${fake_bin}:${PATH}" HOME="${fake_home}" ACTION_PATH="${repo_root}" \
-      OPENCODE_RUNTIME=v2 REVIEW_ONLY="${review_only}" GITHUB_TOKEN=SECRET_SENTINEL \
-      INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" TIMEOUT_MINUTES=1 "${run_script}"
-    [ "${status}" -ne 0 ]
-    [[ "${output}" == *"OpenCode 2 isolation is not yet verified"* ]]
-    [[ "${output}" != *"SECRET_SENTINEL"* ]]
-    [ ! -e "${BATS_TEST_TMPDIR}/invocation" ]
-  done
+@test "runtime v2 invokes the selected binary" {
+  fake_bin="${BATS_TEST_TMPDIR}/opencode"
+  printf '%s\n' '#!/usr/bin/env bash' 'if [[ "$1" == --version ]]; then echo "opencode v2.3.0"; else touch "${INVOCATION_FILE}"; fi' > "${fake_bin}"
+  chmod +x "${fake_bin}"
+  run env HOME="${fake_home}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}" \
+    OPENCODE_RUNTIME=v2 REVIEW_ONLY=false MODEL=provider/model AGENT=build PROMPT=test \
+    INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" TIMEOUT_MINUTES=1 "${run_script}"
+  [ "${status}" -eq 0 ]
+  [ -e "${BATS_TEST_TMPDIR}/invocation" ]
 }
 
 @test "authoritative validation supports v2 array variants on slash-containing model IDs" {

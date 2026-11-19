@@ -38,11 +38,9 @@ setup() {
   [ "${status}" -ne 0 ]
 }
 
-@test "v2 execution is blocked before invoking a binary" {
-  # shellcheck disable=SC2016 # Expand the positional parameter in the child shell.
-  run env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true USE_GITHUB_TOKEN=true bash -c 'source "$1"; opencode_validate_runtime' _ "${root}/scripts/run-opencode.sh"
-  [ "${status}" -ne 0 ]
-  [[ "${output}" == *"disabled pending #58 and #59"* ]]
+@test "v2 runtime is accepted" {
+  run env OPENCODE_RUNTIME=v2 bash -c 'source "$1"; opencode_validate_runtime' _ "${root}/scripts/run-opencode.sh"
+  [ "${status}" -eq 0 ]
 }
 
 @test "installers use separate homes for sequential and parallel major installs" {

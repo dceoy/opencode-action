@@ -31,11 +31,11 @@ setup() {
   [ "${status}" -ne 0 ]
 }
 
-@test "v2 review fails before the installer or OpenCode is invoked" {
-  run env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true ACTION_PATH="${BATS_TEST_TMPDIR}/missing" \
+@test "v2 review reaches isolated setup" {
+  run -127 env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true RUNNER_TEMP="${BATS_TEST_TMPDIR}" ACTION_PATH="${BATS_TEST_TMPDIR}/missing" \
     GITHUB_TOKEN=SECRET_SENTINEL bash -euo pipefail "${run_step}"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *"OpenCode 2 isolation is not yet verified"* ]]
+  [[ "${output}" == *"prepare-opencode-config.sh"* ]]
   [[ "${output}" != *"SECRET_SENTINEL"* ]]
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Regression test for the Renovate-managed OpenCode version pin.
 
-@test "OpenCode v1 defaults are consistent and discoverable by Renovate" {
+@test "OpenCode v2 defaults are consistent and discoverable by Renovate" {
   repo_root="$(git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel)"
   run python3 - "${repo_root}" <<'PY'
 import json
@@ -23,6 +23,9 @@ paths = [
 versions = set()
 for path in paths:
     content = (root / path).read_text()
+    assert re.search(r"(?m)^\s+runtime:(?: &input-runtime)?\n(?:\s+.*\n)*?\s+default: v2$", content), path
+    if path != "action.yml":
+        assert "runtime: ${{ inputs.runtime || 'v2' }}" in content, path
     assert any(re.search(pattern[1:-1], path) for pattern in manager["managerFilePatterns"]), path
     matches = [
         m.groupdict()
@@ -35,7 +38,7 @@ for path in paths:
         assert match["datasource"] == "github-releases", path
         assert match["depName"] == "anomalyco/opencode", path
         assert match["versioning"] == "semver", path
-        assert re.fullmatch(r"v1\.\d+\.\d+", match["currentValue"]), path
+        assert re.fullmatch(r"v2\.\d+\.\d+", match["currentValue"]), path
         versions.add(match["currentValue"])
     if path != "action.yml":
         assert "opencode-version: ${{ inputs.opencode-version || '" in content, path
@@ -43,7 +46,7 @@ assert len(versions) == 1, versions
 assert any(
     rule.get("matchPackageNames") == ["anomalyco/opencode"]
     and rule.get("matchDatasources") == ["github-releases"]
-    and rule.get("allowedVersions") == "<2.0.0"
+    and rule.get("allowedVersions") == ">=2.0.0 <3.0.0"
     for rule in config["packageRules"]
 )
 PY
