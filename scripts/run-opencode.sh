@@ -144,12 +144,13 @@ opencode_validate_variant() {
 
   set +e
   result="$(jq -r --arg provider "${provider}" --arg model "${model_id}" '
-    if ((.provider[$provider].models // {}) | has($model) | not) then
+    ((.providers[$provider].models // .provider[$provider].models // {})) as $models |
+    if ($models | has($model) | not) then
       "absent"
-    elif (.provider[$provider].models[$model] | has("variants") | not) then
+    elif ($models[$model] | has("variants") | not) then
       "no-variants"
     else
-      (.provider[$provider].models[$model].variants | keys | join(","))
+      ($models[$model].variants | if type == "array" then map(.id) | sort else keys end | join(","))
     end
   ' <<< "${bundled_json}" 2> /dev/null)"
   jq_rc=$?
