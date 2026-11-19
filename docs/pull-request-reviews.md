@@ -44,9 +44,29 @@ Automatic formatters and language servers are disabled in review-only runs.
 
 The adapter resolves credentials for each invocation rather than persisting a short-lived token between processes. Read-only requests use best-effort token resolution; the pending-review probe runs only before publication and performs real GitHub API create/delete operations, although it never publishes a review. The review agent denies tools by default and allows only the upstream skill, trusted reference reads and globbing, and the native API tool. It denies direct GitHub/network tools, general shell commands, grep, delegation, repository edits and all checkout file reads. Repository content is read through frozen Git blobs instead, so checkout symlinks cannot redirect file reads to runner credentials. These are OpenCode tool permissions, **not an operating-system sandbox**; use trusted runners and grant `pull-requests: write`.
 
-## OpenCode 2 (opt-in)
+## OpenCode 2 security gate
 
 OpenCode v2 installation can be selected with `runtime: v2` and an exact pin such as `opencode-version: v2.3.0`. Model execution, including review-only execution, is disabled pending the security and routing work in #58 and #59. Roll back by selecting `runtime: v1` and a matching v1 release. Floating versions are rejected.
+
+OpenCode 2 review runs are blocked before installation and before a model call. The
+v1 permission configuration and the existing mock-model tests do not establish
+that v2 isolates every configuration source, plugin, credential, or tool call.
+See [issue #58](https://github.com/dceoy/opencode-action/issues/58). Use the
+pinned OpenCode 1 default until that security gate is satisfied.
+
+On Linux, the locked npm `@opencode/cli` 2.3.0 binary was inspected with
+`debug config --standalone` and `debug agents --standalone` in a disposable HOME
+and an empty workspace. The generated v1 configuration was supplied through
+`OPENCODE_CONFIG_CONTENT` with the project-config and external-skill disable
+variables set. `debug config` showed an ordered wildcard deny, scoped skill
+reads, `glob` and `pr-review-api` allows, and `edit` and `shell` denies.
+`debug agents` showed the generated rules after built-in allow/ask rules, and
+again as agent rules. This is diagnostic evidence, not a complete proof of
+rule precedence or discovery isolation. The existing mock-model permission
+matrix bypasses the production gate for testing; it uses a fixture skill and a
+mock adapter, not a real review submission. Managed configuration, inherited
+state and credentials, discovery flags, plugin loading, and a real pinned skill
+and commit-bound review still need end-to-end verification before enabling v2.
 
 ## Review contract and boundaries
 

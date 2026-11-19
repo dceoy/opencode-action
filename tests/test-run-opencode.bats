@@ -745,20 +745,19 @@ _review_permission_matrix() {
   [ ! -e "${marker}" ]
 }
 
-@test "runtime v2 fails closed before OpenCode starts" {
-  mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
-  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  for example in 'v2|false|true|disabled pending' \
-    'v2|true|false|disabled pending' \
-    'v2|true|true|disabled pending' \
-    'v3|true|true|Invalid runtime'; do
-    IFS='|' read -r runtime review_only use_github_token expected <<< "${example}"
-    run env HOME="${fake_home}" ACTION_PATH="${repo_root}" OPENCODE_RUNTIME="${runtime}" REVIEW_ONLY="${review_only}" \
-      USE_GITHUB_TOKEN="${use_github_token}" USE_BUNDLED_TOOLKIT=true MODEL=provider/model \
-      PR_REVIEW_URL=https://github.com/org/repo/pull/123 PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
-      bash -c 'source "$1"; opencode_configure_run' _ "${run_script}"
+@test "runtime v2 fails before OpenCode starts, without exposing credentials" {
+  fake_bin="${BATS_TEST_TMPDIR}/gate-bin"
+  mkdir -p "${fake_bin}"
+  printf '%s\n' '#!/usr/bin/env bash' 'touch "${INVOCATION_FILE}"' > "${fake_bin}/opencode"
+  chmod +x "${fake_bin}/opencode"
+  for review_only in true false; do
+    run env PATH="${fake_bin}:${PATH}" HOME="${fake_home}" ACTION_PATH="${repo_root}" \
+      OPENCODE_RUNTIME=v2 REVIEW_ONLY="${review_only}" GITHUB_TOKEN=SECRET_SENTINEL \
+      INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" TIMEOUT_MINUTES=1 "${run_script}"
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"${expected}"* ]]
+    [[ "${output}" == *"OpenCode 2 isolation is not yet verified"* ]]
+    [[ "${output}" != *"SECRET_SENTINEL"* ]]
+    [ ! -e "${BATS_TEST_TMPDIR}/invocation" ]
   done
 }
 
@@ -777,4 +776,10 @@ JSON
       [[ "${output}" == *"Supported variants: high, low."* ]]
     fi
   done
+}
+
+@test "unknown runtime fails closed" {
+  run env OPENCODE_RUNTIME=v3 bash -c 'source "$1"; opencode_validate_runtime' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"Invalid runtime"* ]]
 }

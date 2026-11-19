@@ -112,7 +112,7 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
-The default remains pinned to a Renovate-managed v1 release. Set `runtime: v2` and `opencode-version: v2.3.0` to select the tested v2 installer; execution remains disabled until #58 and #59 are resolved. Floating inputs including `latest` are rejected: pin a stable release of the selected major. To roll back, set `runtime: v1` and a matching v1 pin such as `v1.19.3`; upgrade by testing and pinning a new release of the selected major.
+The default remains pinned to a Renovate-managed v1 release. Set `runtime: v2` and `opencode-version: v2.3.0` to select the tested v2 installer; execution remains disabled until #58 and #59 are resolved (see the [review isolation security gate](docs/pull-request-reviews.md#opencode-2-security-gate)). Floating inputs including `latest` are rejected: pin a stable release of the selected major. To roll back, set `runtime: v1` and a matching v1 pin such as `v1.19.3`; upgrade by testing and pinning a new release of the selected major.
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
