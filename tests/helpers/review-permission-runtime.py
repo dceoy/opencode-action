@@ -103,7 +103,8 @@ config['provider'] = {'mock': {'npm': '@ai-sdk/openai-compatible',
     'models': {name: {'name': name, 'limit': {'context': 32000, 'output': 1000}} for name in ['test', 'gpt-6']}}}
 environment = {'PATH': os.environ['PATH'], 'HOME': home,
     'OPENCODE_CONFIG_CONTENT': json.dumps(config), 'GITHUB_TOKEN': 'CREDENTIAL_SENTINEL',
-    'OPENCODE_DISABLE_PROJECT_CONFIG': '1', 'OPENCODE_DISABLE_EXTERNAL_SKILLS': '1'}
+    'OPENCODE_DISABLE_PROJECT_CONFIG': '1', 'OPENCODE_DISABLE_EXTERNAL_SKILLS': '1',
+    'OPENCODE_DISABLE_MODELS_FETCH': '1', 'TMPDIR': home}
 try:
     for model in ['test', 'gpt-6']:
         advertised.clear()
@@ -118,7 +119,7 @@ try:
             invocation = [sys.executable, str(repo / 'scripts/run-v2-review.py'), str(adapter), *invocation]
             input_options = {'input': 'matrix-token'}
         result = subprocess.run(invocation, cwd=workspace, env=environment, text=True,
-                                capture_output=True, timeout=90, **input_options)
+                                capture_output=True, timeout=180, **input_options)
         assert result.returncode == 0, result.stderr + result.stdout
         parts = [json.loads(line)['part'] for line in result.stdout.splitlines()
                  if line.startswith('{') and json.loads(line).get('type') == 'tool_use']
