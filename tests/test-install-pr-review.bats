@@ -196,7 +196,7 @@ echo "${specific_version}"
 BINARY
 chmod +x "${HOME}/.opencode/bin/opencode"
 EOF
-    cp "${repo_root}/scripts/verify-opencode.sh" "${mock_action}/scripts/verify-opencode.sh"
+    cp "${repo_root}/scripts/"{verify-opencode,opencode-runtime-env}.sh "${mock_action}/scripts/"
     chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/opencode" "${mock_bin}/gh" \
       "${mock_bin}/curl" "${mock_bin}/tar" \
       "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
@@ -239,6 +239,7 @@ ${mock_bin}/curl" ]
   home_capture="${case_root}/home-capture"
   run_capture="${case_root}/run-capture"
   mkdir -p "${original_home}" "${runner_temp}" "${mock_bin}" "${mock_action}/scripts"
+  cp "${repo_root}/scripts/opencode-runtime-env.sh" "${mock_action}/scripts/"
   echo '/existing/github/path' > "${path_file}"
   cat > "${mock_bin}/gh" << 'EOF'
 #!/usr/bin/env bash

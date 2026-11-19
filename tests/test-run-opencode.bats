@@ -18,6 +18,13 @@ setup() {
   export XDG_DATA_HOME="${fake_home}/.local/share"
 }
 
+teardown() {
+  if [[ -n "${oidc_pid:-}" ]]; then
+    kill "${oidc_pid}"
+    wait "${oidc_pid}" || true
+  fi
+}
+
 @test "timeout selection prefers timeout then gtimeout and supports no timeout" {
   fake_bin="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "${fake_bin}"
@@ -719,7 +726,19 @@ _review_permission_matrix() {
   mkdir -p "${fake_home}/.config/opencode/skills/pr-review/references" "${fake_workspace}/.git"
   printf '%s\n' '---' 'name: pr-review' 'description: Runtime fixture' '---' 'Trusted fixture.' \
     > "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
-  printf '%s\n' '#!/usr/bin/env bash' '[[ $# == 1 && $1 == --request-stdin ]] || exit 2' 'cat > /dev/null' 'echo ADAPTER_OK' > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh"
+  cat > "${fake_home}/.config/opencode/scripts/pr-review-gh.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+[[ $# == 1 && $1 == --request-stdin ]] || exit 2
+request=$(cat)
+if [[ ${OPENCODE_REVIEW_PARENT_AUTH:-} == 1 ]]; then
+  [[ ${GH_TOKEN:-} == matrix-token ]] || exit 2
+  if jq -e '.method == "POST"' <<< "${request}" > /dev/null; then
+    jq -nc --arg head "${PR_REVIEW_HEAD_SHA}" '{review_id: 1, commit_id: $head, state: "COMMENTED"}'
+    exit
+  fi
+fi
+echo ADAPTER_OK
+SCRIPT
   printf 'Evidence\n' > "${fake_workspace}/evidence.txt"
   printf 'Trusted reference\n' > "${fake_home}/.config/opencode/skills/pr-review/references/test.md"
   git init -q "${fake_workspace}"
@@ -774,48 +793,33 @@ _review_permission_matrix() {
 #!/usr/bin/env bash
 if [[ "$1" == --version ]]; then echo 'opencode v2.3.0'; exit; fi
 printf '<%s>\n' "$@" > "${INVOCATION_FILE}"
-echo 'The answer'
+echo '{"type":"text","part":{"type":"text","messageID":"msg_final","text":"The answer"}}'
 SCRIPT
   cat > "${fake_bin}/gh" <<'SCRIPT'
 #!/usr/bin/env bash
+[[ "${GH_TOKEN}" == workflow-token ]] || exit 1
 printf '%s\n' "$*" > "${REPLY_FILE}"
 cat > "${REPLY_BODY}"
 SCRIPT
   chmod +x "${fake_bin}/opencode" "${fake_bin}/gh"
   printf '%s' '{"comment":{"body":"/oc explain this line","id":42},"pull_request":{"number":7}}' > "${BATS_TEST_TMPDIR}/event"
   # Simulate the composite's omitted inputs and step-output mapping.
-  runtime="$(ruby -ryaml -e 'puts YAML.load_file(ARGV[0])["inputs"]["runtime"]["default"]' "${repo_root}/action.yml")"
-  version="$(ruby -ryaml -e 'puts YAML.load_file(ARGV[0])["inputs"]["opencode-version"]["default"]' "${repo_root}/action.yml")"
+  runtime="$(yq -r '.inputs.runtime.default' "${repo_root}/action.yml")"
+  version="$(yq -r '.inputs."opencode-version".default' "${repo_root}/action.yml")"
   export GITHUB_OUTPUT="${BATS_TEST_TMPDIR}/version-output"
   run env INPUT_RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY=false "${repo_root}/scripts/resolve-opencode-version.sh"
   [ "${status}" -eq 0 ]
   grep -qx 'runtime=v2' "${GITHUB_OUTPUT}"
   grep -qx 'opencode-version=2.3.0' "${GITHUB_OUTPUT}"
+  mapping="$(yq -r '.runs.steps[] | select(.name == "Run OpenCode") | .env.OPENCODE_RUNTIME' "${repo_root}/action.yml")"
+  [ "${mapping}" = '${{ steps.version.outputs.runtime }}' ]
   resolved_runtime="$(sed -n 's/^runtime=//p' "${GITHUB_OUTPUT}")"
-  cat > "${BATS_TEST_TMPDIR}/oidc.py" <<'PYTOKEN'
-import http.server, os
-class Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *args): pass
-    def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b'{"value":"oidc"}')
-    def do_POST(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b'{"token":"app-token"}')
-server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
-open(os.environ['PORT_FILE'], 'w').write(str(server.server_port))
-server.serve_forever()
-PYTOKEN
-  PORT_FILE="${BATS_TEST_TMPDIR}/port" python3 "${BATS_TEST_TMPDIR}/oidc.py" &
-  server_pid=$!
-  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
-  port="$(cat "${BATS_TEST_TMPDIR}/port")"
-  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
-    OPENCODE_RUNTIME="${resolved_runtime}" REVIEW_ONLY=false USE_GITHUB_TOKEN=false MODEL=provider/model AGENT=build PROMPT= MENTIONS=/oc \
-    ACTIONS_ID_TOKEN_REQUEST_URL="http://127.0.0.1:${port}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL="http://127.0.0.1:${port}" \
+  run env -u GH_TOKEN HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
+    OPENCODE_RUNTIME="${resolved_runtime}" REVIEW_ONLY=false USE_GITHUB_TOKEN=true GITHUB_TOKEN=workflow-token \
+    MODEL=provider/model AGENT=build PROMPT= MENTIONS=/oc \
     GITHUB_EVENT_NAME=pull_request_review_comment GITHUB_EVENT_PATH="${BATS_TEST_TMPDIR}/event" GITHUB_REPOSITORY=owner/repo \
     INVOCATION_FILE="${BATS_TEST_TMPDIR}/invocation" REPLY_FILE="${BATS_TEST_TMPDIR}/reply" REPLY_BODY="${BATS_TEST_TMPDIR}/body" \
     TIMEOUT_MINUTES=1 "${run_script}"
-  kill "${server_pid}"
-  wait "${server_pid}" || true
   [ "${status}" -eq 0 ]
   [ "$(cat "${BATS_TEST_TMPDIR}/invocation")" = "<run>
 <--standalone>
@@ -823,9 +827,209 @@ PYTOKEN
 <provider/model>
 <--agent>
 <build>
+<--format>
+<json>
 <explain this line>" ]
   grep -q 'repos/owner/repo/pulls/7/comments/42/replies' "${BATS_TEST_TMPDIR}/reply"
-  jq -e '.body == "The answer\n"' "${BATS_TEST_TMPDIR}/body"
+  jq -e '.body == "The answer"' "${BATS_TEST_TMPDIR}/body"
+}
+
+@test "review comment replies target the thread root" {
+  for parent in null 12; do
+    jq -n --argjson parent "${parent}" '{comment: {id: 42, in_reply_to_id: $parent}, pull_request: {number: 7}}' > "${BATS_TEST_TMPDIR}/event"
+    run env GITHUB_EVENT_PATH="${BATS_TEST_TMPDIR}/event" GITHUB_REPOSITORY=owner/repo \
+      bash -c 'source "$1"; opencode_reply_endpoint' _ "${run_script}"
+    [ "${status}" -eq 0 ]
+    expected="${parent}"
+    [[ "${parent}" != null ]] || expected=42
+    [ "${output}" = "repos/owner/repo/pulls/7/comments/${expected}/replies" ]
+  done
+}
+
+start_mock_oidc() {
+  cat > "${BATS_TEST_TMPDIR}/oidc.py" <<'PYTOKEN'
+import http.server, os
+from pathlib import Path
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def send_json(self, path, authorization, body):
+        if self.path != path or self.headers.get('Authorization') != authorization:
+            self.send_error(403)
+            return
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(body)
+    def do_GET(self):
+        self.send_json('/oidc?audience=opencode-github-action', 'Bearer request', b'{"value":"oidc"}')
+    def do_POST(self):
+        self.send_json('/exchange_github_app_token', 'Bearer oidc', b'{"token":"app-token"}')
+
+server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+Path(os.environ['PORT_FILE']).write_text(str(server.server_port))
+server.serve_forever()
+PYTOKEN
+  PORT_FILE="${BATS_TEST_TMPDIR}/port" python3 "${BATS_TEST_TMPDIR}/oidc.py" &
+  oidc_pid=$!
+  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
+  oidc_base="http://127.0.0.1:$(cat "${BATS_TEST_TMPDIR}/port")"
+}
+
+@test "v2 thread reply posts only the final assistant text from structured stdout" {
+  start_mock_oidc
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+  cat > "${fake_bin}/opencode" <<'SCRIPT'
+#!/usr/bin/env bash
+if [[ "$1" == --version ]]; then echo 'opencode v2.3.0'; exit; fi
+cat <<'JSON'
+{"type":"text","part":{"type":"text","messageID":"msg_tool","text":"Let me check."}}
+{"type":"tool_use","part":{"type":"tool","messageID":"msg_tool","state":{"output":"Tool stdout"}}}
+{"type":"step_start","part":{"type":"step-start","messageID":"msg_final"}}
+{"type":"reasoning","part":{"type":"reasoning","messageID":"msg_final","text":"Hidden reasoning"}}
+Rendered tool output
+"Rendered JSON tool output"
+{"type":"text","part":{"type":"text","messageID":"msg_final","text":"First line\n"}}
+{"type":"text","part":{"type":"text","messageID":"msg_final","text":"Second line."}}
+JSON
+echo '{"type":"text","part":{"type":"text","messageID":"msg_stderr","text":"Stderr noise"}}' >&2
+exit "${MODEL_EXIT:-0}"
+SCRIPT
+  cat > "${fake_bin}/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${GH_TOKEN}" == app-token && "$*" == 'api --method POST repos/owner/repo/pulls/7/comments/12/replies --input -' ]]
+cat > "${REPLY_BODY}"
+SCRIPT
+  chmod +x "${fake_bin}/opencode" "${fake_bin}/gh"
+  printf '%s' '{"comment":{"body":"/oc explain","id":42,"in_reply_to_id":12},"pull_request":{"number":7}}' > "${BATS_TEST_TMPDIR}/event"
+  for code in 19 0; do
+    run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
+      OPENCODE_RUNTIME=v2 REVIEW_ONLY=false USE_GITHUB_TOKEN=false MODEL=provider/model AGENT=build PROMPT= MENTIONS=/oc \
+      ACTIONS_ID_TOKEN_REQUEST_URL="${oidc_base}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL="${oidc_base}" \
+      GITHUB_EVENT_NAME=pull_request_review_comment GITHUB_EVENT_PATH="${BATS_TEST_TMPDIR}/event" GITHUB_REPOSITORY=owner/repo \
+      REPLY_BODY="${BATS_TEST_TMPDIR}/body" MODEL_EXIT="${code}" TIMEOUT_MINUTES=1 "${run_script}"
+    [ "${status}" -eq "${code}" ]
+    if [[ "${code}" -ne 0 ]]; then
+      [ ! -e "${BATS_TEST_TMPDIR}/body" ]
+    fi
+  done
+  jq -e '.body == "First line\nSecond line."' "${BATS_TEST_TMPDIR}/body"
+}
+
+setup_v2_publication() {
+  start_mock_oidc
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}" "${fake_workspace}" "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/plugins"
+  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md"
+  cp -r "${repo_root}/.opencode/plugins/pr-review-api" "${fake_home}/.config/opencode/plugins/"
+  cat > "${fake_bin}/opencode" <<'SCRIPT'
+#!/usr/bin/env python3
+import json, os, subprocess, sys, urllib.request
+from pathlib import Path
+
+base = Path(os.environ['FIXTURE_DIR'])
+if sys.argv[1] == '--version':
+    (base / 'version-env').write_bytes(subprocess.check_output(['env']))
+    print('opencode v2.3.0')
+    sys.exit(0)
+(base / 'process-env').write_text(json.dumps(dict(os.environ)))
+(base / 'descendant-env').write_bytes(subprocess.check_output(['env']))
+
+def request(**payload):
+    req = urllib.request.Request(os.environ['OPENCODE_REVIEW_BROKER_URL'], data=json.dumps(payload).encode())
+    with urllib.request.urlopen(req) as response:
+        return json.load(response)
+
+endpoint = 'repos/owner/repo/pulls/7'
+assert json.loads(request(endpoint=endpoint)['content']) == {'number': 7}
+commit = os.environ['PR_REVIEW_HEAD_SHA'] if os.environ['REVIEW_SCENARIO'] != 'wrong-head' else 'b' * 40
+queued = request(endpoint=endpoint + '/reviews', method='POST',
+                 payload={'event': 'COMMENT', 'body': 'Frozen evidence review', 'commit_id': commit})
+assert queued == {'status': 'queued'}
+assert (base / 'api-order').read_text() == 'read\n'
+(base / 'api-order').open('a').write('model-exit\n')
+sys.exit(17 if os.environ['REVIEW_SCENARIO'] == 'model-failed' else 0)
+SCRIPT
+  cat > "${fake_bin}/gh" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${GH_TOKEN}" == app-token && "$1" == api ]]
+case "$*" in
+  'api repos/owner/repo/pulls/7 --method GET')
+    echo read >> "${FIXTURE_DIR}/api-order"
+    echo '{"number":7}' ;;
+  'api --method POST repos/owner/repo/pulls/7/reviews --input -')
+    jq -e '. == {}' > /dev/null
+    echo identity >> "${FIXTURE_DIR}/api-order"
+    login='opencode-agent[bot]'
+    if [[ "${REVIEW_SCENARIO}" == wrong-identity ]]; then login='github-actions[bot]'; fi
+    jq -nc --arg login "${login}" '{id: 31, user: {login: $login}}' ;;
+  'api --method DELETE repos/owner/repo/pulls/7/reviews/31')
+    echo cleanup >> "${FIXTURE_DIR}/api-order" ;;
+  'api repos/owner/repo/pulls/7/reviews --method POST --input -')
+    echo publish >> "${FIXTURE_DIR}/api-order"
+    cat > "${FIXTURE_DIR}/published"
+    jq -nc --arg head "${PR_REVIEW_HEAD_SHA}" '{id: 32, commit_id: $head, state: "COMMENTED"}' ;;
+  *) exit 1 ;;
+esac
+SCRIPT
+  chmod +x "${fake_bin}/opencode" "${fake_bin}/gh"
+}
+
+run_v2_publication() {
+  cd "${fake_workspace}" || return 1
+  run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
+    OPENCODE_RUNTIME=v2 REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true USE_GITHUB_TOKEN=false \
+    MODEL=provider/model AGENT=build PROMPT=/pr-review GITHUB_EVENT_NAME=pull_request \
+    PR_REVIEW_URL=https://github.com/owner/repo/pull/7 PR_REVIEW_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    ACTIONS_ID_TOKEN_REQUEST_URL="${oidc_base}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL="${oidc_base}" \
+    OPENCODE_APP_TOKEN=inherited-app GH_TOKEN=inherited-gh GITHUB_TOKEN=inherited-workflow PR_REVIEW_INSTALL_TOKEN=inherited-install \
+    FIXTURE_DIR="${BATS_TEST_TMPDIR}" REVIEW_SCENARIO="$1" TIMEOUT_MINUTES=1 "${run_script}"
+}
+
+@test "v2 review isolates GitHub credentials during version checks, the model run and descendant execution" {
+  setup_v2_publication
+  run_v2_publication success
+  [ "${status}" -eq 0 ]
+  credentials='OPENCODE_APP_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|ACTIONS_ID_TOKEN_REQUEST_TOKEN|OIDC_BASE_URL|GH_TOKEN|GITHUB_TOKEN|PR_REVIEW_INSTALL_TOKEN'
+  run grep -Eq "^(${credentials})=" "${BATS_TEST_TMPDIR}/version-env" "${BATS_TEST_TMPDIR}/descendant-env"
+  [ "${status}" -eq 1 ]
+  jq -e --arg credentials "^(${credentials})$" 'keys | all(test($credentials) | not)' "${BATS_TEST_TMPDIR}/process-env"
+  run grep -Eq 'app-token|inherited-(app|gh|workflow|install)' "${BATS_TEST_TMPDIR}/version-env" \
+    "${BATS_TEST_TMPDIR}/process-env" "${BATS_TEST_TMPDIR}/descendant-env"
+  [ "${status}" -eq 1 ]
+}
+
+@test "v2 review parent verifies the App identity and publishes a commit-bound COMMENT after exit" {
+  setup_v2_publication
+  run_v2_publication success
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit\nidentity\ncleanup\npublish' ]
+  jq -e '. == {event: "COMMENT", body: "Frozen evidence review", commit_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' \
+    "${BATS_TEST_TMPDIR}/published"
+  [[ "${output}" == *'"review_id": 32'* ]]
+}
+
+@test "v2 review parent discards queued publication if the model exits unsuccessfully" {
+  setup_v2_publication
+  run_v2_publication model-failed
+  [ "${status}" -eq 17 ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit' ]
+  [ ! -e "${BATS_TEST_TMPDIR}/published" ]
+}
+
+@test "v2 review parent rejects the wrong commit and the wrong App identity" {
+  setup_v2_publication
+  run_v2_publication wrong-head
+  [ "${status}" -ne 0 ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit' ]
+  [ ! -e "${BATS_TEST_TMPDIR}/published" ]
+  : > "${BATS_TEST_TMPDIR}/api-order"
+  run_v2_publication wrong-identity
+  [ "${status}" -ne 0 ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit\nidentity\ncleanup' ]
+  [ ! -e "${BATS_TEST_TMPDIR}/published" ]
 }
 
 @test "authoritative validation supports v2 array variants on slash-containing model IDs" {

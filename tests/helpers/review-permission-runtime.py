@@ -56,6 +56,13 @@ for name, tool, args in [
 ]:
     cases.append((name, tool, args, False))
 
+head = 'a' * 40
+if runtime == 'v2':
+    cases.append(('queue_review', 'pr-review-api', {'request': json.dumps({
+        'endpoint': 'repos/org/repo/pulls/123/reviews', 'method': 'POST',
+        'payload': {'event': 'COMMENT', 'body': 'Test review', 'commit_id': head},
+    })}, True))
+
 
 advertised = []
 
@@ -100,9 +107,18 @@ environment = {'PATH': os.environ['PATH'], 'HOME': home,
 try:
     for model in ['test', 'gpt-6']:
         advertised.clear()
-        result = subprocess.run([binary, 'run', *standalone, '--model', 'mock/' + model, '--agent', 'action-pr-review',
-            '--format', 'json', 'Run the permission matrix.'], cwd=workspace, env=environment,
-            text=True, capture_output=True, timeout=90, stdin=subprocess.DEVNULL)
+        invocation = [binary, 'run', *standalone, '--model', 'mock/' + model, '--agent', 'action-pr-review',
+                      '--format', 'json', 'Run the permission matrix.']
+        input_options = {'stdin': subprocess.DEVNULL}
+        if runtime == 'v2':
+            environment.pop('GITHUB_TOKEN', None)
+            environment['PR_REVIEW_HEAD_SHA'] = head
+            repo = Path(__file__).resolve().parents[2]
+            adapter = Path(home) / '.config/opencode/scripts/pr-review-gh.sh'
+            invocation = [sys.executable, str(repo / 'scripts/run-v2-review.py'), str(adapter), *invocation]
+            input_options = {'input': 'matrix-token'}
+        result = subprocess.run(invocation, cwd=workspace, env=environment, text=True,
+                                capture_output=True, timeout=90, **input_options)
         assert result.returncode == 0, result.stderr + result.stdout
         parts = [json.loads(line)['part'] for line in result.stdout.splitlines()
                  if line.startswith('{') and json.loads(line).get('type') == 'tool_use']
@@ -115,6 +131,8 @@ try:
                 skill_result = json.dumps(state.get('output', state))
                 assert 'Trusted fixture.' in skill_result, (model, name, state)
                 assert 'UNTRUSTED_SKILL' not in skill_result, (model, name, state)
+            if name == 'queue_review':
+                assert 'queued' in json.dumps(state), (model, name, state)
             print(model, name, 'allowed' if allowed else 'denied')
         visible = [names for names in advertised if names]
         assert visible and all('pr-review-api' in names for names in visible), advertised

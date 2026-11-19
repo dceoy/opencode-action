@@ -2,6 +2,15 @@
 # Resolve action inputs into an OpenCode invocation. Functions are sourceable
 # so prompt/config/timeout/error behavior can be tested without the service.
 
+case "${BASH_SOURCE[0]}" in
+  */*)
+    # shellcheck source=scripts/opencode-runtime-env.sh
+    source "${BASH_SOURCE[0]%/*}/opencode-runtime-env.sh" ;;
+  *)
+    # shellcheck source=scripts/opencode-runtime-env.sh
+    source ./opencode-runtime-env.sh ;;
+esac
+
 opencode_select_timeout_command() {
   local timeout_minutes="${1}"
   OPENCODE_TIMEOUT_COMMAND=()
@@ -294,7 +303,7 @@ opencode_select_run_command() {
     OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" github run)
     return 0
   fi
-  reported="$("${OPENCODE_BIN:-opencode}" --version 2> /dev/null | tail -n 1)" || reported=""
+  reported="$(opencode_runtime_exec "${OPENCODE_BIN:-opencode}" --version 2> /dev/null | tail -n 1)" || reported=""
   reported="${reported##* }"
   if [[ ! "${reported#v}" =~ ^2\.[0-9]+\.[0-9]+ ]]; then
     opencode_report_error "The selected OpenCode 2 runtime requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
@@ -308,11 +317,15 @@ opencode_select_run_command() {
   if [[ -n "${VARIANT:-}" ]]; then
     model+="#${VARIANT}"
   fi
-  OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
+  OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" run --standalone --model "${model}" --agent "${AGENT}")
+  if [[ "${REVIEW_ONLY:-false}" != "true" && "${GITHUB_EVENT_NAME:-}" == pull_request_review_comment ]]; then
+    OPENCODE_RUN_COMMAND+=(--format json)
+  fi
+  OPENCODE_RUN_COMMAND+=("${PROMPT}")
 }
 
 opencode_configure_run() {
-  local script_dir base_config skill_relative review_bridge
+  local script_dir base_config skill_relative review_bridge publication_instructions
   local -a command_dirs
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -387,8 +400,10 @@ opencode_configure_run() {
       return 1
     fi
     review_bridge="tools/pr-review-api.js"
+    publication_instructions="POST accepts no offset/limit and returns a review receipt; verify publication through paged GET reads."
     if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
       review_bridge="plugins/pr-review-api/index.js"
+      publication_instructions='Use this launcher handoff for the skill publication and post-publication verification steps. POST accepts no offset/limit/page and queues exactly one review. Finish all evidence and snapshot checks before queuing. Treat {"status":"queued"} as the handoff to the trusted launcher, which publishes and verifies the GitHub receipt after this session exits successfully. Report the review as queued and end the session after that acknowledgement.'
     fi
     if [[ ! -f "${HOME}/.config/opencode/${review_bridge}" || ! -f "${HOME}/.config/opencode/scripts/pr-review-gh.sh" ]]; then
       opencode_report_error "Review-only requires the installed native pr-review-api tool and adapter."
@@ -397,7 +412,7 @@ opencode_configure_run() {
     skill_relative="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "${HOME}/.config/opencode/skills/pr-review" "${GITHUB_WORKSPACE:-${PWD}}")"
     OPENCODE_RESOLVED_AGENT=action-pr-review
     export AGENT="${OPENCODE_RESOLVED_AGENT}"
-    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub reads, COMMENT publication, and verification, invoke the native pr-review-api tool with a request argument containing a JSON string. No shell or file modifications are available. Request JSON schema: {endpoint: scoped REST path, method: GET or POST (default GET), paginate: boolean (default false), page: positive integer 1..10000 for paginated GETs (default 1), offset: nonnegative integer (default 0), limit: integer 1..4096 (default 4096), payload: embedded review object for POST only}. Publish using the reviews endpoint with payload {event: COMMENT, body: nonempty review text including required run markers, commit_id: ${PR_REVIEW_HEAD_SHA}, comments: optional inline comments}. GET responses have offset, next_offset, page, next_page, total_chars and content. With paginate:true each call fetches only one GitHub API page of up to 10 records; reissue the same API page with next_offset until null, then continue with next_page and offset:0 until next_page is null. Commit check-runs and combined status endpoints support paginate:true with their full object responses preserved. Use paginate:false for other singleton and immutable endpoints. Never restart pagination at page 1 to retrieve subsequent API pages. offset/limit slice one API page, not all GitHub pages. Mutable metadata can change between reads, so verify the live snapshot before and after reconstruction. POST accepts no offset/limit and returns a review receipt; verify publication through paged GET reads. Reads support PR metadata, files, commits, comments, reviews, issue comments, immutable commits and comparisons. For full frozen file evidence, read git/trees/<40-character-SHA> and git/blobs/<40-character-SHA> under the target repository; follow nested trees as needed. Blob responses are decoded to text, and truncated trees fail. Tie every tree/blob to the frozen base/head and do not claim a clean review from incomplete evidence. Use glob to locate repository paths and read only for trusted skill references; all repository file content must come from frozen blob evidence to avoid checkout symlinks bypassing credential-read rules; grep, direct gh, git, network tools and task delegation are unavailable. The adapter verifies the OpenCode App token and fails closed unless workflow-token fallback is explicit. Do not read credentials or modify repository files. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
+    export PROMPT="Load and follow the installed pr-review skill from dceoy/pr-loop using the native skill tool (name: pr-review). Review ${PR_REVIEW_URL} at frozen head ${PR_REVIEW_HEAD_SHA}. For ALL GitHub reads, COMMENT publication, and verification, invoke the native pr-review-api tool with a request argument containing a JSON string. No shell or file modifications are available. Request JSON schema: {endpoint: scoped REST path, method: GET or POST (default GET), paginate: boolean (default false), page: positive integer 1..10000 for paginated GETs (default 1), offset: nonnegative integer (default 0), limit: integer 1..4096 (default 4096), payload: embedded review object for POST only}. Publish using the reviews endpoint with payload {event: COMMENT, body: nonempty review text including required run markers, commit_id: ${PR_REVIEW_HEAD_SHA}, comments: optional inline comments}. GET responses have offset, next_offset, page, next_page, total_chars and content. With paginate:true each call fetches only one GitHub API page of up to 10 records; reissue the same API page with next_offset until null, then continue with next_page and offset:0 until next_page is null. Commit check-runs and combined status endpoints support paginate:true with their full object responses preserved. Use paginate:false for other singleton and immutable endpoints. Never restart pagination at page 1 to retrieve subsequent API pages. offset/limit slice one API page, not all GitHub pages. Mutable metadata can change between reads, so verify the live snapshot before and after reconstruction. ${publication_instructions} Reads support PR metadata, files, commits, comments, reviews, issue comments, immutable commits and comparisons. For full frozen file evidence, read git/trees/<40-character-SHA> and git/blobs/<40-character-SHA> under the target repository; follow nested trees as needed. Blob responses are decoded to text, and truncated trees fail. Tie every tree/blob to the frozen base/head and do not claim a clean review from incomplete evidence. Use glob to locate repository paths and read only for trusted skill references; all repository file content must come from frozen blob evidence to avoid checkout symlinks bypassing credential-read rules; grep, direct gh, git, network tools and task delegation are unavailable. The adapter verifies the OpenCode App token and fails closed unless workflow-token fallback is explicit. Do not read credentials or modify repository files. Additional focus: ${OPENCODE_EFFECTIVE_PROMPT}"
   elif [[ "${OPENCODE_RUNTIME:-v1}" == "v2" || -n "${PROMPT:-}" || -n "${OPENCODE_RESOLVED_COMMAND_FILE}" ]]; then
     export PROMPT="${OPENCODE_RESOLVED_PROMPT}"
   fi
@@ -433,8 +448,7 @@ opencode_configure_run() {
 
 # Match the v1 GitHub integration's OIDC audience and exchange endpoint.
 opencode_exchange_app_token() {
-  local token
-  token="$(python3 - <<'PYTOKEN'
+  python3 - <<'PYTOKEN'
 import json, os, urllib.parse, urllib.request
 url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
 url += ("&" if "?" in url else "?") + urllib.parse.urlencode({"audience": "opencode-github-action"})
@@ -449,56 +463,97 @@ if not isinstance(token, str) or not token or "\n" in token or "\r" in token:
     raise ValueError("invalid App token")
 print(token)
 PYTOKEN
-  )" || { opencode_report_error "OpenCode App token exchange failed."; return 1; }
-  printf '::add-mask::%s\n' "${token}"
-  export OPENCODE_APP_TOKEN="${token}"
+}
+
+opencode_reply_endpoint() {
+  local repo pr comment
+  repo="${GITHUB_REPOSITORY:?}"
+  pr="$(jq -r '.pull_request.number // empty' "${GITHUB_EVENT_PATH}")"
+  comment="$(jq -r '.comment.in_reply_to_id // .comment.id // empty' "${GITHUB_EVENT_PATH}")"
+  [[ "${repo}" =~ ^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$ && "${pr}" =~ ^[1-9][0-9]*$ && "${comment}" =~ ^[1-9][0-9]*$ ]] || {
+    opencode_report_error "Invalid review comment reply target." >&2; return 1;
+  }
+  printf 'repos/%s/pulls/%s/comments/%s/replies\n' "${repo}" "${pr}" "${comment}"
 }
 
 opencode_reply_to_comment() {
-  local output_file="${1}" repo pr comment endpoint
-  [[ "${GITHUB_EVENT_NAME:-}" == pull_request_review_comment ]] || return 0
-  repo="${GITHUB_REPOSITORY:?}"
-  pr="$(jq -r '.pull_request.number // empty' "${GITHUB_EVENT_PATH}")"
-  comment="$(jq -r '.comment.id // empty' "${GITHUB_EVENT_PATH}")"
-  [[ "${repo}" =~ ^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$ && "${pr}" =~ ^[1-9][0-9]*$ && "${comment}" =~ ^[1-9][0-9]*$ ]] || {
-    opencode_report_error "Invalid review comment reply target."; return 1;
-  }
-  endpoint="repos/${repo}/pulls/${pr}/comments/${comment}/replies"
-  jq -n --rawfile body "${output_file}" '{body: $body}' |     GH_TOKEN="${OPENCODE_APP_TOKEN:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}" gh api --method POST "${endpoint}" --input - > /dev/null
+  local output_file="$1" endpoint="$2" payload
+  local +x reply_token="$3"
+  # v2 emits assistant text as parts or deltas grouped by assistant message ID.
+  payload="$(jq -ceRn '
+    reduce (inputs | (fromjson? | objects) // {}) as $event (
+      {id: null, text: "", failed: false};
+      if $event.type == "error" then
+        .failed = true
+      elif (($event.type == "step_start" or $event.type == "text")
+          and ($event.part | type) == "object" and ($event.part.messageID | type) == "string") then
+        if .id != $event.part.messageID then
+          .id = $event.part.messageID | .text = ""
+        else . end |
+        if $event.type == "text" and $event.part.type == "text" and ($event.part.text | type) == "string" then
+          .text += $event.part.text
+        else . end
+      else . end
+    ) | select((.failed | not) and (.text | test("\\S"))) | {body: .text}
+  ' "${output_file}")" || { opencode_report_error "OpenCode produced no final assistant text for the thread reply."; return 1; }
+  [[ -n "${reply_token}" ]] || { opencode_report_error "No GitHub token available for the thread reply."; return 1; }
+  GH_TOKEN="${reply_token}" gh api --method POST "${endpoint}" --input - <<< "${payload}" > /dev/null
 }
 
-_opencode_run_main() {
-  local output_file opencode_status timeout_minutes
+_opencode_run_main() (
+  local output_file reply_output='' reply_endpoint='' opencode_status timeout_minutes script_dir
+  local +x publication_token=''
   timeout_minutes="${TIMEOUT_MINUTES:?TIMEOUT_MINUTES is required}"
 
   opencode_configure_run
   opencode_select_run_command
-  if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" && "${USE_GITHUB_TOKEN:-false}" != "true" ]]; then
-    opencode_exchange_app_token
+  if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+    if [[ "${REVIEW_ONLY:-false}" != "true" && "${GITHUB_EVENT_NAME:-}" == pull_request_review_comment ]]; then
+      reply_endpoint="$(opencode_reply_endpoint)" || return 1
+    fi
+    if [[ "${USE_GITHUB_TOKEN:-false}" == "true" ]]; then
+      publication_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+    else
+      publication_token="$(opencode_exchange_app_token)" || {
+        opencode_report_error "OpenCode App token exchange failed."
+        return 1
+      }
+      printf '::add-mask::%s\n' "${publication_token}"
+    fi
   fi
   output_file="$(mktemp)"
-  trap 'rm -f "${output_file}"' EXIT
+  trap 'unlink "${output_file}"; if [[ -n "${reply_output}" ]]; then unlink "${reply_output}"; fi' EXIT
   opencode_select_timeout_command "${timeout_minutes}"
 
   set +e
-  "${OPENCODE_TIMEOUT_COMMAND[@]}" "${OPENCODE_RUN_COMMAND[@]}" 2>&1 | tee "${output_file}"
-  opencode_status="${PIPESTATUS[0]}"
+  if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" && "${REVIEW_ONLY:-false}" == "true" ]]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    printf '%s' "${publication_token}" | opencode_runtime_exec python3 "${script_dir}/run-v2-review.py" \
+      "${script_dir}/../.opencode/scripts/pr-review-gh.sh" \
+      "${OPENCODE_TIMEOUT_COMMAND[@]}" "${OPENCODE_RUN_COMMAND[@]}" 2>&1 | tee "${output_file}"
+    opencode_status="${PIPESTATUS[1]}"
+  elif [[ -n "${reply_endpoint}" ]]; then
+    reply_output="$(mktemp)" || return 1
+    opencode_runtime_exec "${OPENCODE_TIMEOUT_COMMAND[@]}" "${OPENCODE_RUN_COMMAND[@]}" \
+      2>&1 > "${reply_output}" | tee "${output_file}"
+    opencode_status="${PIPESTATUS[0]}"
+  else
+    opencode_runtime_exec "${OPENCODE_TIMEOUT_COMMAND[@]}" "${OPENCODE_RUN_COMMAND[@]}" 2>&1 | tee "${output_file}"
+    opencode_status="${PIPESTATUS[0]}"
+  fi
   set -e
 
   if [[ "${opencode_status}" -ne 0 ]]; then
+    if [[ -n "${reply_output}" ]]; then cat "${reply_output}" >> "${output_file}"; fi
     opencode_report_failure \
       "${opencode_status}" "${output_file}" "${timeout_minutes}" \
       "${MODEL:-unknown}" "${OPENCODE_VERSION:-unknown}"
-    rm -f "${output_file}"
-    trap - EXIT
     return "${opencode_status}"
   fi
-  if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" && "${REVIEW_ONLY:-false}" != "true" ]]; then
-    opencode_reply_to_comment "${output_file}"
+  if [[ -n "${reply_endpoint}" ]]; then
+    opencode_reply_to_comment "${reply_output}" "${reply_endpoint}" "${publication_token}"
   fi
-  rm -f "${output_file}"
-  trap - EXIT
-}
+)
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   set -euo pipefail

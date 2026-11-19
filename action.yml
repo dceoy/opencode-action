@@ -200,12 +200,13 @@ runs:
           if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
             installer_url=https://opencode.ai/v2/install
           fi
+          source "${ACTION_PATH}/scripts/opencode-runtime-env.sh"
           curl -fsSL "${installer_url}" |
             PATH="${review_installer_bin}:${PATH}" \
               TMPDIR="${review_installer_bin}" \
               GITHUB_PATH=/dev/null \
               OPENCODE_REVIEW_INSTALL_SHIM="${review_installer_bin}/opencode" \
-              bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
+              opencode_runtime_exec bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
           if [[ ! -x "${HOME}/.opencode/bin/opencode" && ! -x "${HOME}/.opencode/bin/opencode.exe" ]]; then
             echo "::error::OpenCode installer did not install a binary in the isolated HOME." >&2
             exit 1

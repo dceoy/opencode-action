@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Run scoped GitHub reads and commit-bound review publication.
-# This runs inside OpenCode: after the OIDC token exchange of v1 `opencode github run`,
-# or with the explicit workflow token on runtime v2.
+# v1 invokes this from OpenCode. The v2 launcher invokes it with its held credential.
 set -euo pipefail
 
 pr_review_request() {
@@ -200,15 +199,25 @@ print(json.dumps(p))
 
   # shellcheck source=.opencode/scripts/resolve-app-token.sh
   source "${script_dir}/resolve-app-token.sh"
-  if [[ "${method}" == POST ]]; then
+  if [[ "${OPENCODE_REVIEW_PARENT_AUTH:-}" == 1 ]]; then
+    [[ -n "${GH_TOKEN:-}" ]] || return 1
+    if [[ "${method}" == POST && "${USE_GITHUB_TOKEN:-false}" != true ]]; then
+      opencode_verify_app_token_identity "${repo}" "${pr_number}" "${GH_TOKEN}" || {
+        echo "::error::OpenCode App token identity verification failed." >&2
+        return 1
+      }
+    fi
+  elif [[ "${method}" == POST ]]; then
     opencode_require_app_token_for_review "${USE_GITHUB_TOKEN:-false}" "${repo}" "${pr_number}" || return 1
-    exec gh "$@" <<< "${payload}"
   else
     # Evidence may take many bounded reads. Identity verification creates and
     # deletes a pending review, so reserve it for the final publication.
     opencode_prepare_gh_token "${USE_GITHUB_TOKEN:-false}" || true
-    exec gh "$@"
   fi
+  if [[ "${method}" == POST ]]; then
+    exec gh "$@" <<< "${payload}"
+  fi
+  exec gh "$@"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
