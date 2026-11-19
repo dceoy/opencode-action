@@ -71,3 +71,35 @@ PY
   done
   grep -Fq '          review-only: true' "${review}"
 }
+
+@test "bot does not subscribe to issue or PR conversation comments" {
+  # yq parses YAML 1.2, preserving "on" as a string; it is installed on
+  # the ubuntu-slim runner used by the Bats CI job.
+  run yq -e 'explode(.) | (.on | tag) == "!!map" and (.on | has("issue_comment") == false) and (.on | has("pull_request_review_comment"))' "${bot}"
+  [ "${status}" -eq 0 ]
+}
+
+@test "review comment execution requires a trusted non-bot author" {
+  run python3 - "${bot}" << 'PYCODE'
+import re
+import sys
+from pathlib import Path
+
+workflow = Path(sys.argv[1]).read_text()
+match = re.findall(
+    r"^jobs:\n  opencode-bot:\n    if: >\n((?:      .*\n|\n)+)    runs-on:",
+    workflow, re.MULTILINE,
+)
+assert len(match) == 1, "could not uniquely extract the bot job condition"
+condition = " ".join(match[0].split())
+expected = " ".join("""
+    ( github.event_name == 'pull_request_review_comment'
+      && github.event.comment.user.type != 'Bot'
+      && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    ) || ( github.event_name != 'pull_request_review_comment'
+      && inputs.prompt != '' )
+""".split())
+assert condition == expected, "bot job condition changed"
+PYCODE
+  [ "${status}" -eq 0 ]
+}
