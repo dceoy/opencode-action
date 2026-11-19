@@ -107,7 +107,7 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
 | `runtime`             | `v2`                      | Runtime generation: `v1` or `v2`.                                                                                                                 |
-| `minimum-release-age` | `24h`                    | Install the newest stable release of the selected runtime published at least this long ago (e.g., `7d` or `0s`).                                   |
+| `minimum-release-age` | `24h`                     | Install the newest stable release of the selected runtime published at least this long ago (e.g., `7d` or `0s`).                                  |
 | `use-bundled-toolkit` | `true`                    | Install the bundled provider configuration for normal runs or the trusted review bridge for review-only runs.                                     |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
