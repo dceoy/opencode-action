@@ -59,7 +59,7 @@ inputs:
   pr-review-ref:
     required: false
     description: Full immutable pr-loop commit SHA supplying the pr-review skill
-    default: 66193c0383663b48ea144b438d7dd4a42e02b6e2  # v1.1.5
+    default: ecbfb15677f7a78de3642e42aa820afd598a2787  # v1.1.6
   timeout-minutes:
     required: false
     description: Maximum minutes to let OpenCode execute before it is killed (uses 'timeout'/'gtimeout' when available; otherwise runs without an enforced timeout).
