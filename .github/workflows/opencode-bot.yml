@@ -174,7 +174,7 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           MENTIONS: ${{ inputs.mentions || '/opencode,/oc' }}
         run: |
-          python3 -I -P - <<'PY'
+          python3 -I - <<'PY'
           import os
           import string
 
