@@ -978,6 +978,7 @@ SCRIPT
 }
 
 run_v2_publication() {
+  local launcher="${2:-${run_script}}"
   cd "${fake_workspace}" || return 1
   run env HOME="${fake_home}" PATH="${fake_bin}:${PATH}" ACTION_PATH="${repo_root}" OPENCODE_BIN="${fake_bin}/opencode" \
     OPENCODE_RUNTIME=v2 REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true USE_GITHUB_TOKEN=false \
@@ -985,7 +986,7 @@ run_v2_publication() {
     PR_REVIEW_URL=https://github.com/owner/repo/pull/7 PR_REVIEW_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
     ACTIONS_ID_TOKEN_REQUEST_URL="${oidc_base}/oidc" ACTIONS_ID_TOKEN_REQUEST_TOKEN=request OIDC_BASE_URL="${oidc_base}" \
     OPENCODE_APP_TOKEN=inherited-app GH_TOKEN=inherited-gh GITHUB_TOKEN=inherited-workflow PR_REVIEW_INSTALL_TOKEN=inherited-install \
-    FIXTURE_DIR="${BATS_TEST_TMPDIR}" REVIEW_SCENARIO="$1" TIMEOUT_MINUTES=1 "${run_script}"
+    FIXTURE_DIR="${BATS_TEST_TMPDIR}" REVIEW_SCENARIO="$1" TIMEOUT_MINUTES=1 "${launcher}"
 }
 
 @test "v2 review isolates GitHub credentials during version checks, the model run and descendant execution" {
@@ -1008,6 +1009,28 @@ run_v2_publication() {
   [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit\nidentity\ncleanup\npublish' ]
   jq -e '. == {event: "COMMENT", body: "Frozen evidence review", commit_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' \
     "${BATS_TEST_TMPDIR}/published"
+  [[ "${output}" == *'"review_id": 32'* ]]
+}
+
+@test "v2 review credential helpers ignore Python modules planted in the checkout" {
+  setup_v2_publication
+  mkdir -p "${fake_workspace}/scripts" "${fake_workspace}/.opencode/scripts"
+  cp "${repo_root}/scripts/"{run-opencode.sh,opencode-action-lib.sh,opencode-runtime-env.sh,run-v2-review.py} "${fake_workspace}/scripts/"
+  cp "${repo_root}/.opencode/scripts/"{pr-review-gh.sh,resolve-app-token.sh} "${fake_workspace}/.opencode/scripts/"
+  for directory in "${fake_workspace}" "${fake_workspace}/scripts"; do
+    cat > "${directory}/json.py" << 'PY'
+from pathlib import Path
+
+Path(__file__).with_suffix('.imported').touch()
+raise RuntimeError('checkout json.py was imported')
+PY
+  done
+
+  run_v2_publication success "${fake_workspace}/scripts/run-opencode.sh"
+  [ "${status}" -eq 0 ]
+  [ ! -e "${fake_workspace}/json.imported" ]
+  [ ! -e "${fake_workspace}/scripts/json.imported" ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/api-order")" = $'read\nmodel-exit\nidentity\ncleanup\npublish' ]
   [[ "${output}" == *'"review_id": 32'* ]]
 }
 

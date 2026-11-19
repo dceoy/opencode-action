@@ -5,7 +5,7 @@ set -euo pipefail
 
 pr_review_request() {
   # Preserve request stdin on fd 3 while the static program uses stdin.
-  python3 - "${BASH_SOURCE[0]}" 3<&0 << 'PYCODE'
+  python3 -I -P - "${BASH_SOURCE[0]}" 3<&0 << 'PYCODE'
 import base64
 import json
 import os
@@ -139,7 +139,7 @@ pr_review_gh_main() {
     payload="$(cat)" || return 2
     # The internal subprocess is also scoped: direct invocation cannot bypass
     # the exact reviewed commit or request validation.
-    payload="$(python3 -c '
+    payload="$(python3 -I -P -c '
 import json, sys
 
 def unique(pairs):

@@ -13,7 +13,7 @@ import textwrap
 from pathlib import Path
 
 source = Path(sys.argv[1]).read_text()
-code = source.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+code = source.split("          python3 -I -P - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
 Path(sys.argv[2]).write_text(textwrap.dedent(code))
 PY
 }
