@@ -10,7 +10,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 ## OpenCode bot
 
-Use `opencode-bot.yml` for `/opencode` and `/oc` inline pull request review comments, direct manual dispatch, or another event with a fixed `prompt`.
+Use `opencode-bot.yml` for `/opencode` and `/oc` inline pull request review comments, direct manual dispatch, or another event with a fixed `prompt`. On v2, the bot posts a reply only for `pull_request_review_comment` events; the launcher posts nothing for `workflow_dispatch` and fixed-prompt runs.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@d60931945956acddad620910a3455f28355e2d04
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@ab6604cc588b61690c4eae15b4a9682c5c47f011
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -39,7 +39,7 @@ For pull request review comments, the reusable workflow accepts comments only fr
 
 ## Pull request review
 
-Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its default `/pr-review` prompt loads the skill, while plain-text prompts can narrow review focus.
+Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its default `/pr-review` prompt loads the skill, while v1 also supports plain-text review focus.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -57,14 +57,14 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@d60931945956acddad620910a3455f28355e2d04
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@ab6604cc588b61690c4eae15b4a9682c5c47f011
 ```
 
 This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time without an account or model-provider API key. To use another provider/model, set `with.model` explicitly and pass credentials if required. Free-model availability and rate limits may change.
 
 This example assumes a trusted, same-repository pull request. For `pull_request` events from public forks, GitHub withholds repository Actions secrets and makes `GITHUB_TOKEN` read-only; Dependabot pull requests have the same restrictions. Private-fork behavior can differ when repository settings explicitly allow secrets or write tokens.
 
-To focus the review, override `prompt` with a supported review aspect, for example `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
+To focus the review, select `runtime: v1` and `opencode-version: v1.19.3`, then set `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
 
 ## Inputs
 
@@ -80,8 +80,8 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `runtime`             | `v1`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
-| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Exact stable release matching the selected runtime.           |
+| `runtime`             | `v2`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
+| `opencode-version`    | `v2.3.0`                                                            | Exact stable release matching the selected runtime.           |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
 | `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
@@ -90,7 +90,7 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
 | `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
 
-The default version remains a concrete v1 release pinned in both workflow YAML files and `action.yml`; Renovate updates these pins while excluding v2 releases. Set `runtime` to `v1` or `v2` and pin `opencode-version` to an exact stable release of the matching major, such as `v1.19.3` or `v2.3.0`. Floating values such as `v1`, `v2`, and `latest` are rejected. Review-only runs on v1 require version `v1.2.14` or newer. OpenCode 2 model execution is disabled, including review-only runs, pending the [review isolation security gate](pull-request-reviews.md#opencode-2-security-gate).
+The default runtime is v2 with a concrete v2 release pinned in both workflow YAML files and `action.yml`; Renovate tracks v2 releases. To use v1, set `runtime: v1` and an exact v1 `opencode-version`, such as `v1.19.3`. Floating values such as `v1`, `v2`, and `latest` are rejected. Review-only runs on v1 require version `v1.2.14` or newer.
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs. Its input mappings reference the `workflow_call` definitions via GitHub Actions YAML anchors to avoid drift.
 
@@ -100,7 +100,7 @@ GitHub.com's `$/path` self repository syntax resolves to the repository and comm
 
 Pass only the provider secret needed by the selected model. The default free review model does not require an OpenCode Console account or `OPENCODE_API_KEY`; unlike the review workflow, the bot workflow continues to require an explicit model input. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
 
-`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. For code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`.
+`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. On v1, for code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`. On v2, `gh` is unauthenticated (no token in the environment); the persisted checkout credential in token mode is what enables `git push` from the shell, and because it stays readable there, treat the token as exposed to the run and scope it least-privilege.
 
 ## Permissions
 

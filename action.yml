@@ -41,14 +41,13 @@ inputs:
   runtime:
     required: false
     description: OpenCode runtime generation (v1 or v2).
-    default: v1
+    default: v2
   opencode-version:
     required: false
     description: >-
       Pin an exact stable release matching runtime. Floating versions are rejected.
-      OpenCode 2 model execution is blocked pending verification of review isolation and routing work.
     # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-    default: v1.19.3
+    default: v2.3.0
   use-bundled-toolkit:
     required: false
     description: Whether to copy the action's bundled provider configuration and review support files.
@@ -146,11 +145,6 @@ runs:
         OPENCODE_RUNTIME: ${{ steps.version.outputs.runtime }}
         RUNNER_TEMP: ${{ runner.temp }}
       run: |
-        # Check before installing the review skill or starting OpenCode.
-        if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
-          echo "::error::OpenCode 2 isolation is not yet verified; refusing to start before any model call. Use OpenCode 1 (see issue #58)." >&2
-          exit 1
-        fi
         if [[ "${REVIEW_ONLY}" == "true" ]]; then
           # Scope HOME, PATH, and XDG overrides to this composite step only.
           review_home="$(mktemp -d "${RUNNER_TEMP%/}/opencode-review.XXXXXXXX")"
@@ -206,12 +200,13 @@ runs:
           if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
             installer_url=https://opencode.ai/v2/install
           fi
+          source "${ACTION_PATH}/scripts/opencode-runtime-env.sh"
           curl -fsSL "${installer_url}" |
             PATH="${review_installer_bin}:${PATH}" \
               TMPDIR="${review_installer_bin}" \
               GITHUB_PATH=/dev/null \
               OPENCODE_REVIEW_INSTALL_SHIM="${review_installer_bin}/opencode" \
-              bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
+              opencode_runtime_exec bash -s -- --version "${OPENCODE_VERSION}" --no-modify-path
           if [[ ! -x "${HOME}/.opencode/bin/opencode" && ! -x "${HOME}/.opencode/bin/opencode.exe" ]]; then
             echo "::error::OpenCode installer did not install a binary in the isolated HOME." >&2
             exit 1
@@ -227,9 +222,5 @@ runs:
           "${ACTION_PATH}/scripts/verify-opencode.sh"
           export OPENCODE_BIN="${OPENCODE_INSTALL_HOME}/.opencode/bin/opencode"
           [[ -x "${OPENCODE_BIN}" ]] || OPENCODE_BIN+=".exe"
-        fi
-        if [[ "${OPENCODE_RUNTIME}" == "v2" ]]; then
-          echo "::error::OpenCode v2 model execution is disabled pending #58 and #59." >&2
-          exit 1
         fi
         "${ACTION_PATH}/scripts/run-opencode.sh"

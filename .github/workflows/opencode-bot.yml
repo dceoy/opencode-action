@@ -46,13 +46,13 @@ on:
         required: false
         type: string
         description: OpenCode runtime generation (v1 or v2)
-        default: v1
+        default: v2
       opencode-version: &input-opencode-version
         required: false
         type: string
         description: Exact stable release matching the selected runtime
         # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-        default: v1.19.3
+        default: v2.3.0
       use-bundled-toolkit: &input-use-bundled-toolkit
         required: false
         type: boolean
@@ -174,7 +174,7 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           MENTIONS: ${{ inputs.mentions || '/opencode,/oc' }}
         run: |
-          python3 - <<'PY'
+          python3 -I - <<'PY'
           import os
           import string
 
@@ -254,9 +254,9 @@ jobs:
           mentions: ${{ inputs.mentions || '/opencode,/oc' }}
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
-          runtime: ${{ inputs.runtime || 'v1' }}
+          runtime: ${{ inputs.runtime || 'v2' }}
           # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-          opencode-version: ${{ inputs.opencode-version || 'v1.19.3' }}
+          opencode-version: ${{ inputs.opencode-version || 'v2.3.0' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: ${{ inputs.review-only }}
           pr-review-ref: ${{ inputs.pr-review-ref }}

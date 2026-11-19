@@ -31,11 +31,11 @@ setup() {
   [ "${status}" -ne 0 ]
 }
 
-@test "v2 review fails before the installer or OpenCode is invoked" {
-  run env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true ACTION_PATH="${BATS_TEST_TMPDIR}/missing" \
+@test "v2 review reaches isolated setup" {
+  run -127 env OPENCODE_RUNTIME=v2 REVIEW_ONLY=true RUNNER_TEMP="${BATS_TEST_TMPDIR}" ACTION_PATH="${BATS_TEST_TMPDIR}/missing" \
     GITHUB_TOKEN=SECRET_SENTINEL bash -euo pipefail "${run_step}"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *"OpenCode 2 isolation is not yet verified"* ]]
+  [[ "${output}" == *"prepare-opencode-config.sh"* ]]
   [[ "${output}" != *"SECRET_SENTINEL"* ]]
 }
 
@@ -196,7 +196,7 @@ echo "${specific_version}"
 BINARY
 chmod +x "${HOME}/.opencode/bin/opencode"
 EOF
-    cp "${repo_root}/scripts/verify-opencode.sh" "${mock_action}/scripts/verify-opencode.sh"
+    cp "${repo_root}/scripts/"{verify-opencode,opencode-runtime-env}.sh "${mock_action}/scripts/"
     chmod +x "${original_home}/.opencode/bin/opencode" "${mock_bin}/opencode" "${mock_bin}/gh" \
       "${mock_bin}/curl" "${mock_bin}/tar" \
       "${mock_action}/scripts/prepare-opencode-config.sh" "${mock_action}/scripts/run-opencode.sh"
@@ -239,6 +239,7 @@ ${mock_bin}/curl" ]
   home_capture="${case_root}/home-capture"
   run_capture="${case_root}/run-capture"
   mkdir -p "${original_home}" "${runner_temp}" "${mock_bin}" "${mock_action}/scripts"
+  cp "${repo_root}/scripts/opencode-runtime-env.sh" "${mock_action}/scripts/"
   echo '/existing/github/path' > "${path_file}"
   cat > "${mock_bin}/gh" << 'EOF'
 #!/usr/bin/env bash

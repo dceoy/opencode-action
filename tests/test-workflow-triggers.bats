@@ -13,7 +13,7 @@ import textwrap
 from pathlib import Path
 
 source = Path(sys.argv[1]).read_text()
-code = source.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+code = source.split("          python3 -I - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
 Path(sys.argv[2]).write_text(textwrap.dedent(code))
 PY
 }
@@ -87,7 +87,7 @@ from pathlib import Path
 
 workflow = Path(sys.argv[1]).read_text()
 match = re.findall(
-    r"^jobs:\n  opencode-bot:\n    if: >\n((?:      .*\n|\n)+)    runs-on:",
+    r"^jobs:\n  opencode-bot:\n(?:    permissions:\n(?:      .*\n)+)?    if: >\n((?:      .*\n|\n)+)    runs-on:",
     workflow, re.MULTILINE,
 )
 assert len(match) == 1, "could not uniquely extract the bot job condition"

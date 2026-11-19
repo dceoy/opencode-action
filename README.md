@@ -22,7 +22,7 @@ on:
   pull_request_review_comment:
     types: [created]
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
   id-token: write
@@ -36,7 +36,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run OpenCode
-        uses: dceoy/opencode-action@1a46f6a4207e3c67c901874c6abad73b3b3f11c1  # v0.9.0
+        uses: dceoy/opencode-action@ab6604cc588b61690c4eae15b4a9682c5c47f011
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -53,10 +53,12 @@ jobs:
 The shorter `/oc` trigger also works:
 
 ```text
-/oc fix this
+/oc suggest a fix
 ```
 
 The default setup exchanges the workflow OIDC token for an OpenCode GitHub App token, which requires `id-token: write`.
+
+On v2, no GitHub credentials are passed to OpenCode through its environment, and `gh` runs unauthenticated. In the default OIDC mode, the launcher only posts the final message as a reply to the review-comment thread. For code-writing runs, set `use-github-token: true` with persisted checkout credentials and a write-capable token (enabling `git push`), or use `runtime: v1` with an exact v1 pin. In token mode, persisted checkout credentials remain readable from OpenCode's shell, so that token is not isolated from the model; scope it least-privilege.
 
 ## Reusable workflows
 
@@ -104,25 +106,25 @@ The [release workflow](.github/workflows/release.yml) runs every Monday at 09:15
 | `variant`             | -                         | Provider-specific reasoning effort; leave empty unless supported. See [Custom providers](docs/custom-providers.md#variants-for-custom-providers). |
 | `share`               | `false`                   | Share the OpenCode session.                                                                                                                       |
 | `use-github-token`    | `false`                   | Use the workflow token instead of the default App-token flow.                                                                                     |
-| `runtime`             | `v1`                      | Runtime generation: `v1` or `v2`. v2 model execution is disabled pending #58 and #59.                                                             |
-| `opencode-version`    | Pinned v1                 | Exact stable release matching the runtime. The Sakura provider requires 1.2.25+.                                                                  |
+| `runtime`             | `v2`                      | Runtime generation: `v1` or `v2`.                                                                                                                 |
+| `opencode-version`    | `v2.3.0`                  | Exact stable release matching the runtime. The Sakura provider requires 1.2.25+.                                                                  |
 | `use-bundled-toolkit` | `true`                    | Install the bundled provider configuration for normal runs or the trusted review bridge for review-only runs.                                     |
 | `review-only`         | `false`                   | Enable isolated review execution and install upstream `pr-review`.                                                                                |
 | `pr-review-ref`       | Caller-supplied SHA       | Immutable `pr-loop` commit supplying the review skill.                                                                                            |
 | `timeout-minutes`     | `60`                      | Stop OpenCode after this many minutes.                                                                                                            |
 | `oidc-base-url`       | `https://api.opencode.ai` | OIDC exchange URL for a custom GitHub App installation.                                                                                           |
 
-The default remains pinned to a Renovate-managed v1 release. Set `runtime: v2` and `opencode-version: v2.3.0` to select the tested v2 installer; execution remains disabled until #58 and #59 are resolved (see the [review isolation security gate](docs/pull-request-reviews.md#opencode-2-security-gate)). Floating inputs including `latest` are rejected: pin a stable release of the selected major. To roll back, set `runtime: v1` and a matching v1 pin such as `v1.19.3`; upgrade by testing and pinning a new release of the selected major.
+The default is the Renovate-managed OpenCode v2 pin. Floating versions, including `latest`, are rejected. To use v1, set `runtime: v1` and a matching exact pin such as `v1.19.3`; test and pin upgrades for the selected major.
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
-When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task.
+When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task. On v2, the token is not placed in OpenCode's environment and `gh` is unauthenticated; the launcher uses it for thread replies. In token mode, the persisted checkout credential remains readable from the shell (`git push`), so use a least-privilege token.
 
 Outputs are `opencode-version`, `runtime` (`v1` or `v2`, selected explicitly), and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache, install the external `pr-review` skill, and use a disposable temporary HOME (including isolated XDG paths).
 
 ## Pull request reviews
 
-The reusable [`opencode-review.yml`](.github/workflows/opencode-review.yml) runs the SHA-pinned external `pr-loop/pr-review` skill in an isolated `review-only` environment. The old bundled `/review-pr` command, agents, and orchestration are gone. The `/pr-review` prompt loads the skill through OpenCode's native `skill` tool; optional plain-text instructions narrow review focus.
+The reusable [`opencode-review.yml`](.github/workflows/opencode-review.yml) runs the SHA-pinned external `pr-loop/pr-review` skill in an isolated `review-only` environment. The old bundled `/review-pr` command, agents, and orchestration are gone. The `/pr-review` prompt loads the skill through OpenCode's native `skill` tool; On v1, optional plain-text instructions narrow review focus; v2 accepts only an empty prompt or `/pr-review`.
 
 Direct action or bot review-only calls require `use-bundled-toolkit: 'true'`, a full `pr-review-ref` commit SHA, and a concrete PR URL/head SHA. The reusable review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` as public inputs for compatibility; its review agent remains fixed, comment mentions are irrelevant to PR events, and the bundle is required. The action retains its restricted GitHub API adapter and verified App-token publication flow, which are needed to enforce read-only evidence access and a commit-bound `COMMENT` review. The restriction is an OpenCode tool permission boundary, not an operating-system sandbox.
 

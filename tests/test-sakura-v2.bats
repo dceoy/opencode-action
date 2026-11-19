@@ -10,7 +10,8 @@
   mkdir -p "${home}" "${workspace}"
   run env HOME="${home}" XDG_DATA_HOME="${home}/.local/share" XDG_CACHE_HOME="${home}/.cache" \
     ACTION_PATH="${root}" REVIEW_ONLY=true OPENCODE_RUNTIME=v2 USE_BUNDLED_TOOLKIT=true \
-    USE_GITHUB_TOKEN=true GITHUB_WORKSPACE="${workspace}" MODEL=sakura/preview/example VARIANT= AGENT=build PROMPT=review \
+    OPENCODE_DISABLE_MODELS_FETCH=1 \
+    USE_GITHUB_TOKEN=true GITHUB_WORKSPACE="${workspace}" MODEL=sakura/preview/example VARIANT= AGENT=build PROMPT=/pr-review GITHUB_EVENT_NAME=pull_request \
     PR_REVIEW_URL=https://github.com/example/repo/pull/1 PR_REVIEW_HEAD_SHA=0123456789012345678901234567890123456789 \
     SAKURA_AI_ENGINE_API_KEY=credential_sentinel CLI="${cli}" ROOT="${root}" bash -euo pipefail -c '
       source "$ROOT/scripts/prepare-opencode-config.sh"
@@ -18,8 +19,6 @@
       mkdir -p "$HOME/.config/opencode/skills/pr-review"
       touch "$HOME/.config/opencode/skills/pr-review/SKILL.md"
       source "$ROOT/scripts/run-opencode.sh"
-      # Model execution is gated; this test only loads configuration.
-      opencode_validate_runtime() { :; }
       opencode_configure_run
       cd "$GITHUB_WORKSPACE"
       "$CLI" debug config --standalone > "$HOME/debug.json" 2> "$HOME/debug.err"
