@@ -45,7 +45,7 @@ PY
   PORT_FILE="${BATS_TEST_TMPDIR}/port" MOCK_RELEASES_DIR="${MOCK_RELEASES_DIR}" \
     python3 "${BATS_TEST_TMPDIR}/releases-server.py" &
   server_pid=$!
-  for _ in {1..100}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
+  for _ in {1..500}; do [[ -s "${BATS_TEST_TMPDIR}/port" ]] && break; sleep 0.01; done
   GITHUB_API_URL="http://127.0.0.1:$(cat "${BATS_TEST_TMPDIR}/port")"
   export GITHUB_API_URL
   export GH_TOKEN=test-token
