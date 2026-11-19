@@ -6,18 +6,6 @@ setup() {
   touch "${GITHUB_OUTPUT}"
 }
 
-@test "exact versions resolve only for the selected major and review minimum" {
-  for spec in 'v1 v1.19.3 false 0' 'v2 v2.3.0 true 0' 'v1 2.3.0 true 1' 'v2 1.19.3 false 1' 'v1 1.2.13 true 1' 'v1 1.2.14 true 0' 'v1 01.2.3 false 1' 'v1 1.2.3-extra false 1' 'v1 latest false 1' 'v2 latest true 1' 'v3 3.0.0 false 1'; do
-    read -r runtime version review result <<< "${spec}"
-    run env INPUT_RUNTIME="${runtime}" INPUT_VERSION="${version}" REVIEW_ONLY="${review}" "${root}/scripts/resolve-opencode-version.sh"
-    [ "${status}" -eq "${result}" ]
-    if [ "${result}" -eq 0 ]; then
-      [[ "${output}" == *"runtime=${runtime}"* ]]
-      [[ "${output}" == *"opencode-version=${version#v}"* ]]
-    fi
-  done
-}
-
 @test "installed binaries must report the exact selected release and major" {
   for spec in 'v1 1.19.3 1.19.3 0' 'v2 2.3.0 opencode_v2.3.0 0' 'v1 1.19.3 2.3.0 1' 'v2 2.3.0 opencode_v2.3.1 1' 'v2 2.3.0 garbage_v2.3.0 1'; do
     read -r runtime version reported result <<< "${spec}"

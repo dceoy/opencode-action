@@ -48,12 +48,11 @@ on:
         type: string
         description: OpenCode runtime generation (v1 or v2)
         default: v2
-      opencode-version:
+      minimum-release-age:
         required: false
         type: string
-        description: Exact stable release matching the selected runtime
-        # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-        default: v2.3.0
+        description: Minimum age of a stable OpenCode release (e.g., 24h, 7d, 0s)
+        default: 24h
       use-bundled-toolkit:
         required: false
         type: boolean
@@ -164,8 +163,7 @@ jobs:
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           runtime: ${{ inputs.runtime || 'v2' }}
-          # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-          opencode-version: ${{ inputs.opencode-version || 'v2.3.0' }}
+          minimum-release-age: ${{ inputs.minimum-release-age || '24h' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: true
           timeout-minutes: ${{ inputs.timeout-minutes || 60 }}

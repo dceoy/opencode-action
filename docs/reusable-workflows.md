@@ -64,33 +64,33 @@ This example uses the review workflow's default `opencode/deepseek-v4.1-flash-fr
 
 This example assumes a trusted, same-repository pull request. For `pull_request` events from public forks, GitHub withholds repository Actions secrets and makes `GITHUB_TOKEN` read-only; Dependabot pull requests have the same restrictions. Private-fork behavior can differ when repository settings explicitly allow secrets or write tokens.
 
-To focus the review, select `runtime: v1` and `opencode-version: v1.19.3`, then set `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
+To focus the review, select `runtime: v1`, then set `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
 
 ## Inputs
 
 Both reusable workflows expose the action configuration plus a runner input, except that `review-only`, `pr-review-ref`, `pr-review-url`, and `pr-review-head-sha` are bot-only inputs. The review workflow always enables review-only mode and inherits the `pr-review-ref` default from `action.yml`. The review workflow retains `agent`, `mentions`, and `use-bundled-toolkit` for caller compatibility. Review mode still forces the restricted review agent, ignores comment mentions for PR events, and requires `use-bundled-toolkit: true`:
 
-| Input                 | Default                                                             | Description                                                   |
-| --------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `model`               | `opencode/deepseek-v4.1-flash-free` (review); required (bot)        | Model in `provider/model` format.                             |
-| `agent`               | `build`                                                             | Primary agent; review-only runs override it.                  |
-| `share`               | `false`                                                             | Share the OpenCode session.                                   |
-| `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                 |
-| `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow. |
-| `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
-| `variant`             | `''`                                                                | Provider-specific model variant.                              |
-| `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `runtime`             | `v2`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
-| `opencode-version`    | `v2.3.0`                                                            | Exact stable release matching the selected runtime.           |
-| `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
-| `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                 |
-| `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |
-| `pr-review-url`       | `''` (bot only)                                                     | GitHub PR URL for manual review-only runs.                    |
-| `pr-review-head-sha`  | `''` (bot only)                                                     | Full reviewed head SHA for manual review-only runs.           |
-| `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                          |
-| `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                              |
+| Input                 | Default                                                             | Description                                                    |
+| --------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `model`               | `opencode/deepseek-v4.1-flash-free` (review); required (bot)        | Model in `provider/model` format.                              |
+| `agent`               | `build`                                                             | Primary agent; review-only runs override it.                   |
+| `share`               | `false`                                                             | Share the OpenCode session.                                    |
+| `prompt`              | `''` for `opencode-bot.yml`; `/pr-review` for `opencode-review.yml` | Fixed prompt.                                                  |
+| `use-github-token`    | `false`                                                             | Use the workflow token instead of the default App-token flow.  |
+| `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.          |
+| `variant`             | `''`                                                                | Provider-specific model variant.                               |
+| `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                        |
+| `runtime`             | `v2`                                                                | OpenCode runtime generation (`v1` or `v2`).                    |
+| `minimum-release-age` | `24h`                                                               | Minimum age of the selected stable release (`7d`, `0s`, etc.). |
+| `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                  |
+| `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                  |
+| `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.             |
+| `pr-review-url`       | `''` (bot only)                                                     | GitHub PR URL for manual review-only runs.                     |
+| `pr-review-head-sha`  | `''` (bot only)                                                     | Full reviewed head SHA for manual review-only runs.            |
+| `timeout-minutes`     | `60`                                                                | Maximum OpenCode runtime in minutes.                           |
+| `runs-on`             | `ubuntu-latest`                                                     | Runner label for the called job.                               |
 
-The default runtime is v2 with a concrete v2 release pinned in both workflow YAML files and `action.yml`; Renovate tracks v2 releases. To use v1, set `runtime: v1` and an exact v1 `opencode-version`, such as `v1.19.3`. Floating values such as `v1`, `v2`, and `latest` are rejected. Review-only runs on v1 require version `v1.2.14` or newer.
+The default runtime is v2. At each run, the action selects the highest stable v2 release from GitHub Releases that was published at least `minimum-release-age` ago (default `24h`); `7d` and `0s` are also supported. Choose `runtime: v1` to resolve the v1 series instead. Drafts, prereleases, and versions from the other major are excluded, and API failures or no eligible versions stop execution. Review-only runs on v1 require version `v1.2.14` or newer.
 
 Direct `workflow_dispatch` on `opencode-bot.yml` uses the same inputs. Its input mappings reference the `workflow_call` definitions via GitHub Actions YAML anchors to avoid drift.
 

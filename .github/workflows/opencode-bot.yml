@@ -47,12 +47,11 @@ on:
         type: string
         description: OpenCode runtime generation (v1 or v2)
         default: v2
-      opencode-version: &input-opencode-version
+      minimum-release-age: &input-minimum-release-age
         required: false
         type: string
-        description: Exact stable release matching the selected runtime
-        # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-        default: v2.3.0
+        description: Minimum age of a stable OpenCode release (e.g., 24h, 7d, 0s)
+        default: 24h
       use-bundled-toolkit: &input-use-bundled-toolkit
         required: false
         type: boolean
@@ -134,7 +133,7 @@ on:
       variant: *input-variant
       oidc-base-url: *input-oidc-base-url
       runtime: *input-runtime
-      opencode-version: *input-opencode-version
+      minimum-release-age: *input-minimum-release-age
       use-bundled-toolkit: *input-use-bundled-toolkit
       review-only: *input-review-only
       pr-review-url: *input-pr-review-url
@@ -255,8 +254,7 @@ jobs:
           variant: ${{ inputs.variant }}
           oidc-base-url: ${{ inputs.oidc-base-url || 'https://api.opencode.ai' }}
           runtime: ${{ inputs.runtime || 'v2' }}
-          # renovate: datasource=github-releases depName=anomalyco/opencode versioning=semver
-          opencode-version: ${{ inputs.opencode-version || 'v2.3.0' }}
+          minimum-release-age: ${{ inputs.minimum-release-age || '24h' }}
           use-bundled-toolkit: ${{ inputs.model == '' || inputs.use-bundled-toolkit }}
           review-only: ${{ inputs.review-only }}
           pr-review-ref: ${{ inputs.pr-review-ref }}

@@ -4,7 +4,7 @@ The `opencode-review.yml` reusable workflow restricts reviews to eligible non-dr
 
 ## Invocation
 
-The review workflow uses `review-only: true` and passes the pull request URL and exact head SHA from the event. The public `agent`, `mentions`, and `use-bundled-toolkit` inputs remain available for backward compatibility: the review agent is always restricted to `action-pr-review`, `mentions` has no effect on PR events, and `use-bundled-toolkit: false` is rejected by review-only mode. The action uses `gh skill install dceoy/pr-loop skills/pr-review --pin <SHA> --agent opencode --scope user` to install just the upstream Skill under `~/.config/opencode/skills/pr-review/` at the immutable `pr-review-ref` commit, then invokes it using a plain-text prompt. The workflow loads the installed skill through OpenCode's native `skill` tool; it does not generate a TUI slash command or modify upstream `SKILL.md` metadata. The default `prompt` is `/pr-review`, which is normalized to review focus before that instruction is constructed. For free-form review focus, select `runtime: v1` and `opencode-version: v1.19.3`; the old `/review-pr` command is not supported.
+The review workflow uses `review-only: true` and passes the pull request URL and exact head SHA from the event. The public `agent`, `mentions`, and `use-bundled-toolkit` inputs remain available for backward compatibility: the review agent is always restricted to `action-pr-review`, `mentions` has no effect on PR events, and `use-bundled-toolkit: false` is rejected by review-only mode. The action uses `gh skill install dceoy/pr-loop skills/pr-review --pin <SHA> --agent opencode --scope user` to install just the upstream Skill under `~/.config/opencode/skills/pr-review/` at the immutable `pr-review-ref` commit, then invokes it using a plain-text prompt. The workflow loads the installed skill through OpenCode's native `skill` tool; it does not generate a TUI slash command or modify upstream `SKILL.md` metadata. The default `prompt` is `/pr-review`, which is normalized to review focus before that instruction is constructed. For free-form review focus, select `runtime: v1`; the old `/review-pr` command is not supported.
 
 Review-only runs require OpenCode 1.2.14 or newer and GitHub CLI with `gh skill` support for the OpenCode agent (tested with v2.104.0). GitHub CLI v2.90.0 has `gh skill` but does not support `--agent opencode`. The composite action validates the OpenCode version and immutable SHA, then invokes `gh skill` directly in isolated user scope; no custom installer or package manager is needed.
 
@@ -23,12 +23,11 @@ jobs:
       prompt: /pr-review
 ```
 
-For a focused review with v1, use matching runtime and version inputs:
+For a focused review with v1, use the matching runtime input:
 
 ```yaml
 with:
   runtime: v1
-  opencode-version: v1.19.3
   prompt: Focus on security and regression risks.
 ```
 
@@ -55,7 +54,7 @@ The v1 adapter resolves credentials for each invocation. The v2 launcher supplie
 
 ## OpenCode 2 review execution
 
-OpenCode v2 is the default, pinned to `v2.3.0`. To use v1, select `runtime: v1` and a matching exact v1 release. Floating versions are rejected.
+OpenCode v2 is the default. The latest stable v2 release older than `minimum-release-age` (default `24h`) is selected automatically; use `runtime: v1` to select the v1 series. Review-only v1 runs require v1.2.14 or newer.
 
 The v2 review path accepts only an empty prompt or `/pr-review`, and only pull request, pull request target, or manual dispatch events. It does not support `issue_comment` or `pull_request_review_comment` events. The bot workflow gates review comments on trusted authors and configured mentions, but the action can also be invoked directly and does not enforce those gates itself. Free-form focus is currently supported only by v1. Manual events require an explicit PR URL and full head SHA.
 
