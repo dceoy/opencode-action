@@ -58,7 +58,7 @@ The shorter `/oc` trigger also works:
 
 The default setup exchanges the workflow OIDC token for an OpenCode GitHub App token, which requires `id-token: write`.
 
-On v2, OpenCode receives no GitHub credentials. In the default OIDC mode, the launcher only posts the final message as a reply to the review-comment thread; `git push` and authenticated `gh`/API calls are unavailable. For code-writing runs, set `use-github-token: true` with persisted checkout credentials and a write-capable token (`git push` only), or use `runtime: v1` with an exact v1 pin.
+On v2, no GitHub credentials are passed to OpenCode through its environment, and `gh` runs unauthenticated. In the default OIDC mode, the launcher only posts the final message as a reply to the review-comment thread. For code-writing runs, set `use-github-token: true` with persisted checkout credentials and a write-capable token (enabling `git push`), or use `runtime: v1` with an exact v1 pin. In token mode, persisted checkout credentials remain readable from OpenCode's shell, so that token is not isolated from the model; scope it least-privilege.
 
 ## Reusable workflows
 
@@ -118,7 +118,7 @@ The default is the Renovate-managed OpenCode v2 pin. Floating versions, includin
 
 Direct `workflow_dispatch` uses the same inputs as `workflow_call`; `model` and a non-empty `prompt` are required to run the job.
 
-When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task. On v2, the token is used by the launcher (thread replies) and is not passed to OpenCode.
+When `use-github-token: true`, keep `GITHUB_TOKEN` in `env` and grant only the permissions needed for the task. On v2, the token is not placed in OpenCode's environment and `gh` is unauthenticated; the launcher uses it for thread replies. In token mode, the persisted checkout credential remains readable from the shell (`git push`), so use a least-privilege token.
 
 Outputs are `opencode-version`, `runtime` (`v1` or `v2`, selected explicitly), and `cache-hit`. Review-only runs (`review-only: 'true'`) skip the OpenCode binary cache, install the external `pr-review` skill, and use a disposable temporary HOME (including isolated XDG paths).
 

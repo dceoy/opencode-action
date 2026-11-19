@@ -10,7 +10,7 @@ The examples below pin the reusable workflow definition to a full commit SHA. In
 
 ## OpenCode bot
 
-Use `opencode-bot.yml` for `/opencode` and `/oc` inline pull request review comments, direct manual dispatch, or another event with a fixed `prompt`. On v2, the bot posts a reply only for `pull_request_review_comment` events; `workflow_dispatch` and fixed-prompt runs publish nothing.
+Use `opencode-bot.yml` for `/opencode` and `/oc` inline pull request review comments, direct manual dispatch, or another event with a fixed `prompt`. On v2, the bot posts a reply only for `pull_request_review_comment` events; the launcher posts nothing for `workflow_dispatch` and fixed-prompt runs.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -100,7 +100,7 @@ GitHub.com's `$/path` self repository syntax resolves to the repository and comm
 
 Pass only the provider secret needed by the selected model. The default free review model does not require an OpenCode Console account or `OPENCODE_API_KEY`; unlike the review workflow, the bot workflow continues to require an explicit model input. The reusable workflows accept `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `SAKURA_AI_ENGINE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, and `MOONSHOT_API_KEY`.
 
-`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. On v1, for code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`. On v2, OpenCode receives no GitHub credentials, so model-issued API writes and `gh` are unavailable; write capability is limited to `git push` via persisted checkout credentials in token mode.
+`GH_TOKEN` is optional. When omitted, the reusable workflow falls back to the caller's `github.token`. With `use-github-token: true`, that fallback is limited to `contents: read` by the called workflow even if the caller grants `contents: write`. On v1, for code-writing operations such as `/oc fix this`, pass a separately write-scoped `GH_TOKEN`; otherwise GitHub API writes to repository contents fail with `403`. On v2, `gh` is unauthenticated (no token in the environment); the persisted checkout credential in token mode is what enables `git push` from the shell, and because it stays readable there, treat the token as exposed to the run and scope it least-privilege.
 
 ## Permissions
 
