@@ -663,6 +663,27 @@ EOF
   [[ "${output}" == *"requires a concrete PR_REVIEW_URL"* ]]
 }
 
+@test "v2 review-only authorizes only review requests on supported events with a frozen target" {
+  mkdir -p "${fake_home}/.config/opencode/skills/pr-review" "${fake_home}/.config/opencode/plugins/pr-review-api"
+  touch "${fake_home}/.config/opencode/skills/pr-review/SKILL.md" "${fake_home}/.config/opencode/plugins/pr-review-api/index.js"
+  for spec in 'pull_request|/pr-review|0' 'pull_request_target|/pr-review|0' 'workflow_dispatch||0' \
+    'issue_comment|/pr-review|1' 'pull_request_review_comment|/pr-review|1' \
+    'push|/pr-review|1' 'issue_comment|post a comment|1' 'workflow_dispatch|/pr-review fix the code|1'; do
+    IFS='|' read -r event prompt expected <<< "${spec}"
+    run env HOME="${fake_home}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
+      OPENCODE_RUNTIME=v2 GITHUB_EVENT_NAME="${event}" PROMPT="${prompt}" \
+      PR_REVIEW_URL=https://github.com/org/repo/pull/123 PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
+      bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run' _ "${run_script}"
+    [ "${status}" -eq "${expected}" ]
+  done
+  run env -u PR_REVIEW_URL -u PR_REVIEW_HEAD_SHA -u GITHUB_EVENT_PATH HOME="${fake_home}" \
+    ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true OPENCODE_RUNTIME=v2 \
+    GITHUB_EVENT_NAME=workflow_dispatch PROMPT=/pr-review \
+    bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run' _ "${run_script}"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"requires a concrete PR_REVIEW_URL"* ]]
+}
+
 @test "review-only forces deny-default permissions regardless of caller agent" {
   for caller in build plan ''; do
     mkdir -p "${fake_home}/.config/opencode/skills/pr-review"
@@ -705,7 +726,7 @@ _review_permission_matrix() {
   ln -s .git/config "${fake_workspace}/credential-link.txt"
   printf 'CREDENTIAL_SENTINEL\n' > "${fake_workspace}/.env"
   env HOME="${fake_home}" GITHUB_WORKSPACE="${fake_workspace}" ACTION_PATH="${repo_root}" REVIEW_ONLY=true USE_BUNDLED_TOOLKIT=true \
-    OPENCODE_RUNTIME="${runtime}" USE_GITHUB_TOKEN=true \
+    OPENCODE_RUNTIME="${runtime}" USE_GITHUB_TOKEN=true GITHUB_EVENT_NAME=workflow_dispatch \
     MODEL=provider/model AGENT=build PR_REVIEW_URL=https://github.com/org/repo/pull/123 \
     PR_REVIEW_HEAD_SHA=abcdefabcdefabcdefabcdefabcdefabcdefabcd \
     bash -c 'source "$1"; opencode_validate_runtime() { :; }; opencode_configure_run; printf "%s" "$OPENCODE_CONFIG_CONTENT"' _ "${run_script}" > "${config}"

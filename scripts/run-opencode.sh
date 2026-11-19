@@ -299,17 +299,21 @@ opencode_select_run_command() {
     OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" github run)
     return 0
   fi
-  reported="$(opencode --version 2> /dev/null | tail -n 1)" || reported=""
+  reported="$("${OPENCODE_BIN:-opencode}" --version 2> /dev/null | tail -n 1)" || reported=""
   reported="${reported##* }"
   if [[ ! "${reported#v}" =~ ^2\.[0-9]+\.[0-9]+ ]]; then
     opencode_report_error "The selected OpenCode 2 runtime requires an OpenCode 2 binary, but 'opencode --version' reported '${reported:-nothing}'."
     return 1
   fi
-  model="${MODEL:?MODEL is required}"
+  model="${MODEL:-}"
+  if [[ ! "${model}" =~ ^[^/[:space:]#]+/[^[:space:]#]+$ || "${VARIANT:-}" == *[[:space:]#]* ]]; then
+    opencode_report_error "OpenCode v2 requires a model in provider/model form and a valid optional variant."
+    return 1
+  fi
   if [[ -n "${VARIANT:-}" ]]; then
     model+="#${VARIANT}"
   fi
-  OPENCODE_RUN_COMMAND=(opencode run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
+  OPENCODE_RUN_COMMAND=("${OPENCODE_BIN:-opencode}" run --standalone --model "${model}" --agent "${AGENT}" "${PROMPT}")
 }
 
 opencode_configure_run() {
@@ -363,6 +367,21 @@ opencode_configure_run() {
     elif [[ "${OPENCODE_EFFECTIVE_PROMPT}" == /* ]]; then
       opencode_report_error "Review-only accepts /pr-review or plain-text review focus."
       return 1
+    fi
+    if [[ "${OPENCODE_RUNTIME:-v1}" == "v2" ]]; then
+      case "${GITHUB_EVENT_NAME:-}" in
+        pull_request | pull_request_target | workflow_dispatch) ;;
+        *)
+          opencode_report_error "OpenCode v2 review-only does not support event '${GITHUB_EVENT_NAME:-missing}'."
+          return 1
+          ;;
+      esac
+      # Free-form text can request a general comment or mutation. Until a
+      # structured focus input exists, authorize only the review command itself.
+      if [[ -n "${OPENCODE_EFFECTIVE_PROMPT}" ]]; then
+        opencode_report_error "OpenCode v2 review-only accepts only an empty prompt or /pr-review."
+        return 1
+      fi
     fi
     if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]]; then
       export PR_REVIEW_URL="${PR_REVIEW_URL:-$(jq -r '.pull_request.html_url // empty' "${GITHUB_EVENT_PATH}")}"
