@@ -39,7 +39,7 @@ For pull request review comments, the reusable workflow accepts comments only fr
 
 ## Pull request review
 
-Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its default `/pr-review` prompt loads the skill, while plain-text prompts can narrow review focus.
+Use `opencode-review.yml` for automatic reviews on `pull_request` events. It installs the pinned external `pr-loop/pr-review` skill; its default `/pr-review` prompt loads the skill, while v1 also supports plain-text review focus.
 
 <!-- prettier-ignore -->
 ```yaml
@@ -64,7 +64,7 @@ This example uses the review workflow's default `opencode/deepseek-v4.1-flash-fr
 
 This example assumes a trusted, same-repository pull request. For `pull_request` events from public forks, GitHub withholds repository Actions secrets and makes `GITHUB_TOKEN` read-only; Dependabot pull requests have the same restrictions. Private-fork behavior can differ when repository settings explicitly allow secrets or write tokens.
 
-To focus the review, override `prompt` with a supported review aspect, for example `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
+To focus the review, select `runtime: v1` and `opencode-version: v1.19.3`, then set `prompt: Focus on security and performance.` See [Pull request reviews](pull-request-reviews.md) for review behavior and security guarantees.
 
 ## Inputs
 
@@ -80,8 +80,8 @@ Both reusable workflows expose the action configuration plus a runner input, exc
 | `mentions`            | `/opencode,/oc`                                                     | Comment trigger phrases; unused for PR review events.         |
 | `variant`             | `''`                                                                | Provider-specific model variant.                              |
 | `oidc-base-url`       | `https://api.opencode.ai`                                           | OIDC exchange base URL.                                       |
-| `runtime`             | `v1`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
-| `opencode-version`    | Pinned v1 (see workflow YAML)                                       | Exact stable release matching the selected runtime.           |
+| `runtime`             | `v2`                                                                | OpenCode runtime generation (`v1` or `v2`).                   |
+| `opencode-version`    | `v2.3.0`                                                            | Exact stable release matching the selected runtime.           |
 | `use-bundled-toolkit` | `true`                                                              | Review-only mode requires the trusted bundle.                 |
 | `review-only`         | `false` (bot only)                                                  | Install and invoke the upstream review skill.                 |
 | `pr-review-ref`       | `action.yml` default (bot only)                                     | Immutable `pr-loop` commit providing the reviewer.            |

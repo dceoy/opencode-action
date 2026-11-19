@@ -4,7 +4,7 @@ The `opencode-review.yml` reusable workflow restricts reviews to eligible non-dr
 
 ## Invocation
 
-The review workflow uses `review-only: true` and passes the pull request URL and exact head SHA from the event. The public `agent`, `mentions`, and `use-bundled-toolkit` inputs remain available for backward compatibility: the review agent is always restricted to `action-pr-review`, `mentions` has no effect on PR events, and `use-bundled-toolkit: false` is rejected by review-only mode. The action uses `gh skill install dceoy/pr-loop skills/pr-review --pin <SHA> --agent opencode --scope user` to install just the upstream Skill under `~/.config/opencode/skills/pr-review/` at the immutable `pr-review-ref` commit, then invokes it using a plain-text prompt. The workflow loads the installed skill through OpenCode's native `skill` tool; it does not generate a TUI slash command or modify upstream `SKILL.md` metadata. The default `prompt` is `/pr-review`, which is normalized to review focus before that instruction is constructed. Override it with `/pr-review security and performance` or plain-text review focus; the old `/review-pr` command is not supported.
+The review workflow uses `review-only: true` and passes the pull request URL and exact head SHA from the event. The public `agent`, `mentions`, and `use-bundled-toolkit` inputs remain available for backward compatibility: the review agent is always restricted to `action-pr-review`, `mentions` has no effect on PR events, and `use-bundled-toolkit: false` is rejected by review-only mode. The action uses `gh skill install dceoy/pr-loop skills/pr-review --pin <SHA> --agent opencode --scope user` to install just the upstream Skill under `~/.config/opencode/skills/pr-review/` at the immutable `pr-review-ref` commit, then invokes it using a plain-text prompt. The workflow loads the installed skill through OpenCode's native `skill` tool; it does not generate a TUI slash command or modify upstream `SKILL.md` metadata. The default `prompt` is `/pr-review`, which is normalized to review focus before that instruction is constructed. For free-form review focus, select `runtime: v1` and `opencode-version: v1.19.3`; the old `/review-pr` command is not supported.
 
 Review-only runs require OpenCode 1.2.14 or newer and GitHub CLI with `gh skill` support for the OpenCode agent (tested with v2.104.0). GitHub CLI v2.90.0 has `gh skill` but does not support `--agent opencode`. The composite action validates the OpenCode version and immutable SHA, then invokes `gh skill` directly in isolated user scope; no custom installer or package manager is needed.
 
@@ -20,16 +20,25 @@ jobs:
       actions: read
     uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@163f9a9cd3d3f497e2847635585419f951371d2f # v0.8.1
     with:
-      prompt: Focus on security and regression risks.
+      prompt: /pr-review
+```
+
+For a focused review with v1, use matching runtime and version inputs:
+
+```yaml
+with:
+  runtime: v1
+  opencode-version: v1.19.3
+  prompt: Focus on security and regression risks.
 ```
 
 The default review model is `opencode/deepseek-v4.1-flash-free`, currently free for a limited time through OpenCode and usable without an account or model-provider API key. GitHub token permissions and the default OIDC-based App token exchange still apply to PR review operations. Pass `with.model` to override the default and supply credentials if required. Free availability and rate limits can change.
 
 ## GitHub App token reuse
 
-The token resolver (`.opencode/scripts/resolve-app-token.sh`) is preserved independently of the removed review command. The trusted `pr-review-gh.sh` adapter is installed alongside it under `~/.config/opencode/scripts/`. The review prompt instructs the external `pr-review` skill to route GitHub operations through the trusted native API tool and adapter. Review-only runs use the action-defined `action-pr-review` primary agent regardless of the caller's `agent` input. It must run **inside** `opencode github run`: the OpenCode OIDC exchange and Git credential configuration are established at that point, not during action setup.
+The token resolver (`.opencode/scripts/resolve-app-token.sh`) is preserved independently of the removed review command. The trusted `pr-review-gh.sh` adapter is installed alongside it under `~/.config/opencode/scripts/`. The review prompt instructs the external `pr-review` skill to route GitHub operations through the trusted native API tool and adapter. Review-only runs use the action-defined `action-pr-review` primary agent regardless of the caller's `agent` input. The v1 integration establishes the OIDC exchange inside `opencode github run`; v2 exchanges the OIDC token before launching and passes the candidate to the adapter.
 
-The adapter extracts token candidates from Git `http.*.extraheader`. Read-only requests never create pending reviews: with `use-github-token: true`, they preserve the caller's workflow credential; otherwise, they use the first candidate when present, or the existing environment credential when no candidate is found. Before publication, the adapter verifies a candidate with a temporary unsubmitted pending-review create/delete probe, then exports the verified credential to its child `gh` process as `GH_TOKEN` and `GITHUB_TOKEN`. The token is not written to a file or emitted as output.
+The adapter considers the v2 exchanged token and candidates from Git `http.*.extraheader`. Read-only requests never create pending reviews: with `use-github-token: true`, they preserve the caller's workflow credential; otherwise, they use the first candidate when present, or the existing environment credential when no candidate is found. Before publication, the adapter verifies a candidate with a temporary unsubmitted pending-review create/delete probe, then exports the verified credential to its child `gh` process as `GH_TOKEN` and `GITHUB_TOKEN`. The token is not written to a file or emitted as output.
 
 - **Default (`use-github-token: false`)**: publication requires a verified OpenCode App token; unavailable or mismatched identity fails closed. Read-only requests may use the available scoped credential.
 - **Explicit fallback (`use-github-token: true`)**: publication prefers a verified OpenCode App token; otherwise it uses the caller's existing workflow token and its author identity. Read requests preserve that workflow token.
