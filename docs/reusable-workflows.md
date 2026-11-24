@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@c9f89e8a02bc7eb64d52808ff8f1603f0a0713e3  # v1.0.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@cda16d479232f0998a3046425dc43747f1c4c66e  # v1.1.0
     with:
       model: opencode-go/kimi-k3
     secrets:
@@ -57,7 +57,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@c9f89e8a02bc7eb64d52808ff8f1603f0a0713e3  # v1.0.0
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@cda16d479232f0998a3046425dc43747f1c4c66e  # v1.1.0
 ```
 
 This example uses the review workflow's default `opencode/deepseek-v4.1-flash-free` model, which OpenCode currently provides free of charge for a limited time without an account or model-provider API key. To use another provider/model, set `with.model` explicitly and pass credentials if required. Free-model availability and rate limits may change.
