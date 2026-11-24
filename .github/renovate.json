@@ -1,13 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    {
-      "description": "Require manual review for Python compatibility range changes",
-      "matchManagers": ["pep621"],
-      "matchDepTypes": ["requires-python"],
-      "automerge": false
-    }
+    "config:recommended"
   ],
   "platformAutomerge": false,
   "ignoreTests": false,
