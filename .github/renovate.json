@@ -1,8 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    {
+      "description": "Require manual review for Python compatibility range changes",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "automerge": false
+    }
   ],
+  "platformAutomerge": false,
+  "ignoreTests": false,
   "minimumReleaseAge": "1 day",
   "lockFileMaintenance": {
     "enabled": true
@@ -16,7 +24,7 @@
         "digest"
       ],
       "automerge": true,
-      "automergeType": "branch"
+      "automergeType": "pr"
     }
   ]
 }
