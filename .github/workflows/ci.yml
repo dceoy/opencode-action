@@ -19,7 +19,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-actions-lint-and-scan.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/github-actions-lint-and-scan.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       search-path: .github/workflows
       yamllint-search-path: .
@@ -31,7 +31,7 @@ jobs:
       github.event_name == 'push'
       || github.event_name == 'pull_request'
       || github.event_name == 'workflow_dispatch'
-    uses: dceoy/gha-for-devops/.github/workflows/markdown-lint.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/markdown-lint.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       search-path: .
   shell-lint:
@@ -41,7 +41,7 @@ jobs:
       || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
-    uses: dceoy/gha-for-devops/.github/workflows/shell-lint.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/shell-lint.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       search-path: .
   bats-test:
@@ -51,7 +51,7 @@ jobs:
       || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
-    uses: dceoy/gha-for-devops/.github/workflows/bats-test.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/bats-test.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       search-path: .
       setup-run: |
@@ -82,6 +82,6 @@ jobs:
       actions: read
       checks: read
       statuses: read
-    uses: dceoy/gha-for-devops/.github/workflows/dependabot-auto-merge.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/dependabot-auto-merge.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       unconditional: true
