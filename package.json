@@ -2,7 +2,7 @@
   "name": "opencode-action",
   "private": true,
   "devDependencies": {
-    "@opencode/cli": "2.3.0",
+    "@opencode/cli": "2.3.2",
     "opencode-ai": "latest"
   },
   "devEngines": {
