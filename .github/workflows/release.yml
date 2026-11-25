@@ -34,7 +34,7 @@ jobs:
       && inputs.task != 'post-release'
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-release.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/github-release.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       version-bump: ${{ inputs.task || 'auto' }}
       release-trigger-paths: |
@@ -51,7 +51,7 @@ jobs:
        (needs.release.result == 'success' && needs.release.outputs.release-tag != ''))
     permissions:
       contents: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/github-major-version-tag.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       tag-name: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
   release-pins:
@@ -63,7 +63,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dceoy/gha-for-devops/.github/workflows/github-action-release-pins.yml@b7d9e0c64d9cd6d7198da715b11a4648373e9a23  # v2.3.4
+    uses: dceoy/gha-for-devops/.github/workflows/github-action-release-pins.yml@a49d8c5289d9ac33c9eef275f0238dd6a8b306d5  # v2.3.5
     with:
       release-tag: ${{ needs.release.outputs.release-tag || github.event.release.tag_name }}
       pr-loop-ref-input: pr-review-ref
