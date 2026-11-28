@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -12,7 +12,7 @@
     --line:#ddd6c6; --accent:#b3540a; --accent-ink:#8f4206; --accent-soft:#f6e3d3;
     --code-bg:#211d16; --code-ink:#f2ead8; --code-dim:#a89e83; --ok:#2e6b34; --warn:#9a6a00;
     --radius:10px;
-    --font-sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",-apple-system,"Segoe UI",sans-serif;
+    --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
   @media (prefers-color-scheme: dark){
@@ -127,12 +127,12 @@
 </head>
 <body>
 
-<nav aria-label="目次">
+<nav aria-label="Table of contents">
   <div class="wrap">
     <a class="brand" href="#top">dceoy/<b>opencode-action</b></a>
     <a href="#quickstart">Quick start</a>
-    <a href="#flow">動作の流れ</a>
-    <a href="#usage">使い方の3形態</a>
+    <a href="#flow">How it works</a>
+    <a href="#usage">Three ways to use it</a>
     <a href="#models">Models &amp; secrets</a>
     <a href="#runtime">Runtime v1 / v2</a>
     <a href="#review">PR reviews</a>
@@ -145,19 +145,19 @@
 <header id="top">
   <div class="wrap">
     <p class="kicker">GitHub Action · OpenCode agent</p>
-    <h1><span class="mono">opencode-action</span> —<br>OpenCode エージェントを GitHub Actions で動かす</h1>
-    <p class="lede"><a href="https://github.com/dceoy/opencode-action">dceoy/opencode-action</a> は、AI コーディングエージェント <strong>OpenCode</strong> を GitHub Actions のジョブとして実行する composite action です。PR の差分へのインラインコメントに <code>/opencode</code>（または <code>/oc</code>）と書くだけでエージェントが起動し、説明・修正提案・コード変更までをその場で行います。手動 dispatch の汎用タスクと、<code>pr-loop</code> の <code>pr-review</code> skill を使った隔離環境での自動 PR レビューにも対応します。</p>
+    <h1><span class="mono">opencode-action</span> —<br>Run the OpenCode agent in GitHub Actions</h1>
+    <p class="lede"><a href="https://github.com/dceoy/opencode-action">dceoy/opencode-action</a> is a composite action that runs the AI coding agent <strong>OpenCode</strong> as a GitHub Actions job. Just write <code>/opencode</code> (or <code>/oc</code>) in an inline comment on a pull request diff and the agent starts right there — explaining the change, suggesting fixes, and editing code. It also supports generic tasks via manual dispatch and automated PR reviews in an isolated environment using the <code>pr-review</code> skill from <code>pr-loop</code>.</p>
     <div class="stats">
-      <div class="stat"><div class="v">v1.1.0</div><div class="k">最新リリース（action のピン留め例）</div></div>
-      <div class="stat"><div class="v">v2</div><div class="k">デフォルト runtime（v1 も選択可）</div></div>
-      <div class="stat"><div class="v">24h</div><div class="k">minimum-release-age のデフォルト</div></div>
-      <div class="stat"><div class="v">2</div><div class="k">reusable workflows（bot / review）</div></div>
-      <div class="stat"><div class="v">AGPL-3.0</div><div class="k">ライセンス</div></div>
+      <div class="stat"><div class="v">v1.1.0</div><div class="k">Latest release (example action pin)</div></div>
+      <div class="stat"><div class="v">v2</div><div class="k">Default runtime (v1 also available)</div></div>
+      <div class="stat"><div class="v">24h</div><div class="k">Default minimum-release-age</div></div>
+      <div class="stat"><div class="v">2</div><div class="k">Reusable workflows (bot / review)</div></div>
+      <div class="stat"><div class="v">AGPL-3.0</div><div class="k">License</div></div>
     </div>
     <div class="hero-links">
-      <a class="btn primary" href="https://github.com/dceoy/opencode-action">GitHub リポジトリ →</a>
-      <a class="btn" href="https://github.com/dceoy/opencode-action/blob/main/docs/reusable-workflows.md">Reusable workflows ドキュメント</a>
-      <a class="btn" href="https://opencode.ai">OpenCode 公式サイト</a>
+      <a class="btn primary" href="https://github.com/dceoy/opencode-action">GitHub repository →</a>
+      <a class="btn" href="https://github.com/dceoy/opencode-action/blob/main/docs/reusable-workflows.md">Reusable workflows documentation</a>
+      <a class="btn" href="https://opencode.ai">OpenCode official site</a>
     </div>
   </div>
 </header>
@@ -166,13 +166,13 @@
 
 <!-- ============ QUICK START ============ -->
 <section id="quickstart">
-  <h2><span class="num">01</span>Quick start — 3ステップ</h2>
-  <p class="sub">最小構成は「secret を1つ登録 → workflow を1ファイル追加 → PR の差分にコメント」の3つだけです。</p>
+  <h2><span class="num">01</span>Quick start — 3 steps</h2>
+  <p class="sub">The minimal setup is just three things: register one secret, add one workflow file, then comment on a PR diff.</p>
 
-  <h3>1. Provider secret を登録する</h3>
-  <p>リポジトリの <strong>Settings → Secrets and variables → Actions</strong> に、使うモデルプロバイダの API key を登録します。下の例では OpenCode の <code>OPENCODE_API_KEY</code> を使います（プロバイダごとの対応表は<a href="#models">Models &amp; secrets</a>）。</p>
+  <h3>1. Register a provider secret</h3>
+  <p>In your repository's <strong>Settings → Secrets and variables → Actions</strong>, register the API key for the model provider you want to use. The example below uses OpenCode's <code>OPENCODE_API_KEY</code> (see <a href="#models">Models &amp; secrets</a> for the provider table).</p>
 
-  <h3>2. Workflow を追加する</h3>
+  <h3>2. Add a workflow</h3>
   <div class="codeblock">
     <div class="bar"><span class="fname">.github/workflows/opencode.yml</span><button class="copybtn" type="button">Copy</button></div>
     <pre><code>---
@@ -202,58 +202,58 @@ jobs:
         with:
           model: opencode-go/kimi-k3</code></pre>
   </div>
-  <p>デフォルト構成では、workflow の OIDC トークンを OpenCode GitHub App のトークンと交換するため <code>id-token: write</code> が必要です。action 参照はタグではなく<strong>フルコミット SHA にピン留め</strong>するのがこのリポジトリの流儀です。</p>
+  <p>In the default configuration, <code>id-token: write</code> is required so the workflow's OIDC token can be exchanged for an OpenCode GitHub App token. This repository's convention is to pin action references to a <strong>full commit SHA</strong>, not a tag.</p>
 
-  <h3>3. PR の差分にインラインコメントを書く</h3>
+  <h3>3. Write an inline comment on a PR diff</h3>
   <div class="codeblock">
     <div class="bar"><span class="fname">PR review comment</span><button class="copybtn" type="button">Copy</button></div>
     <pre><code>/opencode explain this change
 
-<span class="c"># 短いトリガーも使えます</span>
+<span class="c"># The short trigger works too</span>
 /oc suggest a fix</code></pre>
   </div>
-  <p>エージェントがそのコメントスレッドに返信します。トリガー語は <code>mentions</code> input（デフォルト <code>/opencode,/oc</code>）で変更できます。</p>
+  <p>The agent replies in that comment thread. You can change the trigger words with the <code>mentions</code> input (default <code>/opencode,/oc</code>).</p>
 </section>
 
 <!-- ============ FLOW ============ -->
 <section id="flow">
-  <h2><span class="num">02</span>動作の流れ</h2>
-  <p class="sub">コメントから返信までの5段階です。各ステップを選ぶと詳細が切り替わります。</p>
-  <div class="flow" role="group" aria-label="実行フロー">
-    <button type="button" data-step="0" aria-pressed="true"><span class="n">STEP 1</span><span class="t">トリガー</span></button>
-    <button type="button" data-step="1" aria-pressed="false"><span class="n">STEP 2</span><span class="t">Runtime 解決</span></button>
-    <button type="button" data-step="2" aria-pressed="false"><span class="n">STEP 3</span><span class="t">トークン交換</span></button>
-    <button type="button" data-step="3" aria-pressed="false"><span class="n">STEP 4</span><span class="t">OpenCode 実行</span></button>
-    <button type="button" data-step="4" aria-pressed="false"><span class="n">STEP 5</span><span class="t">返信・公開</span></button>
+  <h2><span class="num">02</span>How it works</h2>
+  <p class="sub">Five stages from comment to reply. Select a step to see its details.</p>
+  <div class="flow" role="group" aria-label="Execution flow">
+    <button type="button" data-step="0" aria-pressed="true"><span class="n">STEP 1</span><span class="t">Trigger</span></button>
+    <button type="button" data-step="1" aria-pressed="false"><span class="n">STEP 2</span><span class="t">Runtime resolution</span></button>
+    <button type="button" data-step="2" aria-pressed="false"><span class="n">STEP 3</span><span class="t">Token exchange</span></button>
+    <button type="button" data-step="3" aria-pressed="false"><span class="n">STEP 4</span><span class="t">Run OpenCode</span></button>
+    <button type="button" data-step="4" aria-pressed="false"><span class="n">STEP 5</span><span class="t">Reply / Publish</span></button>
   </div>
   <div class="flow-detail" id="flowDetail" aria-live="polite"></div>
   <div class="callout">
-    <p><strong>v2 の資格情報の扱いが要点です。</strong> デフォルト（OIDC）モードでは GitHub の資格情報は OpenCode の環境に渡されず、<code>gh</code> は未認証で動きます。ランチャーだけが最終メッセージをレビューコメントのスレッドへ返信として投稿します。コードを書かせる（<code>git push</code> させる）場合は <code>use-github-token: true</code> ＋ checkout 資格情報の永続化 ＋ 書き込み可能なトークンが必要です。</p>
+    <p><strong>How v2 handles credentials is the key point.</strong> In the default (OIDC) mode, GitHub credentials are not passed into OpenCode's environment, and <code>gh</code> runs unauthenticated. Only the launcher posts the final message as a reply to the review comment thread. To let the agent write code (<code>git push</code>), you need <code>use-github-token: true</code> plus persisted checkout credentials and a writable token.</p>
   </div>
 </section>
 
 <!-- ============ USAGE ============ -->
 <section id="usage">
-  <h2><span class="num">03</span>使い方の3形態</h2>
-  <p class="sub">直接 action を呼ぶ方法と、呼び出し側が小さく済む reusable workflow が2つ用意されています。</p>
-  <div class="tabs" role="tablist" aria-label="使い方">
+  <h2><span class="num">03</span>Three ways to use it</h2>
+  <p class="sub">You can call the action directly, or use one of two reusable workflows that keep the caller small.</p>
+  <div class="tabs" role="tablist" aria-label="Usage patterns">
     <button type="button" role="tab" id="tab-direct" aria-controls="panel-direct" aria-selected="true">Direct action</button>
     <button type="button" role="tab" id="tab-bot" aria-controls="panel-bot" aria-selected="false">opencode-bot.yml</button>
     <button type="button" role="tab" id="tab-review" aria-controls="panel-review" aria-selected="false">opencode-review.yml</button>
   </div>
 
   <div class="tabpanel" id="panel-direct" role="tabpanel" aria-labelledby="tab-direct">
-    <p><span class="tag">基本形</span></p>
-    <p>自分の workflow の step から <code>uses: dceoy/opencode-action@&lt;SHA&gt;</code> で直接呼びます。上の Quick start がこの形です。トリガー（review comment / dispatch / 任意イベント）、権限、checkout の有無をすべて自分で制御したい場合に使います。</p>
+    <p><span class="tag">Basic pattern</span></p>
+    <p>Call it directly from a step in your own workflow with <code>uses: dceoy/opencode-action@&lt;SHA&gt;</code>. The Quick start above uses this form. Use it when you want full control over the trigger (review comment / dispatch / arbitrary event), permissions, and whether to check out.</p>
     <ul>
-      <li><code>workflow_dispatch</code> で直接使う場合も <code>workflow_call</code> と同じ inputs が使え、<code>model</code> と空でない <code>prompt</code> が実行条件です。</li>
-      <li>出力は <code>opencode-version</code>、<code>runtime</code>（<code>v1</code>/<code>v2</code>）、<code>cache-hit</code> の3つ。</li>
+      <li>When used directly via <code>workflow_dispatch</code>, the same inputs as <code>workflow_call</code> are available, and a <code>model</code> plus a non-empty <code>prompt</code> are required to run.</li>
+      <li>Outputs are <code>opencode-version</code>, <code>runtime</code> (<code>v1</code>/<code>v2</code>), and <code>cache-hit</code>.</li>
     </ul>
   </div>
 
   <div class="tabpanel" id="panel-bot" role="tabpanel" aria-labelledby="tab-bot" hidden>
     <p><span class="tag">Reusable workflow</span></p>
-    <p><code>/opencode</code>・<code>/oc</code> のインライン PR レビューコメント、手動 dispatch、固定 <code>prompt</code> による任意イベント向けの汎用 bot です。レビューコメントは <strong>OWNER / MEMBER / COLLABORATOR</strong> のコメントで、かつ <code>mentions</code> の語句を含む場合だけ受理されます（<code>model</code> を渡してもこの条件は回避できません）。コメント以外のイベントでは空でない <code>prompt</code> が必須です。</p>
+    <p>A general-purpose bot for inline PR review comments with <code>/opencode</code> / <code>/oc</code>, manual dispatch, and arbitrary events with a fixed <code>prompt</code>. Review comments are accepted only when they come from an <strong>OWNER / MEMBER / COLLABORATOR</strong> and contain one of the <code>mentions</code> phrases (passing a <code>model</code> does not bypass this condition). For non-comment events, a non-empty <code>prompt</code> is required.</p>
     <div class="codeblock">
       <div class="bar"><span class="fname">caller workflow</span><button class="copybtn" type="button">Copy</button></div>
       <pre><code>---
@@ -275,12 +275,12 @@ jobs:
     secrets:
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}</code></pre>
     </div>
-    <p class="small">v2 では bot が返信を投稿するのは <code>pull_request_review_comment</code> イベントのときだけです。<code>workflow_dispatch</code> と固定 prompt の実行ではランチャーは何も投稿しません。</p>
+    <p class="small">In v2, the bot posts a reply only for <code>pull_request_review_comment</code> events. For <code>workflow_dispatch</code> and fixed-prompt runs, the launcher posts nothing.</p>
   </div>
 
   <div class="tabpanel" id="panel-review" role="tabpanel" aria-labelledby="tab-review" hidden>
     <p><span class="tag">Reusable workflow</span> <span class="tag plain">review-only</span></p>
-    <p><code>pull_request</code> イベントで自動レビューを行います。<a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a> の外部 <code>pr-review</code> skill を SHA ピン留めでインストールし、隔離された review-only 環境で実行します（詳細は<a href="#review">PR reviews</a>）。デフォルトモデルは当面無料の <code>opencode/deepseek-v4.1-flash-free</code> で、プロバイダの API key なしで試せます。</p>
+    <p>Runs automated reviews on <code>pull_request</code> events. It installs the external <code>pr-review</code> skill from <a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a> pinned by SHA and runs it in an isolated review-only environment (see <a href="#review">PR reviews</a> for details). The default model is the currently free <code>opencode/deepseek-v4.1-flash-free</code>, so you can try it without a provider API key.</p>
     <div class="codeblock">
       <div class="bar"><span class="fname">caller workflow</span><button class="copybtn" type="button">Copy</button></div>
       <pre><code>---
@@ -298,30 +298,30 @@ jobs:
       actions: read
     uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@cda16d479232f0998a3046425dc43747f1c4c66e  <span class="c"># v1.1.0</span></code></pre>
     </div>
-    <p class="small">信頼できる同一リポジトリの PR を前提とした例です。公開フォークからの PR では GitHub が secrets を渡さず <code>GITHUB_TOKEN</code> も読み取り専用になります（Dependabot PR も同様）。</p>
+    <p class="small">This example assumes trusted same-repository PRs. For PRs from public forks, GitHub does not pass secrets and <code>GITHUB_TOKEN</code> is read-only (the same applies to Dependabot PRs).</p>
   </div>
 </section>
 
 <!-- ============ MODELS ============ -->
 <section id="models">
   <h2><span class="num">04</span>Models and secrets</h2>
-  <p class="sub"><code>model</code> input は <code>provider/model</code> 形式で指定し、対応する API key を secret として渡します。プロバイダ側のアカウントに十分なクレジット／クォータが必要です。</p>
+  <p class="sub">Specify the <code>model</code> input in <code>provider/model</code> format and pass the corresponding API key as a secret. Your provider account needs sufficient credit / quota.</p>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Provider</th><th>モデルの例</th><th>Secret</th></tr></thead>
+      <thead><tr><th>Provider</th><th>Example model</th><th>Secret</th></tr></thead>
       <tbody>
         <tr><td>OpenCode</td><td><code>opencode-go/kimi-k3</code></td><td><code>OPENCODE_API_KEY</code></td></tr>
         <tr><td>OpenRouter</td><td><code>openrouter/openrouter/free</code></td><td><code>OPENROUTER_API_KEY</code></td></tr>
         <tr><td>Anthropic</td><td><code>anthropic/claude-opus-5</code></td><td><code>ANTHROPIC_API_KEY</code></td></tr>
         <tr><td>OpenAI</td><td><code>openai/gpt-5.6-sol</code></td><td><code>OPENAI_API_KEY</code></td></tr>
-        <tr><td>Sakura AI Engine（同梱済み）</td><td><code>sakura/gpt-oss-120b</code></td><td><code>SAKURA_AI_ENGINE_API_KEY</code></td></tr>
-        <tr><td>Custom provider</td><td><code>myprovider/my-model</code></td><td>プロバイダ固有</td></tr>
+        <tr><td>Sakura AI Engine (bundled)</td><td><code>sakura/gpt-oss-120b</code></td><td><code>SAKURA_AI_ENGINE_API_KEY</code></td></tr>
+        <tr><td>Custom provider</td><td><code>myprovider/my-model</code></td><td>Provider-specific</td></tr>
       </tbody>
     </table>
   </div>
-  <p>Reusable workflows は上記に加えて <code>GOOGLE_GENERATIVE_AI_API_KEY</code>、<code>DEEPSEEK_API_KEY</code>、<code>XAI_API_KEY</code>、<code>GROQ_API_KEY</code>、<code>CEREBRAS_API_KEY</code>、<code>MOONSHOT_API_KEY</code> も secret として受け付けます。選んだモデルに必要な secret だけを渡してください。</p>
+  <p>In addition to the above, the reusable workflows also accept <code>GOOGLE_GENERATIVE_AI_API_KEY</code>, <code>DEEPSEEK_API_KEY</code>, <code>XAI_API_KEY</code>, <code>GROQ_API_KEY</code>, <code>CEREBRAS_API_KEY</code>, and <code>MOONSHOT_API_KEY</code> as secrets. Pass only the secret required for the model you chose.</p>
   <h3>Custom providers</h3>
-  <p>OpenCode に組み込まれていないプロバイダ（多くは OpenAI 互換 API）は、リポジトリルートの <code>opencode.json</code> で定義できます。Sakura AI Engine は例外で、同梱 toolkit に <code>sakura</code> プロバイダとして設定済みのため、通常は <code>opencode.json</code> 不要で <code>sakura/*</code> モデルが使えます。</p>
+  <p>Providers not built into OpenCode (many are OpenAI-compatible APIs) can be defined in <code>opencode.json</code> at the repository root. Sakura AI Engine is the exception: it is already configured as the <code>sakura</code> provider in the bundled toolkit, so you can normally use <code>sakura/*</code> models without an <code>opencode.json</code>.</p>
   <div class="codeblock">
     <div class="bar"><span class="fname">opencode.json</span><button class="copybtn" type="button">Copy</button></div>
     <pre><code>{
@@ -342,116 +342,116 @@ jobs:
 }</code></pre>
   </div>
   <div class="callout warn">
-    <p><strong>プロジェクト側の provider 設定は「信頼済み入力」として扱ってください。</strong> 設定は <code>baseURL</code> やリクエストヘッダを制御できるため、信頼できない変更が入ると資格情報が別エンドポイントへ送られかねません。workflow のトリガーと secret へのアクセスを適切に制限してください。なお review-only 実行ではプロジェクト設定は無効化されるため、カスタムプロバイダは使えません（組み込みプロバイダを使ってください）。</p>
+    <p><strong>Treat project-side provider configuration as trusted input.</strong> Because the configuration can control <code>baseURL</code> and request headers, an untrusted change could send credentials to a different endpoint. Restrict workflow triggers and access to secrets appropriately. Note that in review-only runs project configuration is disabled, so custom providers cannot be used (use a built-in provider instead).</p>
   </div>
 </section>
 
 <!-- ============ RUNTIME ============ -->
 <section id="runtime">
-  <h2><span class="num">05</span>Runtime — v1 と v2</h2>
-  <p class="sub"><code>runtime</code> input で OpenCode の世代を選びます。どちらも「<code>minimum-release-age</code>（デフォルト 24h）以上前に公開された最新の安定版」を GitHub Releases から解決して正確なバージョンをインストールします。適格なリリースが無い・API が失敗した場合は、未検証のフォールバックを入れずに<strong>実行を失敗</strong>させます。</p>
-  <div class="seg" role="group" aria-label="Runtime 比較">
-    <button type="button" id="segV2" aria-pressed="true">v2（デフォルト）</button>
+  <h2><span class="num">05</span>Runtime — v1 and v2</h2>
+  <p class="sub">Use the <code>runtime</code> input to choose the OpenCode generation. Both resolve the latest stable release published at least <code>minimum-release-age</code> (default 24h) ago from GitHub Releases and install that exact version. If there is no eligible release or the API fails, the run <strong>fails</strong> rather than installing an unverified fallback.</p>
+  <div class="seg" role="group" aria-label="Runtime comparison">
+    <button type="button" id="segV2" aria-pressed="true">v2 (default)</button>
     <button type="button" id="segV1" aria-pressed="false">v1</button>
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>観点</th><th id="rtColHead">OpenCode v2</th></tr></thead>
+      <thead><tr><th>Aspect</th><th id="rtColHead">OpenCode v2</th></tr></thead>
       <tbody id="rtBody"></tbody>
     </table>
   </div>
-  <p class="small"><code>minimum-release-age</code> は <code>7d</code> で遅延を延ばし、<code>0s</code> で無効化できます。対応単位は <code>s</code> / <code>m</code> / <code>h</code> / <code>d</code> / <code>w</code>。ドラフト・プレリリース・他メジャーのバージョンは除外されます。</p>
+  <p class="small">You can extend the delay with <code>minimum-release-age: 7d</code>, or disable it with <code>0s</code>. Supported units are <code>s</code> / <code>m</code> / <code>h</code> / <code>d</code> / <code>w</code>. Drafts, prereleases, and versions from other majors are excluded.</p>
 </section>
 
 <!-- ============ REVIEW ============ -->
 <section id="review">
-  <h2><span class="num">06</span>Pull request reviews — 隔離された review-only 実行</h2>
-  <p class="sub"><code>opencode-review.yml</code> は、通常の bot 実行とは別設計の「読み取り専用レビュー」です。レビューの振る舞い自体は同梱せず、<code>pr-loop</code> の <code>pr-review</code> skill を不変のコミット SHA で外部から取り込みます（旧来の同梱 <code>/review-pr</code> コマンドや専用エージェントは廃止済み）。</p>
+  <h2><span class="num">06</span>Pull request reviews — Isolated review-only runs</h2>
+  <p class="sub"><code>opencode-review.yml</code> is a read-only review design separate from normal bot runs. The review behavior itself is not bundled; it imports the <code>pr-review</code> skill from <code>pr-loop</code> at an immutable commit SHA (the former bundled <code>/review-pr</code> command and dedicated agent have been removed).</p>
   <div class="cards">
     <div class="card">
-      <h3>対象の限定</h3>
-      <p>ドラフトでなく、bot でなく、信頼できるリポジトリ協力者が開いた PR のみが対象です。モデル選択によってこの制限は変わりません。</p>
+      <h3>Restricted scope</h3>
+      <p>Only PRs that are not drafts, not from bots, and opened by trusted repository collaborators are in scope. Model selection does not change this restriction.</p>
     </div>
     <div class="card">
-      <h3>使い捨ての HOME</h3>
-      <p>review-only 実行はランナーの一時ディレクトリ配下の使い捨て HOME（XDG パスも分離）を使い、終了時に片付けます。プロジェクト設定と外部 skill 探索は無効化され、OpenCode は新規インストールされます。</p>
+      <h3>Disposable HOME</h3>
+      <p>Review-only runs use a disposable HOME under the runner's temporary directory (with separate XDG paths) and clean it up on exit. Project configuration and external skill discovery are disabled, and OpenCode is freshly installed.</p>
     </div>
     <div class="card">
-      <h3>凍結された証拠</h3>
-      <p>リポジトリ内容は checkout のファイルではなく、Git の blob（<code>git/blobs/&lt;SHA&gt;</code>）経由で読みます。checkout のシンボリックリンクがランナーの資格情報へ読み取りを誘導することはありません。</p>
+      <h3>Frozen evidence</h3>
+      <p>Repository content is read via Git blobs (<code>git/blobs/&lt;SHA&gt;</code>), not checkout files. A symlink in the checkout cannot redirect reads to the runner's credentials.</p>
     </div>
     <div class="card">
-      <h3>公開は COMMENT 1件のみ</h3>
-      <p>上流 skill は base/head スナップショットを凍結し、根拠と照合した所見だけを、対象コミットに紐づく <code>COMMENT</code> レビューとして1件公開します。Approve・変更要求・マージ・リポジトリ変更は決して行いません。</p>
+      <h3>Publishes a single COMMENT only</h3>
+      <p>The upstream skill freezes base/head snapshots and publishes only findings verified against evidence as a single <code>COMMENT</code> review tied to the target commit. It never approves, requests changes, merges, or modifies the repository.</p>
     </div>
     <div class="card">
-      <h3>制限付き API アダプタ</h3>
-      <p>GitHub 操作はネイティブな <code>pr-review-api</code> ツール経由の構造化リクエストのみ。シェル式・任意の CLI フラグ・ファイル入力は受け付けず、不正なペイロードは fail-closed で拒否されます。</p>
+      <h3>Restricted API adapter</h3>
+      <p>GitHub operations are structured requests only, via the native <code>pr-review-api</code> tool. Shell expressions, arbitrary CLI flags, and file inputs are not accepted, and invalid payloads are rejected fail-closed.</p>
     </div>
     <div class="card">
-      <h3>トークンの検証</h3>
-      <p>公開前に App トークンの同一性を、未提出の pending review の作成／削除プローブで検証します。トークンはファイルに書かれず、出力にも現れません。</p>
+      <h3>Token verification</h3>
+      <p>Before publishing, the App token's identity is verified with a create/delete probe of an unsubmitted pending review. The token is never written to a file or exposed in outputs.</p>
     </div>
   </div>
   <div class="callout warn">
-    <p><strong>これは OS サンドボックスではありません。</strong> レビューエージェントの制限は OpenCode のツール権限による境界です。信頼できるランナーで実行し、<code>pull-requests: write</code> は必要範囲に留めてください。v2 のレビュー経路が受け付ける prompt は空か <code>/pr-review</code> のみで、自由文のレビュー観点指定は <code>runtime: v1</code> でのみ可能です（例: <code>prompt: Focus on security and performance.</code>）。review-only の v1 には OpenCode v1.2.14 以降が必要です。</p>
+    <p><strong>This is not an OS sandbox.</strong> The review agent's restrictions are a boundary enforced by OpenCode tool permissions. Run it on a trusted runner and keep <code>pull-requests: write</code> to the minimum necessary scope. The v2 review path accepts only an empty prompt or <code>/pr-review</code>; free-text review focus is available only with <code>runtime: v1</code> (e.g. <code>prompt: Focus on security and performance.</code>). Review-only v1 requires OpenCode v1.2.14 or later.</p>
   </div>
-  <p>直接 action から review-only を使う場合は <code>review-only: 'true'</code>、<code>use-bundled-toolkit: 'true'</code>（必須）、完全な <code>pr-review-ref</code> のコミット SHA、対象 PR の URL と head SHA が必要です。review-only 実行では OpenCode バイナリのキャッシュを使いません。</p>
+  <p>To use review-only from the direct action, you need <code>review-only: 'true'</code>, <code>use-bundled-toolkit: 'true'</code> (required), the full commit SHA for <code>pr-review-ref</code>, and the target PR's URL and head SHA. Review-only runs do not use the OpenCode binary cache.</p>
 </section>
 
 <!-- ============ INPUTS ============ -->
 <section id="inputs">
-  <h2><span class="num">07</span>Inputs リファレンス</h2>
-  <p class="sub">action の全 inputs です。テキストで絞り込めます。Reusable workflows もほぼ同じ inputs を持ち、review 専用項目（<code>review-only</code> 等）は bot 側だけ、<code>runs-on</code> は reusable 側だけにあります。</p>
+  <h2><span class="num">07</span>Inputs reference</h2>
+  <p class="sub">All of the action's inputs, filterable by text. The reusable workflows expose almost the same inputs; <code>runs-on</code> exists only on the reusable side.</p>
   <div class="filterbar">
-    <input type="search" id="inputFilter" placeholder="input 名や説明で絞り込み…" aria-label="Inputs を絞り込み" />
+    <input type="search" id="inputFilter" placeholder="Filter by input name or description…" aria-label="Filter inputs" />
     <span class="count" id="inputCount"></span>
   </div>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>Input</th><th>デフォルト</th><th>説明</th></tr></thead>
+      <thead><tr><th>Input</th><th>Default</th><th>Description</th></tr></thead>
       <tbody id="inputsBody"></tbody>
     </table>
   </div>
-  <p class="small">出力（outputs）: <code>opencode-version</code> / <code>runtime</code> / <code>cache-hit</code>。</p>
+  <p class="small">Outputs: <code>opencode-version</code> / <code>runtime</code> / <code>cache-hit</code>.</p>
 
-  <h3>Sakura AI Engine モデル同期</h3>
-  <p>任意の同期 workflow が、チャット可能な Sakura AI Engine モデルを発見し、カタログに変化があれば PR を自動で開く／更新します。有効化には <code>SAKURA_AI_ENGINE_API_KEY</code> secret が必要です。PR 作成にはリポジトリ標準の <code>GITHUB_TOKEN</code>（<code>contents: write</code> / <code>pull-requests: write</code>）を使い、追加のトークン secret は不要です。ただし <code>GITHUB_TOKEN</code> が起こしたイベントでは新しい workflow は起動しないため、この同期 PR が <code>pull_request</code> workflow を自動でトリガーすることはありません。</p>
+  <h3>Sakura AI Engine model sync</h3>
+  <p>An optional sync workflow discovers chat-capable Sakura AI Engine models and automatically opens or updates a PR when the catalog changes. Enabling it requires the <code>SAKURA_AI_ENGINE_API_KEY</code> secret. PR creation uses the repository's standard <code>GITHUB_TOKEN</code> (<code>contents: write</code> / <code>pull-requests: write</code>); no additional token secret is needed. However, because events created by <code>GITHUB_TOKEN</code> do not start new workflows, this sync PR will not automatically trigger <code>pull_request</code> workflows.</p>
 
   <h3>Releases</h3>
-  <p>リリース workflow は、対象ファイルに変更がある週の<strong>月曜 09:15 JST</strong> に自動実行され、手動では major / minor / patch を指定して実行できます。公開後はメジャーバージョンタグを更新し、SHA ピンを更新する PR を開きます。この「リリース → ピン更新 PR」の循環が、利用者側の SHA ピン留めを常に新鮮に保ちます。</p>
+  <p>The release workflow runs automatically on <strong>Mondays at 09:15 JST</strong> in weeks when target files have changed, and can also be run manually with major / minor / patch specified. After publishing, it updates the major version tag and opens a PR to update the SHA pins. This release → pin-update PR cycle keeps consumers' SHA pins fresh.</p>
 </section>
 
 <!-- ============ SECURITY ============ -->
 <section id="security">
-  <h2><span class="num">08</span>Security — トークンモードと信頼境界</h2>
-  <p class="sub">GitHub トークンの渡し方は2モードあり、トレードオフがはっきり分かれます。</p>
+  <h2><span class="num">08</span>Security — Token modes and trust boundaries</h2>
+  <p class="sub">There are two modes for passing the GitHub token, with clearly different trade-offs.</p>
   <div class="cards">
     <div class="card">
-      <p><span class="tag">デフォルト</span></p>
-      <h3>OIDC → App トークン交換</h3>
-      <p><code>use-github-token: false</code>。workflow の OIDC トークンを OpenCode GitHub App トークンに交換します（<code>id-token: write</code> 必須）。v2 では App トークンも OIDC 資格情報も OpenCode 本体やその子プロセスには渡らず、ランチャーがメモリ内に保持します。<code>gh</code> は未認証です。</p>
+      <p><span class="tag">Default</span></p>
+      <h3>OIDC → App token exchange</h3>
+      <p><code>use-github-token: false</code>. Exchanges the workflow's OIDC token for an OpenCode GitHub App token (<code>id-token: write</code> required). In v2, neither the App token nor the OIDC credentials are passed to OpenCode itself or its child processes; the launcher holds them in memory. <code>gh</code> is unauthenticated.</p>
     </div>
     <div class="card">
-      <p><span class="tag plain">明示的に有効化</span></p>
-      <h3>Workflow トークンを使う</h3>
-      <p><code>use-github-token: true</code>。コードを書かせる実行（<code>git push</code>）はこちらが必要です。ただし token mode では永続化された checkout 資格情報が OpenCode のシェルから読める状態にあり、<strong>トークンはモデルに隔離されていません</strong>。最小権限に絞ってください。</p>
+      <p><span class="tag plain">Explicitly enabled</span></p>
+      <h3>Use the workflow token</h3>
+      <p><code>use-github-token: true</code>. This is required for runs that write code (<code>git push</code>). However, in token mode the persisted checkout credentials are readable from OpenCode's shell, and <strong>the token is not isolated from the model</strong>. Scope it to least privilege.</p>
     </div>
   </div>
   <ol class="guarantees">
-    <li><b>未検証のフォールバックを入れない</b>Runtime 解決で適格な安定版が無い・Releases API が失敗した場合は、推測で入れずに実行を失敗させます。</li>
-    <li><b>公開は検証済みトークンでのみ</b>レビュー公開の既定経路は、同一性プローブを通過した OpenCode App トークンが必須です。不在・不一致は fail-closed です。</li>
-    <li><b>トークンを残さない</b>App トークンはファイルに書き出されず、action の出力にも含まれません。v2 ランチャーはメモリ内でのみ保持します。</li>
-    <li><b>トリガーの信頼ゲート</b>bot のレビューコメント受理は OWNER / MEMBER / COLLABORATOR ＋ mentions 一致の両方が必要です（action を直接呼ぶ場合は呼び出し側の責任でゲートしてください）。</li>
-    <li><b>Reusable workflow の権限上限</b>呼び出し先は <code>contents: read</code> を上限とし、呼び出し側がより強い権限を持っていても引き上げられません。別途渡す <code>GH_TOKEN</code> はこの上限の対象外です。</li>
-    <li><b>Review は読み取り専用が既定</b>review-only のエージェントはデフォルト拒否で、skill・信頼済み参照の読み取り・ネイティブ API ツールだけを許可します。フォーマッタや言語サーバも無効化されます。</li>
+    <li><b>No unverified fallback</b>If runtime resolution finds no eligible stable release or the Releases API fails, the run fails instead of installing a guessed version.</li>
+    <li><b>Publishing only with a verified token</b>The default review-publishing path requires an OpenCode App token that has passed the identity probe. Absence or mismatch is fail-closed.</li>
+    <li><b>Tokens are not retained</b>The App token is never written to a file or included in the action's outputs. The v2 launcher holds it in memory only.</li>
+    <li><b>Trigger trust gate</b>Accepting a bot review comment requires both OWNER / MEMBER / COLLABORATOR authorship and a mentions match (when calling the action directly, gate this on the caller side).</li>
+    <li><b>Permission ceiling for reusable workflows</b>The callee is capped at <code>contents: read</code> and cannot be raised even if the caller holds stronger permissions. A separately passed <code>GH_TOKEN</code> is outside this ceiling.</li>
+    <li><b>Reviews are read-only by default</b>The review-only agent is deny-by-default, allowing only skill reads, trusted reference reads, and the native API tool. Formatters and language servers are also disabled.</li>
   </ol>
 </section>
 
 <!-- ============ PUBLISHING ============ -->
 <section id="publishing">
   <h2><span class="num">09</span>Publishing</h2>
-  <p>このページは <strong>GitHub Pages</strong> で公開中です: <a href="https://dceoy.github.io/opencode-action/">dceoy.github.io/opencode-action</a>。<code>gh-pages</code> ブランチのルートにある <code>index.html</code>（commit <code>9de9821</code>）から配信されています。更新する場合は、<code>gh-pages</code> ブランチの <code>index.html</code> を差し替えてください。</p>
+  <p>This page is published on <strong>GitHub Pages</strong>: <a href="https://dceoy.github.io/opencode-action/">dceoy.github.io/opencode-action</a>. It is served from <code>index.html</code> at the root of the <code>gh-pages</code> branch (commit <code>9de9821</code>). To update it, replace <code>index.html</code> on the <code>gh-pages</code> branch.</p>
 </section>
 
 </main>
@@ -463,18 +463,18 @@ jobs:
         <p><strong>dceoy/opencode-action</strong><br>OpenCode agent in GitHub Actions.<br>License: AGPL-3.0</p>
       </div>
       <div>
-        <p>リポジトリ内ドキュメント<br>
+        <p>Repository documentation<br>
         <a href="https://github.com/dceoy/opencode-action/blob/main/docs/reusable-workflows.md">Reusable workflows</a><br>
         <a href="https://github.com/dceoy/opencode-action/blob/main/docs/pull-request-reviews.md">Pull request reviews</a><br>
         <a href="https://github.com/dceoy/opencode-action/blob/main/docs/custom-providers.md">Custom providers</a></p>
       </div>
       <div>
-        <p>関連プロジェクト<br>
-        <a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a>（pr-review skill の提供元）<br>
+        <p>Related projects<br>
+        <a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a> (source of the pr-review skill)<br>
         <a href="https://opencode.ai">OpenCode</a></p>
       </div>
     </div>
-    <p class="small">本ページの内容はリポジトリの README と docs（v1.1.0 時点）に基づきます。最新の仕様はリポジトリを参照してください。</p>
+    <p class="small">The content of this page is based on the repository's README and docs (as of v1.1.0). Refer to the repository for the latest specification.</p>
   </div>
 </footer>
 
@@ -507,16 +507,16 @@ jobs:
 
   /* ---- flow steps ---- */
   var steps = [
-    { title:"STEP 1 — トリガー",
-      body:"<p><code>pull_request_review_comment</code> イベント（作成時）が起点です。呼び出し側 workflow の <code>if</code> 条件や reusable workflow のゲートで、コメント本文に <code>mentions</code>（デフォルト <code>/opencode</code>, <code>/oc</code>）が含まれ、投稿者が OWNER / MEMBER / COLLABORATOR の場合だけジョブが進みます。固定タスクなら <code>prompt</code> input や <code>workflow_dispatch</code> でも起動できます。</p>" },
-    { title:"STEP 2 — Runtime 解決",
-      body:"<p>action は GitHub Releases をジョブのトークンで照会し、<code>runtime</code>（既定 <code>v2</code>）のメジャーに一致し、ドラフト／プレリリースでなく、<code>minimum-release-age</code>（既定 24h）以上前に公開された最新の安定版を選び、その正確なバージョンをインストールします。適格な版が無い・API が失敗すれば、未検証の代替を入れずに失敗します。review-only 実行ではバイナリキャッシュを使いません。</p>" },
-    { title:"STEP 3 — トークン交換",
-      body:"<p>デフォルトでは workflow の OIDC トークンを OpenCode GitHub App のトークンと交換します（<code>oidc-base-url</code> 既定 <code>https://api.opencode.ai</code>）。v2 ランチャーは交換を OpenCode 起動前に行い、App トークンをメモリ内に保持します。OpenCode 本体とその子プロセスには、App トークンも OIDC 要求資格情報も渡りません。<code>use-github-token: true</code> の場合はこの交換ではなく workflow トークンを使うモードになります。</p>" },
-    { title:"STEP 4 — OpenCode 実行",
-      body:"<p><code>model</code>（<code>provider/model</code> 形式）と <code>agent</code>（既定 <code>build</code>、スラッシュコマンドで上書き可）、プロバイダの API key を環境変数で渡して OpenCode を実行します。<code>timeout-minutes</code>（既定 60）で打ち切ります。<code>share: true</code> でセッション共有も可能です。通常実行では同梱 toolkit の provider 設定（Sakura 等）が入ります（<code>use-bundled-toolkit</code>）。</p>" },
-    { title:"STEP 5 — 返信・公開",
-      body:"<p>v2 のデフォルト（OIDC）モードでは、ランチャーが CLI の JSON 出力から最終アシスタントメッセージだけを取り出し、元のレビューコメントスレッドのルートへ返信として投稿します。dispatch や固定 prompt の実行では何も投稿しません。review-only 実行では、検証済みトークンで対象コミットに紐づく <code>COMMENT</code> レビューが1件だけ公開されます。</p>" }
+    { title:"STEP 1 — Trigger",
+      body:"<p>It starts with the <code>pull_request_review_comment</code> event (on creation). The job proceeds only when, via the caller workflow's <code>if</code> condition or the reusable workflow's gate, the comment body contains one of the <code>mentions</code> (default <code>/opencode</code>, <code>/oc</code>) and the author is an OWNER / MEMBER / COLLABORATOR. For fixed tasks, you can also start it with the <code>prompt</code> input or <code>workflow_dispatch</code>.</p>" },
+    { title:"STEP 2 — Runtime resolution",
+      body:"<p>The action queries GitHub Releases with the job token, selects the latest stable release that matches the <code>runtime</code> major (default <code>v2</code>), is not a draft or prerelease, and was published at least <code>minimum-release-age</code> (default 24h) ago, then installs that exact version. If there is no eligible version or the API fails, it fails rather than installing an unverified alternative. Review-only runs do not use the binary cache.</p>" },
+    { title:"STEP 3 — Token exchange",
+      body:"<p>By default, the workflow's OIDC token is exchanged for an OpenCode GitHub App token (<code>oidc-base-url</code> defaults to <code>https://api.opencode.ai</code>). The v2 launcher performs the exchange before starting OpenCode and holds the App token in memory. Neither the App token nor the OIDC request credentials are passed to OpenCode itself or its child processes. With <code>use-github-token: true</code>, the workflow token is used instead of this exchange.</p>" },
+    { title:"STEP 4 — Run OpenCode",
+      body:"<p>OpenCode runs with the <code>model</code> (in <code>provider/model</code> format), the <code>agent</code> (default <code>build</code>, overridable with a slash command), and the provider's API key passed via environment variables. It is cut off by <code>timeout-minutes</code> (default 60). Session sharing is also available with <code>share: true</code>. Normal runs include the bundled toolkit's provider configuration (e.g. Sakura) (<code>use-bundled-toolkit</code>).</p>" },
+    { title:"STEP 5 — Reply / Publish",
+      body:"<p>In v2's default (OIDC) mode, the launcher extracts only the final assistant message from the CLI's JSON output and posts it as a reply to the root of the original review comment thread. Dispatch and fixed-prompt runs post nothing. In review-only runs, a single <code>COMMENT</code> review tied to the target commit is published with the verified token.</p>" }
   ];
   var detail = document.getElementById("flowDetail");
   var flowBtns = document.querySelectorAll(".flow button");
@@ -548,18 +548,18 @@ jobs:
   /* ---- runtime compare ---- */
   var rtRows = {
     v2: [
-      ["起動方法","<code>opencode run --standalone</code> で実行します。"],
-      ["資格情報","GitHub 資格情報は OpenCode の環境に渡されず、<code>gh</code> は未認証。App トークンはランチャーがメモリ内に保持します。"],
-      ["返信の投稿","OIDC モードではランチャーが最終メッセージのみをレビューコメントのスレッドへ投稿。コードを書かせるには <code>use-github-token: true</code> ＋永続化した checkout 資格情報が必要です。"],
-      ["PR レビューの prompt","空か <code>/pr-review</code> のみ受理。自由文の観点指定は不可。対象イベントは <code>pull_request</code> / <code>pull_request_target</code> / 手動 dispatch のみ。"],
-      ["レビュー公開","ランチャーが保持するレビュー要求を、OpenCode の正常終了後に App 同一性を検証してから提出します。"]
+      ["How it runs","<code>opencode run --standalone</code>."],
+      ["Credentials","GitHub credentials are not passed into OpenCode's environment, and <code>gh</code> is unauthenticated. The launcher holds the App token in memory."],
+      ["Posting replies","In OIDC mode, the launcher posts only the final message to the review comment thread. To let it write code, you need <code>use-github-token: true</code> plus persisted checkout credentials."],
+      ["PR review prompt","Accepts only an empty prompt or <code>/pr-review</code>. Free-text focus is not allowed. Eligible events are only <code>pull_request</code> / <code>pull_request_target</code> / manual dispatch."],
+      ["Review publishing","Submits the review request held by the launcher only after OpenCode exits successfully and the App identity has been verified."]
     ],
     v1: [
-      ["起動方法","従来世代の OpenCode を解決して実行します（review-only には v1.2.14 以降が必要）。"],
-      ["資格情報","OIDC 交換は <code>opencode github run</code> の内側で行われます。アダプタが呼び出しごとに資格情報を解決します。"],
-      ["返信の投稿","トークンモードでは OpenCode 側から GitHub API の書き込みが可能で、<code>/oc fix this</code> のようなコード修正は書き込みスコープの <code>GH_TOKEN</code> が別途必要です。"],
-      ["PR レビューの prompt","<code>/pr-review</code> に加えて、平文でレビュー観点を指定できます（例: <code>Focus on security and performance.</code>）。"],
-      ["レビュー公開","アダプタ経由で公開し、モデルが GET で永続化されたレビューを検証します（bounded なレシートが返ります）。"]
+      ["How it runs","Resolves and runs the previous-generation OpenCode (review-only requires v1.2.14 or later)."],
+      ["Credentials","The OIDC exchange happens inside <code>opencode github run</code>. The adapter resolves credentials on each call."],
+      ["Posting replies","In token mode, OpenCode can write via the GitHub API, and code fixes such as <code>/oc fix this</code> additionally require a <code>GH_TOKEN</code> with write scope."],
+      ["PR review prompt","In addition to <code>/pr-review</code>, you can specify a review focus in plain text (e.g. <code>Focus on security and performance.</code>)."],
+      ["Review publishing","Publishes via the adapter, and the model verifies the persisted review with a GET (a bounded receipt is returned)."]
     ]
   };
   var rtBody = document.getElementById("rtBody");
@@ -579,20 +579,20 @@ jobs:
 
   /* ---- inputs table + filter ---- */
   var inputs = [
-    ["model","必須","Model（<code>provider/model</code> 形式）。"],
-    ["agent","<code>build</code>","Primary agent。スラッシュコマンドで上書き可。review-only では固定の制限付きエージェントに置き換わります。"],
-    ["prompt","イベントのコメント","トリガーコメントの代わりに使う固定 prompt。"],
-    ["mentions","<code>/opencode,/oc</code>","カンマ区切りのトリガー語句。"],
-    ["variant","—","Provider 固有の reasoning effort 等。対応が明示されたモデルの場合だけ指定します。"],
-    ["share","<code>false</code>","OpenCode セッションを共有します。"],
-    ["use-github-token","<code>false</code>","既定の App トークンフローの代わりに workflow トークンを使います。"],
-    ["runtime","<code>v2</code>","Runtime 世代（<code>v1</code> または <code>v2</code>）。"],
-    ["minimum-release-age","<code>24h</code>","選択する安定版リリースの最小経過時間（例: <code>7d</code>、<code>0s</code>）。"],
-    ["use-bundled-toolkit","<code>true</code>","通常実行では同梱 provider 設定を、review-only では信頼済みレビューブリッジをインストールします。"],
-    ["review-only","<code>false</code>","隔離されたレビュー実行を有効化し、上流 <code>pr-review</code> をインストールします。"],
-    ["pr-review-ref","呼び出し側が与える SHA","レビュー skill を提供する <code>pr-loop</code> の不変コミット。"],
-    ["timeout-minutes","<code>60</code>","OpenCode を停止するまでの分数。"],
-    ["oidc-base-url","<code>https://api.opencode.ai</code>","カスタム GitHub App 導入向けの OIDC 交換 URL。"]
+    ["model","Required","The model (in <code>provider/model</code> format)."],
+    ["agent","<code>build</code>","The primary agent. Overridable with a slash command. In review-only mode it is replaced by a fixed restricted agent."],
+    ["prompt","The event comment","A fixed prompt to use instead of the trigger comment."],
+    ["mentions","<code>/opencode,/oc</code>","Comma-separated trigger phrases."],
+    ["variant","—","Provider-specific settings such as reasoning effort. Specify only for models with explicit support."],
+    ["share","<code>false</code>","Shares the OpenCode session."],
+    ["use-github-token","<code>false</code>","Uses the workflow token instead of the default App token flow."],
+    ["runtime","<code>v2</code>","The runtime generation (<code>v1</code> or <code>v2</code>)."],
+    ["minimum-release-age","<code>24h</code>","The minimum age of the stable release to select (e.g. <code>7d</code>, <code>0s</code>)."],
+    ["use-bundled-toolkit","<code>true</code>","For normal runs, installs the bundled provider configuration; for review-only runs, installs the trusted review bridge."],
+    ["review-only","<code>false</code>","Enables isolated review runs and installs the upstream <code>pr-review</code>."],
+    ["pr-review-ref","SHA supplied by the caller","The immutable commit of <code>pr-loop</code> that provides the review skill."],
+    ["timeout-minutes","<code>60</code>","Minutes before OpenCode is stopped."],
+    ["oidc-base-url","<code>https://api.opencode.ai</code>","The OIDC exchange URL, for custom GitHub App deployments."]
   ];
   var inputsBody = document.getElementById("inputsBody");
   var inputCount = document.getElementById("inputCount");
@@ -604,7 +604,7 @@ jobs:
     });
     inputsBody.innerHTML = rows.length ? rows.map(function(r){
       return "<tr><td><code>" + r[0] + "</code></td><td>" + r[1] + "</td><td>" + r[2] + "</td></tr>";
-    }).join("") : "<tr><td colspan=\"3\">一致する input はありません。</td></tr>";
+    }).join("") : "<tr><td colspan=\"3\">No matching inputs.</td></tr>";
     inputCount.textContent = rows.length + " / " + inputs.length + " inputs";
   }
   document.getElementById("inputFilter").addEventListener("input", function(e){ renderInputs(e.target.value); });
