@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>opencode-action Guide — OpenCode agent in GitHub Actions</title>
+<style>
+  :root{
+    --bg:#f7f5f0; --surface:#fffdf8; --surface-2:#efece4; --ink:#1c1a15; --ink-2:#55503f;
+    --line:#ddd6c6; --accent:#b3540a; --accent-ink:#8f4206; --accent-soft:#f6e3d3;
+    --code-bg:#211d16; --code-ink:#f2ead8; --code-dim:#a89e83; --ok:#2e6b34; --warn:#9a6a00;
+    --radius:10px;
+    --font-sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",-apple-system,"Segoe UI",sans-serif;
+    --font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14120e; --surface:#1d1a14; --surface-2:#262218; --ink:#ece5d3; --ink-2:#b3a98f;
+      --line:#3a3527; --accent:#e07f2e; --accent-ink:#f09a4e; --accent-soft:#3a2812;
+      --code-bg:#0d0b08; --code-ink:#f2ead8; --code-dim:#8d8265; --ok:#7fc483; --warn:#e0b34e;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important} }
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);line-height:1.75;font-size:16px}
+  button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:2.25rem}
+  a{color:var(--accent-ink)}
+  code{font-family:var(--font-mono);font-size:.88em;background:var(--surface-2);padding:.08em .38em;border-radius:5px;word-break:break-all}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 20px}
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;gap:4px;align-items:center;overflow-x:auto;padding-top:8px;padding-bottom:8px;scrollbar-width:none}
+  nav .wrap::-webkit-scrollbar{display:none}
+  nav a{color:var(--ink-2);text-decoration:none;font-size:.86rem;font-weight:600;padding:8px 10px;border-radius:8px;white-space:nowrap}
+  nav a:hover{color:var(--ink);background:var(--surface-2)}
+  nav a.brand{color:var(--ink);font-family:var(--font-mono);font-size:.92rem}
+  nav a.brand b{color:var(--accent)}
+  /* hero */
+  header{padding:56px 0 8px}
+  .kicker{font-family:var(--font-mono);font-size:.8rem;letter-spacing:.14em;color:var(--accent-ink);text-transform:uppercase;margin:0 0 14px}
+  h1{font-size:clamp(1.9rem,5.2vw,3rem);line-height:1.22;margin:0 0 16px;font-weight:800;letter-spacing:-.01em}
+  h1 .mono{font-family:var(--font-mono);font-weight:700}
+  .lede{font-size:1.08rem;color:var(--ink-2);max-width:46em;margin:0 0 26px}
+  .lede strong{color:var(--ink)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 10px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .stat .v{font-family:var(--font-mono);font-size:1.25rem;font-weight:700;line-height:1.3}
+  .stat .k{font-size:.78rem;color:var(--ink-2);margin-top:2px}
+  .hero-links{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 0}
+  .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:.92rem;padding:10px 18px;border-radius:9px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  @media (prefers-color-scheme: dark){ .btn.primary{color:#1c1206} }
+  /* sections */
+  section{padding:44px 0 6px}
+  h2{font-size:1.55rem;line-height:1.35;margin:0 0 8px;font-weight:800}
+  h2 .num{font-family:var(--font-mono);color:var(--accent);font-size:1.05rem;margin-right:10px}
+  h3{font-size:1.12rem;margin:26px 0 6px;font-weight:700}
+  p{margin:0 0 14px}
+  .sub{color:var(--ink-2);max-width:48em;margin-bottom:20px}
+  ul,ol{margin:0 0 14px;padding-left:1.4em}
+  li{margin-bottom:6px}
+  /* code blocks */
+  .codeblock{position:relative;background:var(--code-bg);border-radius:var(--radius);margin:0 0 18px;overflow:hidden}
+  .codeblock .bar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px 0}
+  .codeblock .fname{font-family:var(--font-mono);font-size:.76rem;color:var(--code-dim)}
+  .copybtn{font-family:var(--font-mono);font-size:.76rem;background:transparent;color:var(--code-dim);border:1px solid #4a4433;border-radius:6px;padding:4px 12px;cursor:pointer;min-height:2.25rem}
+  .copybtn:hover{color:var(--code-ink);border-color:var(--code-dim)}
+  .copybtn.done{color:#9fd89f;border-color:#9fd89f}
+  .codeblock pre{margin:0;padding:10px 16px 16px;overflow-x:auto}
+  .codeblock code{background:none;padding:0;color:var(--code-ink);font-size:.83rem;line-height:1.65;word-break:normal;white-space:pre}
+  .codeblock .c{color:var(--code-dim)}
+  /* flow */
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:6px 0 14px}
+  .flow button{font-family:var(--font-sans);text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 12px 10px;cursor:pointer;color:var(--ink)}
+  .flow button .n{font-family:var(--font-mono);font-size:.72rem;color:var(--accent-ink);display:block;margin-bottom:4px}
+  .flow button .t{font-weight:700;font-size:.9rem;line-height:1.4;display:block}
+  .flow button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+  .flow-detail{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:18px}
+  .flow-detail h3{margin-top:0}
+  .flow-detail p:last-child{margin-bottom:0}
+  @media (max-width:760px){ .flow{grid-template-columns:1fr 1fr} }
+  /* tabs */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0}
+  .tabs button{font-family:var(--font-sans);font-weight:700;font-size:.92rem;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;padding:10px 18px;cursor:pointer}
+  .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);border-color:var(--line);box-shadow:inset 0 3px 0 var(--accent)}
+  .tabpanel{background:var(--surface);border:1px solid var(--line);border-radius:0 var(--radius) var(--radius) var(--radius);padding:22px 22px 8px}
+  .tabpanel[hidden]{display:none}
+  /* tables */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:18px}
+  table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:560px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:.8rem;letter-spacing:.05em;color:var(--ink-2);background:var(--surface-2)}
+  tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+  .filterbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .filterbar input{flex:1;min-width:200px;font-family:var(--font-sans);font-size:.95rem;padding:9px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}
+  .filterbar .count{font-family:var(--font-mono);font-size:.8rem;color:var(--ink-2)}
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+  .card h3{margin-top:0}
+  .card p:last-child,.card ul:last-child{margin-bottom:0}
+  .tag{display:inline-block;font-family:var(--font-mono);font-size:.72rem;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--accent-soft);color:var(--accent-ink);margin-bottom:8px}
+  .tag.plain{background:var(--surface-2);color:var(--ink-2)}
+  /* toggle compare */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  .seg button{font-family:var(--font-sans);font-weight:700;font-size:.92rem;padding:9px 22px;background:var(--surface);color:var(--ink-2);border:none;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  @media (prefers-color-scheme: dark){ .seg button[aria-pressed="true"]{color:#1c1206} }
+  /* callout */
+  .callout{border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--surface);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin-bottom:18px}
+  .callout p:last-child{margin-bottom:0}
+  .callout.warn{border-left-color:var(--warn)}
+  /* guarantees */
+  .guarantees{counter-reset:g;list-style:none;padding:0}
+  .guarantees li{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px 14px 52px;position:relative;margin-bottom:8px}
+  .guarantees li::before{counter-increment:g;content:counter(g,decimal-leading-zero);position:absolute;left:16px;top:14px;font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:.9rem}
+  .guarantees b{display:block;margin-bottom:2px}
+  footer{border-top:1px solid var(--line);margin-top:52px;padding:28px 0 44px;color:var(--ink-2);font-size:.88rem}
+  footer .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  footer a{color:var(--ink-2)}
+  .small{font-size:.86rem;color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<nav aria-label="目次">
+  <div class="wrap">
+    <a class="brand" href="#top">dceoy/<b>opencode-action</b></a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#flow">動作の流れ</a>
+    <a href="#usage">使い方の3形態</a>
+    <a href="#models">Models &amp; secrets</a>
+    <a href="#runtime">Runtime v1 / v2</a>
+    <a href="#review">PR reviews</a>
+    <a href="#inputs">Inputs</a>
+    <a href="#security">Security</a>
+    <a href="#publishing">Publishing</a>
+  </div>
+</nav>
+
+<header id="top">
+  <div class="wrap">
+    <p class="kicker">GitHub Action · OpenCode agent</p>
+    <h1><span class="mono">opencode-action</span> —<br>OpenCode エージェントを GitHub Actions で動かす</h1>
+    <p class="lede"><a href="https://github.com/dceoy/opencode-action">dceoy/opencode-action</a> は、AI コーディングエージェント <strong>OpenCode</strong> を GitHub Actions のジョブとして実行する composite action です。PR の差分へのインラインコメントに <code>/opencode</code>（または <code>/oc</code>）と書くだけでエージェントが起動し、説明・修正提案・コード変更までをその場で行います。手動 dispatch の汎用タスクと、<code>pr-loop</code> の <code>pr-review</code> skill を使った隔離環境での自動 PR レビューにも対応します。</p>
+    <div class="stats">
+      <div class="stat"><div class="v">v1.1.0</div><div class="k">最新リリース（action のピン留め例）</div></div>
+      <div class="stat"><div class="v">v2</div><div class="k">デフォルト runtime（v1 も選択可）</div></div>
+      <div class="stat"><div class="v">24h</div><div class="k">minimum-release-age のデフォルト</div></div>
+      <div class="stat"><div class="v">2</div><div class="k">reusable workflows（bot / review）</div></div>
+      <div class="stat"><div class="v">AGPL-3.0</div><div class="k">ライセンス</div></div>
+    </div>
+    <div class="hero-links">
+      <a class="btn primary" href="https://github.com/dceoy/opencode-action">GitHub リポジトリ →</a>
+      <a class="btn" href="https://github.com/dceoy/opencode-action/blob/main/docs/reusable-workflows.md">Reusable workflows ドキュメント</a>
+      <a class="btn" href="https://opencode.ai">OpenCode 公式サイト</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ QUICK START ============ -->
+<section id="quickstart">
+  <h2><span class="num">01</span>Quick start — 3ステップ</h2>
+  <p class="sub">最小構成は「secret を1つ登録 → workflow を1ファイル追加 → PR の差分にコメント」の3つだけです。</p>
+
+  <h3>1. Provider secret を登録する</h3>
+  <p>リポジトリの <strong>Settings → Secrets and variables → Actions</strong> に、使うモデルプロバイダの API key を登録します。下の例では OpenCode の <code>OPENCODE_API_KEY</code> を使います（プロバイダごとの対応表は<a href="#models">Models &amp; secrets</a>）。</p>
+
+  <h3>2. Workflow を追加する</h3>
+  <div class="codeblock">
+    <div class="bar"><span class="fname">.github/workflows/opencode.yml</span><button class="copybtn" type="button">Copy</button></div>
+    <pre><code>---
+name: OpenCode
+on:
+  pull_request_review_comment:
+    types: [created]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  id-token: write
+jobs:
+  opencode:
+    if: contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  <span class="c"># v7.0.1</span>
+        with:
+          persist-credentials: false
+      - name: Run OpenCode
+        uses: dceoy/opencode-action@cda16d479232f0998a3046425dc43747f1c4c66e  <span class="c"># v1.1.0</span>
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          model: opencode-go/kimi-k3</code></pre>
+  </div>
+  <p>デフォルト構成では、workflow の OIDC トークンを OpenCode GitHub App のトークンと交換するため <code>id-token: write</code> が必要です。action 参照はタグではなく<strong>フルコミット SHA にピン留め</strong>するのがこのリポジトリの流儀です。</p>
+
+  <h3>3. PR の差分にインラインコメントを書く</h3>
+  <div class="codeblock">
+    <div class="bar"><span class="fname">PR review comment</span><button class="copybtn" type="button">Copy</button></div>
+    <pre><code>/opencode explain this change
+
+<span class="c"># 短いトリガーも使えます</span>
+/oc suggest a fix</code></pre>
+  </div>
+  <p>エージェントがそのコメントスレッドに返信します。トリガー語は <code>mentions</code> input（デフォルト <code>/opencode,/oc</code>）で変更できます。</p>
+</section>
+
+<!-- ============ FLOW ============ -->
+<section id="flow">
+  <h2><span class="num">02</span>動作の流れ</h2>
+  <p class="sub">コメントから返信までの5段階です。各ステップを選ぶと詳細が切り替わります。</p>
+  <div class="flow" role="group" aria-label="実行フロー">
+    <button type="button" data-step="0" aria-pressed="true"><span class="n">STEP 1</span><span class="t">トリガー</span></button>
+    <button type="button" data-step="1" aria-pressed="false"><span class="n">STEP 2</span><span class="t">Runtime 解決</span></button>
+    <button type="button" data-step="2" aria-pressed="false"><span class="n">STEP 3</span><span class="t">トークン交換</span></button>
+    <button type="button" data-step="3" aria-pressed="false"><span class="n">STEP 4</span><span class="t">OpenCode 実行</span></button>
+    <button type="button" data-step="4" aria-pressed="false"><span class="n">STEP 5</span><span class="t">返信・公開</span></button>
+  </div>
+  <div class="flow-detail" id="flowDetail" aria-live="polite"></div>
+  <div class="callout">
+    <p><strong>v2 の資格情報の扱いが要点です。</strong> デフォルト（OIDC）モードでは GitHub の資格情報は OpenCode の環境に渡されず、<code>gh</code> は未認証で動きます。ランチャーだけが最終メッセージをレビューコメントのスレッドへ返信として投稿します。コードを書かせる（<code>git push</code> させる）場合は <code>use-github-token: true</code> ＋ checkout 資格情報の永続化 ＋ 書き込み可能なトークンが必要です。</p>
+  </div>
+</section>
+
+<!-- ============ USAGE ============ -->
+<section id="usage">
+  <h2><span class="num">03</span>使い方の3形態</h2>
+  <p class="sub">直接 action を呼ぶ方法と、呼び出し側が小さく済む reusable workflow が2つ用意されています。</p>
+  <div class="tabs" role="tablist" aria-label="使い方">
+    <button type="button" role="tab" id="tab-direct" aria-controls="panel-direct" aria-selected="true">Direct action</button>
+    <button type="button" role="tab" id="tab-bot" aria-controls="panel-bot" aria-selected="false">opencode-bot.yml</button>
+    <button type="button" role="tab" id="tab-review" aria-controls="panel-review" aria-selected="false">opencode-review.yml</button>
+  </div>
+
+  <div class="tabpanel" id="panel-direct" role="tabpanel" aria-labelledby="tab-direct">
+    <p><span class="tag">基本形</span></p>
+    <p>自分の workflow の step から <code>uses: dceoy/opencode-action@&lt;SHA&gt;</code> で直接呼びます。上の Quick start がこの形です。トリガー（review comment / dispatch / 任意イベント）、権限、checkout の有無をすべて自分で制御したい場合に使います。</p>
+    <ul>
+      <li><code>workflow_dispatch</code> で直接使う場合も <code>workflow_call</code> と同じ inputs が使え、<code>model</code> と空でない <code>prompt</code> が実行条件です。</li>
+      <li>出力は <code>opencode-version</code>、<code>runtime</code>（<code>v1</code>/<code>v2</code>）、<code>cache-hit</code> の3つ。</li>
+    </ul>
+  </div>
+
+  <div class="tabpanel" id="panel-bot" role="tabpanel" aria-labelledby="tab-bot" hidden>
+    <p><span class="tag">Reusable workflow</span></p>
+    <p><code>/opencode</code>・<code>/oc</code> のインライン PR レビューコメント、手動 dispatch、固定 <code>prompt</code> による任意イベント向けの汎用 bot です。レビューコメントは <strong>OWNER / MEMBER / COLLABORATOR</strong> のコメントで、かつ <code>mentions</code> の語句を含む場合だけ受理されます（<code>model</code> を渡してもこの条件は回避できません）。コメント以外のイベントでは空でない <code>prompt</code> が必須です。</p>
+    <div class="codeblock">
+      <div class="bar"><span class="fname">caller workflow</span><button class="copybtn" type="button">Copy</button></div>
+      <pre><code>---
+name: OpenCode
+on:
+  pull_request_review_comment:
+    types: [created]
+jobs:
+  opencode:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    uses: dceoy/opencode-action/.github/workflows/opencode-bot.yml@cda16d479232f0998a3046425dc43747f1c4c66e  <span class="c"># v1.1.0</span>
+    with:
+      model: opencode-go/kimi-k3
+    secrets:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}</code></pre>
+    </div>
+    <p class="small">v2 では bot が返信を投稿するのは <code>pull_request_review_comment</code> イベントのときだけです。<code>workflow_dispatch</code> と固定 prompt の実行ではランチャーは何も投稿しません。</p>
+  </div>
+
+  <div class="tabpanel" id="panel-review" role="tabpanel" aria-labelledby="tab-review" hidden>
+    <p><span class="tag">Reusable workflow</span> <span class="tag plain">review-only</span></p>
+    <p><code>pull_request</code> イベントで自動レビューを行います。<a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a> の外部 <code>pr-review</code> skill を SHA ピン留めでインストールし、隔離された review-only 環境で実行します（詳細は<a href="#review">PR reviews</a>）。デフォルトモデルは当面無料の <code>opencode/deepseek-v4.1-flash-free</code> で、プロバイダの API key なしで試せます。</p>
+    <div class="codeblock">
+      <div class="bar"><span class="fname">caller workflow</span><button class="copybtn" type="button">Copy</button></div>
+      <pre><code>---
+name: OpenCode review
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+jobs:
+  review:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      id-token: write
+      actions: read
+    uses: dceoy/opencode-action/.github/workflows/opencode-review.yml@cda16d479232f0998a3046425dc43747f1c4c66e  <span class="c"># v1.1.0</span></code></pre>
+    </div>
+    <p class="small">信頼できる同一リポジトリの PR を前提とした例です。公開フォークからの PR では GitHub が secrets を渡さず <code>GITHUB_TOKEN</code> も読み取り専用になります（Dependabot PR も同様）。</p>
+  </div>
+</section>
+
+<!-- ============ MODELS ============ -->
+<section id="models">
+  <h2><span class="num">04</span>Models and secrets</h2>
+  <p class="sub"><code>model</code> input は <code>provider/model</code> 形式で指定し、対応する API key を secret として渡します。プロバイダ側のアカウントに十分なクレジット／クォータが必要です。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Provider</th><th>モデルの例</th><th>Secret</th></tr></thead>
+      <tbody>
+        <tr><td>OpenCode</td><td><code>opencode-go/kimi-k3</code></td><td><code>OPENCODE_API_KEY</code></td></tr>
+        <tr><td>OpenRouter</td><td><code>openrouter/openrouter/free</code></td><td><code>OPENROUTER_API_KEY</code></td></tr>
+        <tr><td>Anthropic</td><td><code>anthropic/claude-opus-5</code></td><td><code>ANTHROPIC_API_KEY</code></td></tr>
+        <tr><td>OpenAI</td><td><code>openai/gpt-5.6-sol</code></td><td><code>OPENAI_API_KEY</code></td></tr>
+        <tr><td>Sakura AI Engine（同梱済み）</td><td><code>sakura/gpt-oss-120b</code></td><td><code>SAKURA_AI_ENGINE_API_KEY</code></td></tr>
+        <tr><td>Custom provider</td><td><code>myprovider/my-model</code></td><td>プロバイダ固有</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Reusable workflows は上記に加えて <code>GOOGLE_GENERATIVE_AI_API_KEY</code>、<code>DEEPSEEK_API_KEY</code>、<code>XAI_API_KEY</code>、<code>GROQ_API_KEY</code>、<code>CEREBRAS_API_KEY</code>、<code>MOONSHOT_API_KEY</code> も secret として受け付けます。選んだモデルに必要な secret だけを渡してください。</p>
+  <h3>Custom providers</h3>
+  <p>OpenCode に組み込まれていないプロバイダ（多くは OpenAI 互換 API）は、リポジトリルートの <code>opencode.json</code> で定義できます。Sakura AI Engine は例外で、同梱 toolkit に <code>sakura</code> プロバイダとして設定済みのため、通常は <code>opencode.json</code> 不要で <code>sakura/*</code> モデルが使えます。</p>
+  <div class="codeblock">
+    <div class="bar"><span class="fname">opencode.json</span><button class="copybtn" type="button">Copy</button></div>
+    <pre><code>{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "myprovider": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "My Provider",
+      "options": {
+        "baseURL": "https://api.example.com/v1",
+        "apiKey": "{env:MYPROVIDER_API_KEY}"
+      },
+      "models": {
+        "my-model": { "name": "My Model" }
+      }
+    }
+  }
+}</code></pre>
+  </div>
+  <div class="callout warn">
+    <p><strong>プロジェクト側の provider 設定は「信頼済み入力」として扱ってください。</strong> 設定は <code>baseURL</code> やリクエストヘッダを制御できるため、信頼できない変更が入ると資格情報が別エンドポイントへ送られかねません。workflow のトリガーと secret へのアクセスを適切に制限してください。なお review-only 実行ではプロジェクト設定は無効化されるため、カスタムプロバイダは使えません（組み込みプロバイダを使ってください）。</p>
+  </div>
+</section>
+
+<!-- ============ RUNTIME ============ -->
+<section id="runtime">
+  <h2><span class="num">05</span>Runtime — v1 と v2</h2>
+  <p class="sub"><code>runtime</code> input で OpenCode の世代を選びます。どちらも「<code>minimum-release-age</code>（デフォルト 24h）以上前に公開された最新の安定版」を GitHub Releases から解決して正確なバージョンをインストールします。適格なリリースが無い・API が失敗した場合は、未検証のフォールバックを入れずに<strong>実行を失敗</strong>させます。</p>
+  <div class="seg" role="group" aria-label="Runtime 比較">
+    <button type="button" id="segV2" aria-pressed="true">v2（デフォルト）</button>
+    <button type="button" id="segV1" aria-pressed="false">v1</button>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>観点</th><th id="rtColHead">OpenCode v2</th></tr></thead>
+      <tbody id="rtBody"></tbody>
+    </table>
+  </div>
+  <p class="small"><code>minimum-release-age</code> は <code>7d</code> で遅延を延ばし、<code>0s</code> で無効化できます。対応単位は <code>s</code> / <code>m</code> / <code>h</code> / <code>d</code> / <code>w</code>。ドラフト・プレリリース・他メジャーのバージョンは除外されます。</p>
+</section>
+
+<!-- ============ REVIEW ============ -->
+<section id="review">
+  <h2><span class="num">06</span>Pull request reviews — 隔離された review-only 実行</h2>
+  <p class="sub"><code>opencode-review.yml</code> は、通常の bot 実行とは別設計の「読み取り専用レビュー」です。レビューの振る舞い自体は同梱せず、<code>pr-loop</code> の <code>pr-review</code> skill を不変のコミット SHA で外部から取り込みます（旧来の同梱 <code>/review-pr</code> コマンドや専用エージェントは廃止済み）。</p>
+  <div class="cards">
+    <div class="card">
+      <h3>対象の限定</h3>
+      <p>ドラフトでなく、bot でなく、信頼できるリポジトリ協力者が開いた PR のみが対象です。モデル選択によってこの制限は変わりません。</p>
+    </div>
+    <div class="card">
+      <h3>使い捨ての HOME</h3>
+      <p>review-only 実行はランナーの一時ディレクトリ配下の使い捨て HOME（XDG パスも分離）を使い、終了時に片付けます。プロジェクト設定と外部 skill 探索は無効化され、OpenCode は新規インストールされます。</p>
+    </div>
+    <div class="card">
+      <h3>凍結された証拠</h3>
+      <p>リポジトリ内容は checkout のファイルではなく、Git の blob（<code>git/blobs/&lt;SHA&gt;</code>）経由で読みます。checkout のシンボリックリンクがランナーの資格情報へ読み取りを誘導することはありません。</p>
+    </div>
+    <div class="card">
+      <h3>公開は COMMENT 1件のみ</h3>
+      <p>上流 skill は base/head スナップショットを凍結し、根拠と照合した所見だけを、対象コミットに紐づく <code>COMMENT</code> レビューとして1件公開します。Approve・変更要求・マージ・リポジトリ変更は決して行いません。</p>
+    </div>
+    <div class="card">
+      <h3>制限付き API アダプタ</h3>
+      <p>GitHub 操作はネイティブな <code>pr-review-api</code> ツール経由の構造化リクエストのみ。シェル式・任意の CLI フラグ・ファイル入力は受け付けず、不正なペイロードは fail-closed で拒否されます。</p>
+    </div>
+    <div class="card">
+      <h3>トークンの検証</h3>
+      <p>公開前に App トークンの同一性を、未提出の pending review の作成／削除プローブで検証します。トークンはファイルに書かれず、出力にも現れません。</p>
+    </div>
+  </div>
+  <div class="callout warn">
+    <p><strong>これは OS サンドボックスではありません。</strong> レビューエージェントの制限は OpenCode のツール権限による境界です。信頼できるランナーで実行し、<code>pull-requests: write</code> は必要範囲に留めてください。v2 のレビュー経路が受け付ける prompt は空か <code>/pr-review</code> のみで、自由文のレビュー観点指定は <code>runtime: v1</code> でのみ可能です（例: <code>prompt: Focus on security and performance.</code>）。review-only の v1 には OpenCode v1.2.14 以降が必要です。</p>
+  </div>
+  <p>直接 action から review-only を使う場合は <code>review-only: 'true'</code>、<code>use-bundled-toolkit: 'true'</code>（必須）、完全な <code>pr-review-ref</code> のコミット SHA、対象 PR の URL と head SHA が必要です。review-only 実行では OpenCode バイナリのキャッシュを使いません。</p>
+</section>
+
+<!-- ============ INPUTS ============ -->
+<section id="inputs">
+  <h2><span class="num">07</span>Inputs リファレンス</h2>
+  <p class="sub">action の全 inputs です。テキストで絞り込めます。Reusable workflows もほぼ同じ inputs を持ち、review 専用項目（<code>review-only</code> 等）は bot 側だけ、<code>runs-on</code> は reusable 側だけにあります。</p>
+  <div class="filterbar">
+    <input type="search" id="inputFilter" placeholder="input 名や説明で絞り込み…" aria-label="Inputs を絞り込み" />
+    <span class="count" id="inputCount"></span>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Input</th><th>デフォルト</th><th>説明</th></tr></thead>
+      <tbody id="inputsBody"></tbody>
+    </table>
+  </div>
+  <p class="small">出力（outputs）: <code>opencode-version</code> / <code>runtime</code> / <code>cache-hit</code>。</p>
+
+  <h3>Sakura AI Engine モデル同期</h3>
+  <p>任意の同期 workflow が、チャット可能な Sakura AI Engine モデルを発見し、カタログに変化があれば PR を自動で開く／更新します。有効化には <code>SAKURA_AI_ENGINE_API_KEY</code> secret が必要です。PR 作成にはリポジトリ標準の <code>GITHUB_TOKEN</code>（<code>contents: write</code> / <code>pull-requests: write</code>）を使い、追加のトークン secret は不要です。ただし <code>GITHUB_TOKEN</code> が起こしたイベントでは新しい workflow は起動しないため、この同期 PR が <code>pull_request</code> workflow を自動でトリガーすることはありません。</p>
+
+  <h3>Releases</h3>
+  <p>リリース workflow は、対象ファイルに変更がある週の<strong>月曜 09:15 JST</strong> に自動実行され、手動では major / minor / patch を指定して実行できます。公開後はメジャーバージョンタグを更新し、SHA ピンを更新する PR を開きます。この「リリース → ピン更新 PR」の循環が、利用者側の SHA ピン留めを常に新鮮に保ちます。</p>
+</section>
+
+<!-- ============ SECURITY ============ -->
+<section id="security">
+  <h2><span class="num">08</span>Security — トークンモードと信頼境界</h2>
+  <p class="sub">GitHub トークンの渡し方は2モードあり、トレードオフがはっきり分かれます。</p>
+  <div class="cards">
+    <div class="card">
+      <p><span class="tag">デフォルト</span></p>
+      <h3>OIDC → App トークン交換</h3>
+      <p><code>use-github-token: false</code>。workflow の OIDC トークンを OpenCode GitHub App トークンに交換します（<code>id-token: write</code> 必須）。v2 では App トークンも OIDC 資格情報も OpenCode 本体やその子プロセスには渡らず、ランチャーがメモリ内に保持します。<code>gh</code> は未認証です。</p>
+    </div>
+    <div class="card">
+      <p><span class="tag plain">明示的に有効化</span></p>
+      <h3>Workflow トークンを使う</h3>
+      <p><code>use-github-token: true</code>。コードを書かせる実行（<code>git push</code>）はこちらが必要です。ただし token mode では永続化された checkout 資格情報が OpenCode のシェルから読める状態にあり、<strong>トークンはモデルに隔離されていません</strong>。最小権限に絞ってください。</p>
+    </div>
+  </div>
+  <ol class="guarantees">
+    <li><b>未検証のフォールバックを入れない</b>Runtime 解決で適格な安定版が無い・Releases API が失敗した場合は、推測で入れずに実行を失敗させます。</li>
+    <li><b>公開は検証済みトークンでのみ</b>レビュー公開の既定経路は、同一性プローブを通過した OpenCode App トークンが必須です。不在・不一致は fail-closed です。</li>
+    <li><b>トークンを残さない</b>App トークンはファイルに書き出されず、action の出力にも含まれません。v2 ランチャーはメモリ内でのみ保持します。</li>
+    <li><b>トリガーの信頼ゲート</b>bot のレビューコメント受理は OWNER / MEMBER / COLLABORATOR ＋ mentions 一致の両方が必要です（action を直接呼ぶ場合は呼び出し側の責任でゲートしてください）。</li>
+    <li><b>Reusable workflow の権限上限</b>呼び出し先は <code>contents: read</code> を上限とし、呼び出し側がより強い権限を持っていても引き上げられません。別途渡す <code>GH_TOKEN</code> はこの上限の対象外です。</li>
+    <li><b>Review は読み取り専用が既定</b>review-only のエージェントはデフォルト拒否で、skill・信頼済み参照の読み取り・ネイティブ API ツールだけを許可します。フォーマッタや言語サーバも無効化されます。</li>
+  </ol>
+</section>
+
+<!-- ============ PUBLISHING ============ -->
+<section id="publishing">
+  <h2><span class="num">09</span>Publishing</h2>
+  <p>このページは <a href="https://github.com/dceoy/pr-loop">pr-loop の解説ページ</a>と同じ方式で、単一 HTML ファイルとして <strong>GitHub Pages</strong> で公開されます。配信先は <a href="https://dceoy.github.io/opencode-action/">dceoy.github.io/opencode-action</a>（<code>gh-pages</code> ブランチの <code>index.html</code> ＋ <code>.nojekyll</code>）です。リポジトリ本体（<code>main</code>）には手を入れず、Pages 専用ブランチからのみ配信します。</p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <p><strong>dceoy/opencode-action</strong><br>OpenCode agent in GitHub Actions.<br>License: AGPL-3.0</p>
+      </div>
+      <div>
+        <p>リポジトリ内ドキュメント<br>
+        <a href="https://github.com/dceoy/opencode-action/blob/main/docs/reusable-workflows.md">Reusable workflows</a><br>
+        <a href="https://github.com/dceoy/opencode-action/blob/main/docs/pull-request-reviews.md">Pull request reviews</a><br>
+        <a href="https://github.com/dceoy/opencode-action/blob/main/docs/custom-providers.md">Custom providers</a></p>
+      </div>
+      <div>
+        <p>関連プロジェクト<br>
+        <a href="https://github.com/dceoy/pr-loop">dceoy/pr-loop</a>（pr-review skill の提供元）<br>
+        <a href="https://opencode.ai">OpenCode</a></p>
+      </div>
+    </div>
+    <p class="small">本ページの内容はリポジトリの README と docs（v1.1.0 時点）に基づきます。最新の仕様はリポジトリを参照してください。</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---- copy buttons ---- */
+  document.querySelectorAll(".codeblock").forEach(function(block){
+    var btn = block.querySelector(".copybtn");
+    var code = block.querySelector("pre code");
+    if(!btn || !code) return;
+    btn.addEventListener("click", function(){
+      var text = code.textContent;
+      function done(){
+        btn.textContent = "Copied";
+        btn.classList.add("done");
+        setTimeout(function(){ btn.textContent = "Copy"; btn.classList.remove("done"); }, 1600);
+      }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch(e){}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+
+  /* ---- flow steps ---- */
+  var steps = [
+    { title:"STEP 1 — トリガー",
+      body:"<p><code>pull_request_review_comment</code> イベント（作成時）が起点です。呼び出し側 workflow の <code>if</code> 条件や reusable workflow のゲートで、コメント本文に <code>mentions</code>（デフォルト <code>/opencode</code>, <code>/oc</code>）が含まれ、投稿者が OWNER / MEMBER / COLLABORATOR の場合だけジョブが進みます。固定タスクなら <code>prompt</code> input や <code>workflow_dispatch</code> でも起動できます。</p>" },
+    { title:"STEP 2 — Runtime 解決",
+      body:"<p>action は GitHub Releases をジョブのトークンで照会し、<code>runtime</code>（既定 <code>v2</code>）のメジャーに一致し、ドラフト／プレリリースでなく、<code>minimum-release-age</code>（既定 24h）以上前に公開された最新の安定版を選び、その正確なバージョンをインストールします。適格な版が無い・API が失敗すれば、未検証の代替を入れずに失敗します。review-only 実行ではバイナリキャッシュを使いません。</p>" },
+    { title:"STEP 3 — トークン交換",
+      body:"<p>デフォルトでは workflow の OIDC トークンを OpenCode GitHub App のトークンと交換します（<code>oidc-base-url</code> 既定 <code>https://api.opencode.ai</code>）。v2 ランチャーは交換を OpenCode 起動前に行い、App トークンをメモリ内に保持します。OpenCode 本体とその子プロセスには、App トークンも OIDC 要求資格情報も渡りません。<code>use-github-token: true</code> の場合はこの交換ではなく workflow トークンを使うモードになります。</p>" },
+    { title:"STEP 4 — OpenCode 実行",
+      body:"<p><code>model</code>（<code>provider/model</code> 形式）と <code>agent</code>（既定 <code>build</code>、スラッシュコマンドで上書き可）、プロバイダの API key を環境変数で渡して OpenCode を実行します。<code>timeout-minutes</code>（既定 60）で打ち切ります。<code>share: true</code> でセッション共有も可能です。通常実行では同梱 toolkit の provider 設定（Sakura 等）が入ります（<code>use-bundled-toolkit</code>）。</p>" },
+    { title:"STEP 5 — 返信・公開",
+      body:"<p>v2 のデフォルト（OIDC）モードでは、ランチャーが CLI の JSON 出力から最終アシスタントメッセージだけを取り出し、元のレビューコメントスレッドのルートへ返信として投稿します。dispatch や固定 prompt の実行では何も投稿しません。review-only 実行では、検証済みトークンで対象コミットに紐づく <code>COMMENT</code> レビューが1件だけ公開されます。</p>" }
+  ];
+  var detail = document.getElementById("flowDetail");
+  var flowBtns = document.querySelectorAll(".flow button");
+  function showStep(i){
+    detail.innerHTML = "<h3>" + steps[i].title + "</h3>" + steps[i].body;
+    flowBtns.forEach(function(b, j){ b.setAttribute("aria-pressed", j === i ? "true" : "false"); });
+  }
+  flowBtns.forEach(function(b){
+    b.addEventListener("click", function(){ showStep(parseInt(b.getAttribute("data-step"), 10)); });
+  });
+  showStep(0);
+
+  /* ---- usage tabs ---- */
+  var tabs = [
+    { tab:"tab-direct", panel:"panel-direct" },
+    { tab:"tab-bot", panel:"panel-bot" },
+    { tab:"tab-review", panel:"panel-review" }
+  ];
+  tabs.forEach(function(t){
+    document.getElementById(t.tab).addEventListener("click", function(){
+      tabs.forEach(function(o){
+        var on = o.tab === t.tab;
+        document.getElementById(o.tab).setAttribute("aria-selected", on ? "true" : "false");
+        document.getElementById(o.panel).hidden = !on;
+      });
+    });
+  });
+
+  /* ---- runtime compare ---- */
+  var rtRows = {
+    v2: [
+      ["起動方法","<code>opencode run --standalone</code> で実行します。"],
+      ["資格情報","GitHub 資格情報は OpenCode の環境に渡されず、<code>gh</code> は未認証。App トークンはランチャーがメモリ内に保持します。"],
+      ["返信の投稿","OIDC モードではランチャーが最終メッセージのみをレビューコメントのスレッドへ投稿。コードを書かせるには <code>use-github-token: true</code> ＋永続化した checkout 資格情報が必要です。"],
+      ["PR レビューの prompt","空か <code>/pr-review</code> のみ受理。自由文の観点指定は不可。対象イベントは <code>pull_request</code> / <code>pull_request_target</code> / 手動 dispatch のみ。"],
+      ["レビュー公開","ランチャーが保持するレビュー要求を、OpenCode の正常終了後に App 同一性を検証してから提出します。"]
+    ],
+    v1: [
+      ["起動方法","従来世代の OpenCode を解決して実行します（review-only には v1.2.14 以降が必要）。"],
+      ["資格情報","OIDC 交換は <code>opencode github run</code> の内側で行われます。アダプタが呼び出しごとに資格情報を解決します。"],
+      ["返信の投稿","トークンモードでは OpenCode 側から GitHub API の書き込みが可能で、<code>/oc fix this</code> のようなコード修正は書き込みスコープの <code>GH_TOKEN</code> が別途必要です。"],
+      ["PR レビューの prompt","<code>/pr-review</code> に加えて、平文でレビュー観点を指定できます（例: <code>Focus on security and performance.</code>）。"],
+      ["レビュー公開","アダプタ経由で公開し、モデルが GET で永続化されたレビューを検証します（bounded なレシートが返ります）。"]
+    ]
+  };
+  var rtBody = document.getElementById("rtBody");
+  var rtHead = document.getElementById("rtColHead");
+  var segV1 = document.getElementById("segV1"), segV2 = document.getElementById("segV2");
+  function showRuntime(v){
+    rtHead.textContent = v === "v2" ? "OpenCode v2" : "OpenCode v1";
+    rtBody.innerHTML = rtRows[v].map(function(r){
+      return "<tr><th scope=\"row\" style=\"background:none;letter-spacing:0;font-size:.92rem;color:var(--ink)\">" + r[0] + "</th><td>" + r[1] + "</td></tr>";
+    }).join("");
+    segV2.setAttribute("aria-pressed", v === "v2" ? "true" : "false");
+    segV1.setAttribute("aria-pressed", v === "v1" ? "true" : "false");
+  }
+  segV2.addEventListener("click", function(){ showRuntime("v2"); });
+  segV1.addEventListener("click", function(){ showRuntime("v1"); });
+  showRuntime("v2");
+
+  /* ---- inputs table + filter ---- */
+  var inputs = [
+    ["model","必須","Model（<code>provider/model</code> 形式）。"],
+    ["agent","<code>build</code>","Primary agent。スラッシュコマンドで上書き可。review-only では固定の制限付きエージェントに置き換わります。"],
+    ["prompt","イベントのコメント","トリガーコメントの代わりに使う固定 prompt。"],
+    ["mentions","<code>/opencode,/oc</code>","カンマ区切りのトリガー語句。"],
+    ["variant","—","Provider 固有の reasoning effort 等。対応が明示されたモデルの場合だけ指定します。"],
+    ["share","<code>false</code>","OpenCode セッションを共有します。"],
+    ["use-github-token","<code>false</code>","既定の App トークンフローの代わりに workflow トークンを使います。"],
+    ["runtime","<code>v2</code>","Runtime 世代（<code>v1</code> または <code>v2</code>）。"],
+    ["minimum-release-age","<code>24h</code>","選択する安定版リリースの最小経過時間（例: <code>7d</code>、<code>0s</code>）。"],
+    ["use-bundled-toolkit","<code>true</code>","通常実行では同梱 provider 設定を、review-only では信頼済みレビューブリッジをインストールします。"],
+    ["review-only","<code>false</code>","隔離されたレビュー実行を有効化し、上流 <code>pr-review</code> をインストールします。"],
+    ["pr-review-ref","呼び出し側が与える SHA","レビュー skill を提供する <code>pr-loop</code> の不変コミット。"],
+    ["timeout-minutes","<code>60</code>","OpenCode を停止するまでの分数。"],
+    ["oidc-base-url","<code>https://api.opencode.ai</code>","カスタム GitHub App 導入向けの OIDC 交換 URL。"]
+  ];
+  var inputsBody = document.getElementById("inputsBody");
+  var inputCount = document.getElementById("inputCount");
+  function renderInputs(q){
+    var rows = inputs.filter(function(r){
+      if(!q) return true;
+      q = q.toLowerCase();
+      return (r[0] + " " + r[1] + " " + r[2].replace(/<[^>]+>/g,"")).toLowerCase().indexOf(q) !== -1;
+    });
+    inputsBody.innerHTML = rows.length ? rows.map(function(r){
+      return "<tr><td><code>" + r[0] + "</code></td><td>" + r[1] + "</td><td>" + r[2] + "</td></tr>";
+    }).join("") : "<tr><td colspan=\"3\">一致する input はありません。</td></tr>";
+    inputCount.textContent = rows.length + " / " + inputs.length + " inputs";
+  }
+  document.getElementById("inputFilter").addEventListener("input", function(e){ renderInputs(e.target.value); });
+  renderInputs("");
+})();
+</script>
+</body>
+</html>
